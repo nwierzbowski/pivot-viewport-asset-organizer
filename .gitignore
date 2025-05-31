@@ -1,0 +1,21 @@
+# Python generated files
+__pycache__/
+*.pyc
+
+# Virtual environments
+deep_learning_models/venv_envs/
+
+# Temporary data for inference
+deep_learning_models/temp_data/
+
+developer_only_training_repos/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE/Editor specific files
+.vscode/
+.idea/
+*.swp
+*~
