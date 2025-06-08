@@ -1,5 +1,5 @@
 import bpy
-from .operators import Splatter_OT_Segment_Scene
+from .operators import Splatter_OT_Generate_Room, Splatter_OT_Segment_Scene
 
 from .constants import PRE, CATEGORY
 
@@ -19,5 +19,5 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         )
         # Add more operators here later
         layout.separator()
-        layout.label(text="Setup:")
-        # layout.operator("myaddon.install_dependencies", text="Install Dependencies")
+        layout.label(text="Room Generation:")
+        layout.operator(Splatter_OT_Generate_Room.bl_idname, text="Generate Base")

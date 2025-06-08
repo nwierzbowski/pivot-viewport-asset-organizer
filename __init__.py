@@ -61,7 +61,7 @@ import bpy
 #                 pass
 
 
-from .operators import Splatter_OT_Segment_Scene
+from .operators import Splatter_OT_Generate_Room, Splatter_OT_Segment_Scene
 from .ui import Splatter_PT_Main_Panel
 
 bl_info = {
@@ -76,7 +76,11 @@ bl_info = {
     "category": "3D View",
 }
 
-classesToRegister = (Splatter_OT_Segment_Scene, Splatter_PT_Main_Panel)
+classesToRegister = (
+    Splatter_OT_Segment_Scene,
+    Splatter_OT_Generate_Room,
+    Splatter_PT_Main_Panel,
+)
 
 
 def register():
