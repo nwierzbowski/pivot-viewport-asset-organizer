@@ -1,68 +1,11 @@
 import bpy
 
-# import sys
-# import importlib
-
-# if "bpy" in locals():
-#     # Make a copy of the keys to iterate over, to avoid "dictionary changed size during iteration"
-#     addon_name = "Splatter - AI Powered Object Scattering"
-
-#     # Get a list of all module names currently loaded that belong to addon
-#     addon_modules_to_reload = []
-#     for module_name in list(sys.modules.keys()):  # Iterate over a COPY of the keys
-#         if module_name.startswith(addon_name):
-#             addon_modules_to_reload.append(module_name)
-
-#     # Now, iterate over this list and reload the modules
-#     for module_name in addon_modules_to_reload:
-#         try:
-#             # Ensure the module is actually in sys.modules before trying to reload
-#             # (It might have been removed by a previous reload/unregister, though unlikely here)
-#             if module_name in sys.modules:
-#                 importlib.reload(sys.modules[module_name])
-#                 print(f"Reloaded: {module_name}")
-#             else:
-#                 print(
-#                     f"Skipped reloading {module_name}: not found in sys.modules (might have been removed)."
-#                 )
-#         except Exception as e:
-#             print(f"Failed to reload {module_name}: {e}")
-
-#     # After reloading, clear out the existing references to old classes
-#     # from the global scope of this __init__.py, so new ones can be imported.
-#     # This is important to prevent stale references.
-#     from inspect import isclass, isfunction
-
-#     current_module_members = locals().copy()
-#     for name, obj in current_module_members.items():
-#         if name in (
-#             "__init__",
-#             "__main__",
-#             "__file__",
-#             "__name__",
-#             "__package__",
-#             "__spec__",
-#             "bpy",
-#             "sys",
-#             "importlib",
-#             "getmembers",
-#             "isclass",
-#             "isfunction",
-#             "addon_name",
-#             "addon_modules_to_reload",
-#         ):  # Add any new local variables here
-#             continue
-
-#         if isclass(obj) or isfunction(obj):
-#             # Attempt to delete the old reference
-#             try:
-#                 del locals()[name]
-#             except KeyError:
-#                 pass
-
+from .classes import ObjectAttributes
+from bpy.props import PointerProperty
 
 from .operators import (
     Splatter_OT_Classify_Base,
+    Splatter_OT_Classify_Object,
     Splatter_OT_Generate_Base,
     Splatter_OT_Segment_Scene,
 )
@@ -81,10 +24,12 @@ bl_info = {
 }
 
 classesToRegister = (
+    ObjectAttributes,
     Splatter_OT_Segment_Scene,
     Splatter_OT_Generate_Base,
     Splatter_OT_Classify_Base,
     Splatter_PT_Main_Panel,
+    Splatter_OT_Classify_Object,
 )
 
 
@@ -92,6 +37,7 @@ def register():
     print(f"Registering {bl_info.get('name')} version {bl_info.get('version')}")
     for cls in classesToRegister:
         bpy.utils.register_class(cls)
+    bpy.types.Object.classification = PointerProperty(type=ObjectAttributes)
 
     # Example: Add addon preferences (if you create an AddonPreferences class)
     # bpy.utils.register_class(MyAddonPreferences)
@@ -111,6 +57,8 @@ def unregister():
     print(f"Unregistering {bl_info.get('name')}")
     for cls in reversed(classesToRegister):  # Unregister in reverse order
         bpy.utils.unregister_class(cls)
+
+    del bpy.types.Object.classification
 
     # Example: Remove addon preferences
     # bpy.utils.unregister_class(MyAddonPreferences)

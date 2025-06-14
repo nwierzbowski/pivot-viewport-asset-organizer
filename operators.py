@@ -4,6 +4,33 @@ import bmesh
 from .utils import link_node_group
 from mathutils import Vector
 from .constants import PRE, ROOM_BASE_NG
+from bpy.props import FloatProperty, StringProperty
+
+# Internal data storage for volume calculations
+_volume_data = {
+    "object_name": "",
+    "width": 0.0,
+    "height": 0.0,
+    "depth": 0.0,
+    "volume": 0.0,
+}
+
+
+def get_volume_data():
+    """Get the current volume data"""
+    return _volume_data.copy()
+
+
+def clear_volume_data():
+    """Clear the volume data"""
+    global _volume_data
+    _volume_data = {
+        "object_name": "",
+        "width": 0.0,
+        "height": 0.0,
+        "depth": 0.0,
+        "volume": 0.0,
+    }
 
 
 class Splatter_OT_Segment_Scene(bpy.types.Operator):
@@ -129,5 +156,20 @@ class Splatter_OT_Classify_Base(bpy.types.Operator):
                 # Add to walls collection
                 walls_collection.objects.link(obj_item)
                 obj_item.name = "Room_Walls"
+
+        return {"FINISHED"}
+
+
+class Splatter_OT_Classify_Object(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".classify_object"
+    bl_label = "Classify Object"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        obj = context.active_object
+
+        c = obj.classification
+
+        c.isSeating = True
 
         return {"FINISHED"}

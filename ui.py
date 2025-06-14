@@ -1,6 +1,7 @@
 from re import S
 import bpy
 from .operators import (
+    Splatter_OT_Classify_Object,
     Splatter_OT_Generate_Base,
     Splatter_OT_Segment_Scene,
     Splatter_OT_Classify_Base,
@@ -17,6 +18,8 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
     bl_category = CATEGORY  # Tab name in the N-Panel
 
     def draw(self, context):
+        obj = context.active_object
+
         layout = self.layout
         layout.label(text="Deep Learning Operations:")
         layout.operator(
@@ -31,3 +34,21 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         layout.operator(
             Splatter_OT_Classify_Base.bl_idname, text=Splatter_OT_Classify_Base.bl_label
         )
+        layout.separator()
+        layout.label(text="Object Classification:")
+        layout.operator(
+            Splatter_OT_Classify_Object.bl_idname,
+            text=Splatter_OT_Classify_Object.bl_label,
+        )
+        layout.separator()
+        layout.label(text="Object Analysis:")
+
+        if obj:
+            try:
+                if hasattr(obj, "classification"):
+                    c = obj.classification
+                    layout.prop(c, "isSeating", text="Is Seating")
+                    layout.prop(c, "isSurface", text="Is Surface")
+            except (AttributeError, ReferenceError, MemoryError) as e:
+                # Silently handle the error or show a message
+                layout.label(text="Classification data not available")
