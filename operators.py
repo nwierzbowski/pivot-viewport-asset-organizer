@@ -4,7 +4,7 @@ import random
 import bmesh
 from .utils import link_node_group
 from mathutils import Vector
-from .constants import PRE, ROOM_BASE_NG
+from .constants import GET_SURFACES_NG, PRE, ROOM_BASE_NG
 from bpy.props import FloatProperty, StringProperty
 
 # Internal data storage for volume calculations
@@ -176,150 +176,19 @@ class Splatter_OT_Classify_Object(bpy.types.Operator):
     def execute(self, context):
         obj = context.active_object
 
-        # Get bmesh representation
-        bm = bmesh.from_edit_mesh(obj.data)
-        bm.faces.ensure_lookup_table()
-        bm.normal_update()
+        ng = link_node_group(self, GET_SURFACES_NG)
 
-        # Convert angle thresholds to radians
-        base_angle_rad = math.radians(self.angle_threshold)
-        max_angle_rad = math.radians(self.max_angle_threshold)
+        modifier = obj.modifiers.new(name=GET_SURFACES_NG, type="NODES")
+        modifier.node_group = ng
+        inputs = ng.interface.items_tree
 
-        # Find flat surface groups
-        flat_surfaces = self.find_flat_surface_groups(
-            bm, base_angle_rad, max_angle_rad, self.size_scale_factor, self.min_area
-        )
+        # Set values for the inputs
+        modifier[inputs["min_surface_size"].identifier] = 0.03
+        modifier[inputs["min_clearance"].identifier] = 0.2
+        modifier[inputs["min_z_norm"].identifier] = (
+            10 * math.pi / 180
+        )  # Convert degrees to radians
 
-        if self.select_found:
-            # Deselect all faces first
-            for face in bm.faces:
-                face.select = False
+        bpy.ops.object.modifier_apply(modifier=GET_SURFACES_NG)
 
-            # Select faces in qualifying flat surfaces
-            for surface_faces in flat_surfaces:
-                for face in surface_faces:
-                    face.select = True
-
-        # Update mesh
-        bmesh.update_edit_mesh(obj.data)
-
-        self.report(
-            {"INFO"}, f"Found {len(flat_surfaces)} flat surfaces meeting criteria"
-        )
         return {"FINISHED"}
-
-    def find_flat_surface_groups(
-        self, bm, base_angle_threshold, max_angle_threshold, size_scale_factor, min_area
-    ):
-        """Find groups of connected faces that are approximately coplanar"""
-        visited = set()
-        flat_surfaces = []
-
-        for face in bm.faces:
-            if face.index in visited:
-                continue
-
-            # Start a new surface group
-            surface_faces = []
-            stack = [face]
-
-            while stack:
-                current_face = stack.pop()
-                if current_face.index in visited:
-                    continue
-
-                visited.add(current_face.index)
-                surface_faces.append(current_face)
-
-                # Check adjacent faces
-                for edge in current_face.edges:
-                    for linked_face in edge.link_faces:
-                        if (
-                            linked_face.index not in visited
-                            and self.faces_are_coplanar_adaptive(
-                                current_face,
-                                linked_face,
-                                base_angle_threshold,
-                                max_angle_threshold,
-                                size_scale_factor,
-                            )
-                        ):
-                            stack.append(linked_face)
-
-            # Calculate total area of this surface group
-            total_area = sum(face.calc_area() for face in surface_faces)
-
-            # Calculate average normal properly
-            avg_normal = Vector((0, 0, 0))
-            for face in surface_faces:
-                avg_normal += face.normal
-            avg_normal.normalize()
-
-            # Only keep surfaces that meet minimum area requirement
-            # Check if surface is mostly horizontal (facing up)
-            if total_area >= min_area and avg_normal.z > 0.5:
-                flat_surfaces.append(surface_faces)
-
-        return flat_surfaces
-
-    def faces_are_coplanar_adaptive(
-        self, face1, face2, base_angle_threshold, max_angle_threshold, size_scale_factor
-    ):
-        """Check if two faces are approximately coplanar with size-adaptive tolerance"""
-        # Calculate angle between face normals
-        if face1.normal.length == 0 or face2.normal.length == 0:
-            return False
-        angle = face1.normal.angle(face2.normal)
-
-        # Calculate combined face size (average area of both faces)
-        avg_area = (face1.calc_area() + face2.calc_area()) / 2.0
-
-        # Calculate adaptive angle threshold based on face size
-        # Uses logarithmic scaling to prevent extreme values
-        size_factor = math.log(1 + avg_area * size_scale_factor)
-        adaptive_threshold = base_angle_threshold + (
-            max_angle_threshold - base_angle_threshold
-        ) * min(size_factor / math.log(1 + size_scale_factor * 10), 1.0)
-
-        return angle <= adaptive_threshold
-
-    def faces_are_coplanar(self, face1, face2, angle_threshold):
-        """Check if two faces are approximately coplanar (legacy method)"""
-        # Calculate angle between face normals
-        angle = face1.normal.angle(face2.normal)
-        return angle <= angle_threshold
-
-    def get_surface_info(self, surface_faces):
-        """Get information about a surface group"""
-        total_area = sum(face.calc_area() for face in surface_faces)
-
-        # Calculate average normal
-        avg_normal = Vector((0, 0, 0))
-        for face in surface_faces:
-            avg_normal += face.normal
-        avg_normal.normalize()
-
-        # Calculate bounding box
-        all_verts = []
-        for face in surface_faces:
-            all_verts.extend(face.verts)
-
-        if all_verts:
-            min_co = Vector(all_verts[0].co)
-            max_co = Vector(all_verts[0].co)
-
-            for vert in all_verts:
-                for i in range(3):
-                    min_co[i] = min(min_co[i], vert.co[i])
-                    max_co[i] = max(max_co[i], vert.co[i])
-
-            dimensions = max_co - min_co
-        else:
-            dimensions = Vector((0, 0, 0))
-
-        return {
-            "area": total_area,
-            "face_count": len(surface_faces),
-            "normal": avg_normal,
-            "dimensions": dimensions,
-        }
