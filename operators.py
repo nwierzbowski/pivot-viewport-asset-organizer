@@ -1,5 +1,4 @@
 import math
-from os import link
 import bpy
 import random
 import bmesh
@@ -14,7 +13,6 @@ from .constants import (
     WRITE_SEATING,
     WRITE_SURFACES,
 )
-from bpy.props import FloatProperty, StringProperty
 
 
 class Splatter_OT_Segment_Scene(bpy.types.Operator):
@@ -169,14 +167,15 @@ class Splatter_OT_Classify_Faces(bpy.types.Operator):
         bpy.ops.object.modifier_apply(modifier=GET_SURFACES_NG)
 
         bpy.ops.object.mode_set(mode="EDIT")
-        getattr(bpy.ops, PRE.lower()).select_current_surfaces()
+        getattr(bpy.ops, PRE.lower()).select_surfaces()
+        getattr(bpy.ops, PRE.lower()).select_seating()
 
         return {"FINISHED"}
 
 
-class Splatter_OT_Select_Current_Surfaces(bpy.types.Operator):
-    bl_idname = PRE.lower() + ".select_current_surfaces"
-    bl_label = "Select Current Surfaces"
+class Splatter_OT_Select_Surfaces(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".select_surfaces"
+    bl_label = "Select Surfaces"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -188,9 +187,9 @@ class Splatter_OT_Select_Current_Surfaces(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class Splatter_OT_Current_Selection_To_Surfaces(bpy.types.Operator):
-    bl_idname = PRE.lower() + ".current_selection_to_surfaces"
-    bl_label = "Current Selection to Surfaces"
+class Splatter_OT_Selection_To_Surfaces(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".selection_to_surfaces"
+    bl_label = "Selection to Surfaces"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -207,9 +206,9 @@ class Splatter_OT_Current_Selection_To_Surfaces(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class Splatter_OT_Select_Current_Seating(bpy.types.Operator):
-    bl_idname = PRE.lower() + ".select_current_seating"
-    bl_label = "Select Current Seating"
+class Splatter_OT_Select_Seating(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".select_seating"
+    bl_label = "Select Seating"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -221,9 +220,9 @@ class Splatter_OT_Select_Current_Seating(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class Splatter_OT_Current_Selection_To_Seating(bpy.types.Operator):
-    bl_idname = PRE.lower() + ".current_selection_to_seating"
-    bl_label = "Current Selection to Seating"
+class Splatter_OT_Selection_To_Seating(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".selection_to_seating"
+    bl_label = "Selection to Seating"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
