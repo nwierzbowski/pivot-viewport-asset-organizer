@@ -251,4 +251,35 @@ class Splatter_OT_Classify_Object(bpy.types.Operator):
             self.report({"ERROR"}, "No active object to classify")
             return {"CANCELLED"}
 
+        attrs = obj.data.attributes
+
+        isSeating = attrs.get("isSeating")
+        isSurface = attrs.get("isSurface")
+
+        # Check if the object has the required classification attributes
+
+        if isSeating is None or isSurface is None:
+            self.report(
+                {"ERROR"},
+                "Object does not have classification attributes, please run classify faces",
+            )
+            return {"CANCELLED"}
+
+        if isSeating.data_type != "INT" or isSurface.data_type != "INT":
+            self.report(
+                {"ERROR"},
+                "Classification attributes must be integer type, please run classify faces",
+            )
+            return {"CANCELLED"}
+
+        if isSeating.domain != "POINT" or isSurface.domain != "POINT":
+            self.report(
+                {"ERROR"},
+                "Classification attributes must be point domain, please run classify faces",
+            )
+            return {"CANCELLED"}
+
+        obj.classification.isSeating = any(item.value for item in isSeating.data)
+        obj.classification.isSurface = any(item.value for item in isSurface.data)
+
         return {"FINISHED"}
