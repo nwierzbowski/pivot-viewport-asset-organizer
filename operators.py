@@ -250,6 +250,8 @@ class Splatter_OT_Classify_Object(bpy.types.Operator):
             self.report({"ERROR"}, "No active object to classify")
             return {"CANCELLED"}
 
+        bpy.ops.object.mode_set(mode="OBJECT")
+
         attrs = obj.data.attributes
 
         isSeating = attrs.get("isSeating")
