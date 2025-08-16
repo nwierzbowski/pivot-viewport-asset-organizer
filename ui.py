@@ -1,6 +1,7 @@
 from re import S
 import bpy
 from .operators import (
+    Splatter_OT_Align_To_Axes,
     Splatter_OT_Classify_Object,
     Splatter_OT_Selection_To_Seating,
     Splatter_OT_Selection_To_Surfaces,
@@ -78,3 +79,5 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
             except (AttributeError, ReferenceError, MemoryError) as e:
                 # Silently handle the error or show a message
                 layout.label(text="Classification data not available")
+        layout.separator()
+        layout.operator(Splatter_OT_Align_To_Axes.bl_idname, text=Splatter_OT_Align_To_Axes.bl_label)
