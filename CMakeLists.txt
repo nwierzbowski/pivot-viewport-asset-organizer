@@ -9,7 +9,7 @@ endif()
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
-add_library(splatter_engine SHARED splatter/engine/engine.cpp)
+add_library(splatter_engine SHARED splatter/engine/chull.cpp)
 
 target_compile_options(splatter_engine PRIVATE
     -Wall           # Turn on all standard warnings
@@ -28,7 +28,11 @@ set(CYTHON_GENERATED_CPP "${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp")
 
 add_custom_command(
     OUTPUT ${CYTHON_GENERATED_CPP}
-    COMMAND ${CYTHON_EXECUTABLE} --cplus -o ${CYTHON_GENERATED_CPP} ${CYTHON_SOURCE}
+    COMMAND ${CYTHON_EXECUTABLE}
+        --cplus
+        # -I ${CMAKE_CURRENT_SOURCE_DIR}
+        -o ${CYTHON_GENERATED_CPP}
+        ${CYTHON_SOURCE}
     DEPENDS ${CYTHON_SOURCE}
     COMMENT "Cythonizing ${CYTHON_SOURCE}"
 )
