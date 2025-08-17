@@ -27,23 +27,23 @@ add_custom_command(
     COMMENT "Cythonizing ${CYTHON_SOURCE}"
 )
 
-add_library(splatter_bridge MODULE ${CYTHON_GENERATED_CPP})
+add_library(bridge MODULE ${CYTHON_GENERATED_CPP})
 
-set_target_properties(splatter_bridge PROPERTIES PREFIX "")
+set_target_properties(bridge PROPERTIES PREFIX "")
 
 if(WIN32)
-    set_target_properties(splatter_bridge PROPERTIES SUFFIX ".pyd")
+    set_target_properties(bridge PROPERTIES SUFFIX ".pyd")
 else()
-    set_target_properties(splatter_bridge PROPERTIES SUFFIX ".so")
+    set_target_properties(bridge PROPERTIES SUFFIX ".so")
 endif()
 
 # Link the bridge against Python and our C++ engine
-target_link_libraries(splatter_bridge PRIVATE
+target_link_libraries(bridge PRIVATE
     Python::Python          # The modern way to link to Python
     splatter_engine         # Link to our core C++ library
 )
 
 # Make sure the final .so file lands inside the splatter addon folder
-set_target_properties(splatter_bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY
     "${CMAKE_CURRENT_SOURCE_DIR}/splatter"
 )
