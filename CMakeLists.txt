@@ -11,6 +11,12 @@ find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
 add_library(splatter_engine SHARED splatter/engine/engine.cpp)
 
+target_compile_options(splatter_engine PRIVATE
+    -Wall           # Turn on all standard warnings
+    -Wextra         # Turn on even more warnings
+    -pedantic       # Enforce strict standard compliance, disallow compiler extensions
+)
+
 target_compile_features(splatter_engine PRIVATE cxx_std_17)
 target_include_directories(splatter_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/splatter/engine)
 target_compile_definitions(splatter_engine PRIVATE
@@ -37,13 +43,11 @@ else()
     set_target_properties(bridge PROPERTIES SUFFIX ".so")
 endif()
 
-# Link the bridge against Python and our C++ engine
 target_link_libraries(bridge PRIVATE
-    Python::Python          # The modern way to link to Python
-    splatter_engine         # Link to our core C++ library
+    Python::Python
+    splatter_engine
 )
 
-# Make sure the final .so file lands inside the splatter addon folder
 set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY
     "${CMAKE_CURRENT_SOURCE_DIR}/splatter"
 )
