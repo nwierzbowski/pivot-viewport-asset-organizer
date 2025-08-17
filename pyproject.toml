@@ -3,8 +3,10 @@ name = "splatter-ai-powered-object-scatter"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    "cmake>=4.1.0",
+    "cmake-format>=0.6.13",
     "cython>=3.1.3",
     "fake-bpy-module-latest>=20250630",
     "ninja>=1.13.0",
