@@ -1,20 +1,49 @@
-# CMakeLists.txt
+cmake_minimum_required(VERSION 3.16)
+project(splatter_engine LANGUAGES CXX C)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-cmake_minimum_required(VERSION 3.12)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Release, etc." FORCE)
+endif()
 
-# Set the C and C++ compilers to specific versions
-set(CMAKE_C_COMPILER "gcc-11")
-set(CMAKE_CXX_COMPILER "g++-11")
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
-# Now that the compiler is set, initialize the project.
-project(MyEngine CXX C) # Explicitly enable C++ and C
+add_library(splatter_engine SHARED splatter/engine/engine.cpp)
 
-# Create a SHARED library (.so/.dll/.pyd) from our source files
-add_library(engine SHARED
-    my_addon/engine/engine.cpp
+target_compile_features(splatter_engine PRIVATE cxx_std_17)
+target_include_directories(splatter_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/splatter/engine)
+target_compile_definitions(splatter_engine PRIVATE
+    $<$<CONFIG:Release>:NDEBUG>
 )
 
-# Tell CMake where to find the header files
-target_include_directories(engine PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/splatter/engine
+set(CYTHON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/splatter/bridge.pyx")
+set(CYTHON_GENERATED_CPP "${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp")
+
+add_custom_command(
+    OUTPUT ${CYTHON_GENERATED_CPP}
+    COMMAND ${CYTHON_EXECUTABLE} -o ${CYTHON_GENERATED_CPP} ${CYTHON_SOURCE}
+    DEPENDS ${CYTHON_SOURCE}
+    COMMENT "Cythonizing ${CYTHON_SOURCE}"
+)
+
+add_library(splatter_bridge MODULE ${CYTHON_GENERATED_CPP})
+
+set_target_properties(splatter_bridge PROPERTIES PREFIX "")
+
+if(WIN32)
+    set_target_properties(splatter_bridge PROPERTIES SUFFIX ".pyd")
+else()
+    set_target_properties(splatter_bridge PROPERTIES SUFFIX ".so")
+endif()
+
+# Link the bridge against Python and our C++ engine
+target_link_libraries(splatter_bridge PRIVATE
+    Python::Python          # The modern way to link to Python
+    splatter_engine         # Link to our core C++ library
+)
+
+# Make sure the final .so file lands inside the splatter addon folder
+set_target_properties(splatter_bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY
+    "${CMAKE_CURRENT_SOURCE_DIR}/splatter"
 )
