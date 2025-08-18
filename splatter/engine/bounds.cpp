@@ -8,15 +8,15 @@
 #include <algorithm>
 
 // Rotate points by angle (radians) around origin
-std::vector<PT> rotate_points(const std::vector<PT>& points, float angle) {
+std::vector<Vec2> rotate_points(const std::vector<Vec2>& points, float angle) {
     float cos_a = std::cos(angle);
     float sin_a = std::sin(angle);
     
-    std::vector<PT> rotated;
+    std::vector<Vec2> rotated;
     rotated.reserve(points.size());
 
-    for (const PT& p : points) {
-        rotated.emplace_back(PT{
+    for (const Vec2& p : points) {
+        rotated.emplace_back(Vec2{
             p.x * cos_a - p.y * sin_a,
             p.x * sin_a + p.y * cos_a
         });
@@ -26,13 +26,13 @@ std::vector<PT> rotate_points(const std::vector<PT>& points, float angle) {
 }
 
 // Compute axis-aligned bounding box of points
-BoundingBox compute_aabb(const std::vector<PT>& points, float rotation_angle) {
+BoundingBox compute_aabb(const std::vector<Vec2>& points, float rotation_angle) {
     if (points.empty()) return {};
     
     float min_x = points[0].x, max_x = points[0].x;
     float min_y = points[0].y, max_y = points[0].y;
     
-    for (const PT& p : points) {
+    for (const Vec2& p : points) {
         min_x = std::min(min_x, p.x);
         max_x = std::max(max_x, p.x);
         min_y = std::min(min_y, p.y);
@@ -42,21 +42,20 @@ BoundingBox compute_aabb(const std::vector<PT>& points, float rotation_angle) {
     BoundingBox box;
     box.min_corner = {min_x, min_y};
     box.max_corner = {max_x, max_y};
-    box.area = (max_x - min_x) * (max_y - min_y);
-    box.center = {(min_x + max_x) * 0.5f, (min_y + max_y) * 0.5f};
+    box.volume = (max_x - min_x) * (max_y - min_y);
     box.rotation_angle = rotation_angle;
     
     return box;
 }
 
 // Get unique edge directions from convex hull
-std::vector<float> get_edge_angles(const std::vector<PT>& hull) {
+std::vector<float> get_edge_angles(const std::vector<Vec2>& hull) {
     std::vector<float> angles;
     angles.reserve(hull.size());
     
     for (size_t i = 0; i < hull.size(); ++i) {
         size_t next = (i + 1) % hull.size();
-        PT edge = hull[next] - hull[i];
+        Vec2 edge = hull[next] - hull[i];
         
         if (edge.length_squared() > 1e-8f) {  // Avoid degenerate edges
             float angle = std::atan2(edge.y, edge.x);
@@ -87,7 +86,7 @@ void align_min_bounds(const Vec3* verts, uint32_t vertCount, Vec3* out_rot, Vec3
         return;
     }
 
-    std::vector<PT> hull = convex_hull_2D(verts, vertCount);
+    std::vector<Vec2> hull = convex_hull_2D(verts, vertCount);
     std::vector<float> angles = get_edge_angles(hull);
 
     BoundingBox best_box;
@@ -96,7 +95,7 @@ void align_min_bounds(const Vec3* verts, uint32_t vertCount, Vec3* out_rot, Vec3
         auto rotated_hull = rotate_points(hull, angle);
         BoundingBox box = compute_aabb(rotated_hull, angle);
 
-        if (box.area < best_box.area) {
+        if (box.volume < best_box.volume) {
             best_box = box;
         }
     }
