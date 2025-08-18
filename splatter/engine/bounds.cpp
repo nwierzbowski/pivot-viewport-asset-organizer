@@ -8,7 +8,7 @@
 #include <algorithm>
 
 // Rotate points by angle (radians) around origin
-std::vector<Vec2> rotate_points(const std::vector<Vec2>& points, float angle) {
+std::vector<Vec2> rotate_points_2D(const std::vector<Vec2>& points, float angle) {
     float cos_a = std::cos(angle);
     float sin_a = std::sin(angle);
     
@@ -26,7 +26,7 @@ std::vector<Vec2> rotate_points(const std::vector<Vec2>& points, float angle) {
 }
 
 // Compute axis-aligned bounding box of points
-BoundingBox compute_aabb_2D(const std::vector<Vec2>& points, float rotation_angle) {
+BoundingBox2D compute_aabb_2D(const std::vector<Vec2>& points, float rotation_angle) {
     if (points.empty()) return {};
     
     float min_x = points[0].x, max_x = points[0].x;
@@ -39,17 +39,17 @@ BoundingBox compute_aabb_2D(const std::vector<Vec2>& points, float rotation_angl
         max_y = std::max(max_y, p.y);
     }
     
-    BoundingBox box;
-    box.min_corner = {min_x, min_y, 0};
-    box.max_corner = {max_x, max_y, 0};
-    box.volume = (max_x - min_x) * (max_y - min_y);
+    BoundingBox2D box;
+    box.min_corner = {min_x, min_y};
+    box.max_corner = {max_x, max_y};
+    box.area = (max_x - min_x) * (max_y - min_y);
     box.rotation_angle = rotation_angle;
     
     return box;
 }
 
 // Get unique edge directions from convex hull
-std::vector<float> get_edge_angles(const std::vector<Vec2>& hull) {
+std::vector<float> get_edge_angles_2D(const std::vector<Vec2>& hull) {
     std::vector<float> angles;
     angles.reserve(hull.size());
     
@@ -87,15 +87,15 @@ void align_min_bounds(const Vec3* verts, uint32_t vertCount, Vec3* out_rot, Vec3
     }
 
     std::vector<Vec2> hull = convex_hull_2D(verts, vertCount);
-    std::vector<float> angles = get_edge_angles(hull);
+    std::vector<float> angles = get_edge_angles_2D(hull);
 
-    BoundingBox best_box;
+    BoundingBox2D best_box;
 
     for (float angle : angles) {
-        auto rotated_hull = rotate_points(hull, angle);
-        BoundingBox box = compute_aabb_2D(rotated_hull, angle);
+        std::vector<Vec2> rotated_hull = rotate_points_2D(hull, angle);
+        BoundingBox2D box = compute_aabb_2D(rotated_hull, angle);
 
-        if (box.volume < best_box.volume) {
+        if (box.area < best_box.area) {
             best_box = box;
         }
     }

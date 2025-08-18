@@ -98,11 +98,11 @@ struct Vec2 {
     }
 };
 
-struct BoundingBox {
-    Vec3 min_corner;
-    Vec3 max_corner;
-    float volume;
+struct BoundingBox2D {
+    Vec2 min_corner;
+    Vec2 max_corner;
+    float area;
     float rotation_angle;  // Radians
 
-    BoundingBox() : volume(std::numeric_limits<float>::max()), rotation_angle(0) {}
+    BoundingBox2D() : area(std::numeric_limits<float>::max()), rotation_angle(0) {}
 };
