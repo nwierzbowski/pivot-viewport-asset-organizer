@@ -1,71 +1,73 @@
 #include "chull.h"
-
 #include "util.h"
-
 #include <iostream>
 #include <cstdint>
 #include <vector>
 #include <algorithm>
 
-
-void say_hello_from_cpp() {
-    std::cout << "Hello from the C++ Engine! Recomp" << std::endl;
-}
-
 void convex_hull_2D(const Vec3* verts, uint32_t vertCount, uint32_t* out_indices, uint32_t* out_count) {
-    // Monotone chain convex hull in XY, returning indices into the input array
-    struct PT { float x, y; uint32_t idx; };
     *out_count = 0;
     if (!verts || vertCount == 0 || !out_indices || !out_count) return;
-    if (vertCount == 1) {
-        out_indices[0] = 0;
-        *out_count = 1;
+    
+    if (vertCount <= 3) {
+        for (uint32_t i = 0; i < vertCount; ++i) {
+            out_indices[i] = i;
+        }
+        *out_count = vertCount;
         return;
     }
 
-    std::vector<PT> P;
-    P.reserve(vertCount);
+    // Single, clean Andrew's monotone chain implementation
+    struct PT { 
+        float x, y; 
+        uint32_t idx; 
+        
+        bool operator<(const PT &other) const {
+            return x < other.x || (x == other.x && y < other.y);
+        }
+    };
+    
+    std::vector<PT> points;
+    points.reserve(vertCount);
     for (uint32_t i = 0; i < vertCount; ++i) {
-        P.push_back(PT{verts[i].x, verts[i].y, i});
+        points.emplace_back(PT{verts[i].x, verts[i].y, i});
     }
 
-    std::sort(P.begin(), P.end(), [](const PT& a, const PT& b) {
-        if (a.x == b.x) return a.y < b.y;
-        return a.x < b.x;
-    });
+    // Sort once
+    std::sort(points.begin(), points.end());
 
-    auto cross = [](const PT& O, const PT& A, const PT& B) {
-        // cross((A - O), (B - O))
+    // Inline cross product for speed
+    auto cross = [](const PT& O, const PT& A, const PT& B) -> float {
         return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
     };
 
-    std::vector<PT> H;
-    H.reserve(2 * P.size());
+    std::vector<PT> hull;
+    hull.reserve(vertCount);  // Pre-allocate worst case
 
     // Lower hull
-    for (const auto& pt : P) {
-        while (H.size() >= 2 && cross(H[H.size() - 2], H.back(), pt) <= 0.0f) {
-            H.pop_back();
+    for (const PT& p : points) {
+        while (hull.size() >= 2 && cross(hull[hull.size()-2], hull[hull.size()-1], p) <= 0) {
+            hull.pop_back();
         }
-        H.push_back(pt);
+        hull.push_back(p);
     }
+
     // Upper hull
-    size_t lower_size = H.size();
-    for (int i = (int)P.size() - 2; i >= 0; --i) {
-        const auto& pt = P[(size_t)i];
-        while (H.size() > lower_size && cross(H[H.size() - 2], H.back(), pt) <= 0.0f) {
-            H.pop_back();
+    const size_t lower_size = hull.size();
+    for (int i = points.size() - 2; i >= 0; --i) {
+        const PT& p = points[i];
+        while (hull.size() > lower_size && cross(hull[hull.size()-2], hull[hull.size()-1], p) <= 0) {
+            hull.pop_back();
         }
-        H.push_back(pt);
+        hull.push_back(p);
     }
 
-    if (!H.empty()) {
-        H.pop_back(); // last point is same as first
-    }
+    // Remove duplicate last point
+    if (hull.size() > 1) hull.pop_back();
 
-    uint32_t n = (uint32_t)H.size();
-    for (uint32_t i = 0; i < n; ++i) {
-        out_indices[i] = H[i].idx;
+    // Copy results
+    *out_count = static_cast<uint32_t>(hull.size());
+    for (uint32_t i = 0; i < *out_count; ++i) {
+        out_indices[i] = hull[i].idx;
     }
-    *out_count = n;
 }

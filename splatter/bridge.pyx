@@ -1,15 +1,9 @@
 from libc.stdint cimport uint32_t
 
-from splatter.cython_api.chull_api cimport say_hello_from_cpp, convex_hull_2D as convex_hull_2D_cpp
+from splatter.cython_api.chull_api cimport convex_hull_2D as convex_hull_2D_cpp
 from splatter.cython_api.util_api cimport Vec3
 
 import numpy as np
-
-
-def say_hello():
-    """Calls the C++ function and prints a message from C++."""
-    with nogil:
-        say_hello_from_cpp()
 
 def convex_hull_2D(float[:, ::1] verts):
     """Calls the C++ function to compute the convex hull in 2D."""
