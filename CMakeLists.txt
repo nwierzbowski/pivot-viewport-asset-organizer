@@ -26,6 +26,12 @@ target_include_directories(splatter_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sp
 target_compile_definitions(splatter_engine PRIVATE
     $<$<CONFIG:Release>:NDEBUG>
 )
+# Optimizations IPO is let compiler have global view for more aggressive opts
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_msg)
+if(ipo_supported)
+  set_property(TARGET splatter_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+endif()
 
 set(CYTHON_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/splatter/bridge.pyx")
 set(CYTHON_GENERATED_CPP "${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp")
@@ -59,3 +65,7 @@ target_link_libraries(bridge PRIVATE
 set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY
     "${CMAKE_CURRENT_SOURCE_DIR}/splatter"
 )
+
+
+#   target_compile_options(splatter_engine PRIVATE $<$<CONFIG:Release>:-Ofast -ffast-math>)
+#   target_compile_options(bridge         PRIVATE $<$<CONFIG:Release>:-Ofast -ffast-math>)
