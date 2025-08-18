@@ -5,8 +5,6 @@
 #include <algorithm>
 
 std::vector<Vec2> convex_hull_2D(const Vec3* verts, uint32_t vertCount) {
-    // *out_count = 0;
-    // if (!verts || vertCount == 0 || !out_indices || !out_count) return;
     std::vector<Vec2> points;
     points.reserve(vertCount);
 

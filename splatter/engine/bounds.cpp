@@ -8,21 +8,17 @@
 #include <algorithm>
 
 // Rotate points by angle (radians) around origin
-std::vector<Vec2> rotate_points_2D(const std::vector<Vec2>& points, float angle) {
+void rotate_points_2D(const std::vector<Vec2>& points, float angle, std::vector<Vec2>& out) {
     float cos_a = std::cos(angle);
     float sin_a = std::sin(angle);
-    
-    std::vector<Vec2> rotated;
-    rotated.reserve(points.size());
 
-    for (const Vec2& p : points) {
-        rotated.emplace_back(Vec2{
+    for (size_t i = 0; i < points.size(); ++i) {
+        const Vec2& p = points[i];
+        out[i] = {
             p.x * cos_a - p.y * sin_a,
             p.x * sin_a + p.y * cos_a
-        });
+        };
     }
-    
-    return rotated;
 }
 
 // Compute axis-aligned bounding box of points
@@ -61,18 +57,18 @@ std::vector<float> get_edge_angles_2D(const std::vector<Vec2>& hull) {
             float angle = std::atan2(edge.y, edge.x);
             
             // Normalize to [0, π) since we only need half rotations for rectangles
-            if (angle < 0) angle += M_PI;
-            if (angle >= M_PI) angle -= M_PI;
+            // if (angle < 0) angle += M_PI;
+            // if (angle >= M_PI) angle -= M_PI;
             
             angles.push_back(angle);
         }
     }
     
     // Remove duplicate angles (within tolerance)
-    std::sort(angles.begin(), angles.end());
-    auto last = std::unique(angles.begin(), angles.end(), 
-        [](float a, float b) { return std::abs(a - b) < 1e-6f; });
-    angles.erase(last, angles.end());
+    // std::sort(angles.begin(), angles.end());
+    // auto last = std::unique(angles.begin(), angles.end(), 
+    //     [](float a, float b) { return std::abs(a - b) < 1e-6f; });
+    // angles.erase(last, angles.end());
     
     return angles;
 }
@@ -91,9 +87,13 @@ void align_min_bounds(const Vec3* verts, uint32_t vertCount, Vec3* out_rot, Vec3
 
     BoundingBox2D best_box;
 
+    std::vector<Vec2> rot_hull;
+    rot_hull.reserve(hull.size());
+    rot_hull.resize(hull.size());
+
     for (float angle : angles) {
-        std::vector<Vec2> rotated_hull = rotate_points_2D(hull, angle);
-        BoundingBox2D box = compute_aabb_2D(rotated_hull, angle);
+        rotate_points_2D(hull, -angle, rot_hull);
+        BoundingBox2D box = compute_aabb_2D(rot_hull, -angle);
 
         if (box.area < best_box.area) {
             best_box = box;
