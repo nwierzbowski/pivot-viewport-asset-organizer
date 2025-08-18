@@ -5,4 +5,5 @@
 #include <cstdint>
 
 void say_hello_from_cpp();
-void convex_hull_2D(const Vec3* verts, uint32_t vertCount);
+void convex_hull_2D(const Vec3* verts, uint32_t vertCount,
+                    uint32_t* out_indices, uint32_t* out_count);

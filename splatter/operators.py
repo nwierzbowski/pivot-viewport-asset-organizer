@@ -297,17 +297,33 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         verts_np.shape = (vert_count, 3)
 
         start = time.perf_counter()
-        bridge.convex_hull_2D(verts_np)
+        hull_idx = bridge.convex_hull_2D(verts_np)
         # bmesh.ops.convex_hull(bm_tmp, input=verts)
         elapsed = time.perf_counter() - start
         # bm_tmp.free()
-
-        
         print(f"Align to axes elapsed: {elapsed:.6f}s")
 
-        # Align the object to the axes
-        obj.rotation_euler[0] = 0
-        obj.rotation_euler[1] = 0
-        obj.rotation_euler[2] = 0
+        if hull_idx.size < 3:
+            self.report({INFO}, "Hull has fewer than 3 points")
+            return {FINISHED}
+
+        hull_coords = verts_np[hull_idx]
+
+        mesh_data = bpy.data.meshes.new(f"{obj.name}_HullMesh")
+        verts_list = [tuple(v) for v in hull_coords]
+        edges_list = [(i, (i + 1) % len(verts_list)) for i in range(len(verts_list))]
+        faces_list = [list(range(len(verts_list)))]  # one ngon face
+
+        mesh_data.from_pydata(verts_list, edges_list, faces_list)
+        mesh_data.update()
+
+        hull_obj = bpy.data.objects.new(f"{obj.name}_Hull", mesh_data)
+        # Place the hull object in the same world transform as the source object
+        hull_obj.matrix_world = obj.matrix_world.copy()
+
+        context.collection.objects.link(hull_obj)
+        # Optionally select it
+        hull_obj.select_set(True)
+        context.view_layer.objects.active = hull_obj
 
         return {FINISHED}
