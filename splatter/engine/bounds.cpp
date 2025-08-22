@@ -92,8 +92,8 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
     // Parameters
     const uint32_t K = std::min<uint32_t>(100, vertCount); // neighborhood size
     const float LINEARITY_THRESHOLD = 0.9f;
-    const int MAX_POWER_ITERS = 50;
-    const float POWER_TOL = 1e-6f;
+    // const int MAX_POWER_ITERS = 50;
+    // const float POWER_TOL = 1e-6f;
     const uint8_t MIN_WIRE_GROUP_SIZE = 10;
 
     // auto sq = [](float x){ return x*x; };
@@ -139,46 +139,32 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
                 cov[r][c] /= static_cast<double>(n);
     };
 
-    // Helper: power iteration to get largest eigenvalue & eigenvector of symmetric 3x3 matrix
-    auto power_iteration = [&](const double A[3][3], double &out_eigenvalue, double out_vec[3])
+    // Helper: use Eigen's SelfAdjointEigenSolver for 3x3 symmetric matrices.
+    // Produces eigenvalues (ascending) and eigenvectors (columns).
+    auto eig3 = [&](const double A[3][3], double &lambda1, double &lambda2, double &lambda3, double v1[3], double v2[3])
     {
-        double x[3] = {1.0, 1.0, 1.0};
-        // normalize
-        double norm = std::sqrt(x[0] * x[0] + x[1] * x[1] + x[2] * x[2]);
-        for (int i = 0; i < 3; ++i)
-            x[i] /= (norm > 0 ? norm : 1.0);
-        double prev_lambda = 0.0;
-        for (int iter = 0; iter < MAX_POWER_ITERS; ++iter)
+        Eigen::Matrix3d M;
+        M << A[0][0], A[0][1], A[0][2],
+             A[1][0], A[1][1], A[1][2],
+             A[2][0], A[2][1], A[2][2];
+
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
+        es.compute(M);
+        if (es.info() != Eigen::Success)
         {
-            double y[3] = {0.0, 0.0, 0.0};
-            for (int r = 0; r < 3; ++r)
-                for (int c = 0; c < 3; ++c)
-                    y[r] += A[r][c] * x[c];
-            double ynorm = std::sqrt(y[0] * y[0] + y[1] * y[1] + y[2] * y[2]);
-            if (ynorm == 0.0)
-            {
-                out_eigenvalue = 0.0;
-                out_vec[0] = out_vec[1] = out_vec[2] = 0.0;
-                return;
-            }
-            for (int i = 0; i < 3; ++i)
-                x[i] = y[i] / ynorm;
-            // Rayleigh quotient
-            double lambda = 0.0;
-            for (int r = 0; r < 3; ++r)
-                for (int c = 0; c < 3; ++c)
-                    lambda += x[r] * A[r][c] * x[c];
-            if (std::abs(lambda - prev_lambda) < POWER_TOL)
-                break;
-            prev_lambda = lambda;
+            lambda1 = lambda2 = lambda3 = 0.0;
+            v1[0]=v1[1]=v1[2]=v2[0]=v2[1]=v2[2]=0.0;
+            return;
         }
-        out_eigenvalue = 0.0;
-        for (int r = 0; r < 3; ++r)
-            for (int c = 0; c < 3; ++c)
-                out_eigenvalue += x[r] * A[r][c] * x[c];
-        out_vec[0] = x[0];
-        out_vec[1] = x[1];
-        out_vec[2] = x[2];
+
+        Eigen::Vector3d w = es.eigenvalues();    // ascending: w[0] <= w[1] <= w[2]
+        Eigen::Matrix3d V = es.eigenvectors();   // columns are eigenvectors
+
+        lambda1 = w[2];
+        lambda2 = w[1];
+        lambda3 = w[0];
+        v1[0] = V(0,2); v1[1] = V(1,2); v1[2] = V(2,2);
+        v2[0] = V(0,1); v2[1] = V(1,1); v2[2] = V(2,1);
     };
 
     std::vector<uint32_t> neighbor_idxs;
@@ -240,23 +226,9 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
         compute_cov(neighbor_idxs, cov);
 
         // compute eigenvalues: largest via power iteration
-        double lambda1, v1[3];
-        power_iteration(cov, lambda1, v1);
-
-        // deflate to get second eigenvalue: A' = A - lambda1 * v1 v1^T
-        double A_defl[3][3];
-        for (int r = 0; r < 3; ++r)
-            for (int c = 0; c < 3; ++c)
-                A_defl[r][c] = cov[r][c] - lambda1 * v1[r] * v1[c];
-
-        double lambda2, v2[3];
-        power_iteration(A_defl, lambda2, v2);
-
-        // trace gives sum eigenvalues; compute lambda3
-        double trace = cov[0][0] + cov[1][1] + cov[2][2];
-        double lambda3 = trace - lambda1 - lambda2;
-        if (lambda3 < 0)
-            lambda3 = 0.0; // numeric safety
+        double lambda1, lambda2, lambda3;
+        double v1[3], v2[3];
+        eig3(cov, lambda1, lambda2, lambda3, v1, v2);
 
         double lin = 0.0;
         if (lambda1 > 0.0)
