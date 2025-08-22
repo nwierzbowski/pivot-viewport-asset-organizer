@@ -270,7 +270,7 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        start = time.perf_counter()
+        
         obj = context.active_object
         if not obj:
             self.report({ERROR}, "No active object to align")
@@ -302,11 +302,11 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         # This is the crucial step: use the obtained loop indices to look up the actual vertex indices
         triangles_np = loop_vertex_indices[triangle_loop_indices].reshape(-1, 3)
 
-        
+        start = time.perf_counter()
         rot, trans = bridge.align_min_bounds(verts_np, triangles_np)
-        
-        obj.rotation_euler = rot
         elapsed = time.perf_counter() - start
+        obj.rotation_euler = rot
+        
         print(f"Align to axes elapsed: {elapsed:.6f}s")
 
         return {FINISHED}

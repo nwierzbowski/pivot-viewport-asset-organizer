@@ -4,14 +4,16 @@
 #include <vector>
 #include <algorithm>
 
-std::vector<Vec2> convex_hull_2D(const Vec3* verts, uint32_t vertCount) {
+std::vector<Vec2> convex_hull_2D(const Vec3* verts, uint32_t vertCount, const std::vector<bool>& selection) {
     std::vector<Vec2> points;
     points.reserve(vertCount);
 
     if (!verts || vertCount == 0) return points;
 
     for (uint32_t i = 0; i < vertCount; ++i) {
-        points.emplace_back(Vec2{verts[i].x, verts[i].y});
+        if (!selection.empty() && !selection[i]) {
+            points.emplace_back(Vec2{verts[i].x, verts[i].y});
+        }
     }
 
     if (vertCount <= 3) {
