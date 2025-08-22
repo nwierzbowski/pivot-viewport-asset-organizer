@@ -10,6 +10,7 @@
 #include <cmath>
 #include <algorithm>
 #include <queue>
+#include <chrono>
 
 // Rotate points by angle (radians) around origin
 void rotate_points_2D(const std::vector<Vec2> &points, float angle, std::vector<Vec2> &out)
@@ -85,7 +86,7 @@ std::vector<float> get_edge_angles_2D(const std::vector<Vec2> &hull)
 }
 
 std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts)
-{
+{   
     if (!verts || vertCount == 0)
         return std::vector<bool>(vertCount, false);
 
@@ -137,27 +138,89 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
 
     // Helper: use Eigen's SelfAdjointEigenSolver for 3x3 symmetric matrices.
     // Produces eigenvalues (ascending) and eigenvectors (columns).
-    auto eig3 = [&](const double A[3][3], double &lambda1, double &lambda2, double &lambda3)
+    auto eig3 = [&](const double A[3][3], double &lambda1, double &lambda2)
     {
-        Eigen::Matrix3d M;
-        M << A[0][0], A[0][1], A[0][2],
-             A[1][0], A[1][1], A[1][2],
-             A[2][0], A[2][1], A[2][2];
+        // Fast power-iteration for largest eigenvalue + deflation for second.
+        // Fall back to Eigen if something goes wrong.
+        auto dot3 = [](const double a[3], const double b[3]) {
+            return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+        };
+        auto mat_vec = [&](const double M[3][3], const double v[3], double out[3]) {
+            for (int r = 0; r < 3; ++r)
+                out[r] = M[r][0]*v[0] + M[r][1]*v[1] + M[r][2]*v[2];
+        };
 
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
-        es.compute(M);
-        if (es.info() != Eigen::Success)
+        double M[3][3];
+        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) M[r][c] = A[r][c];
+
+        const int MAX_IT = 40;
+        const double TOL = 1e-10;
+
+        // First eigenpair
+        double v[3] = {1.0, 1.0, 1.0};
+        double tmp[3];
+        double nrm = std::sqrt(dot3(v, v));
+        if (nrm == 0.0) { v[0]=1; v[1]=0; v[2]=0; nrm = 1.0; }
+        v[0]/=nrm; v[1]/=nrm; v[2]/=nrm;
+        double lambda_prev = 0.0;
+        for (int it = 0; it < MAX_IT; ++it)
         {
-            lambda1 = lambda2 = lambda3 = 0.0;
-            return;
+            mat_vec(M, v, tmp);
+            double tmpn = std::sqrt(dot3(tmp, tmp));
+            if (tmpn == 0.0) break;
+            v[0] = tmp[0] / tmpn; v[1] = tmp[1] / tmpn; v[2] = tmp[2] / tmpn;
+            mat_vec(M, v, tmp);
+            double lambda = dot3(v, tmp);
+            if (std::abs(lambda - lambda_prev) < TOL * std::max(1.0, std::abs(lambda))) { lambda_prev = lambda; break; }
+            lambda_prev = lambda;
         }
+        lambda1 = lambda_prev;
 
-        Eigen::Vector3d w = es.eigenvalues();    // ascending: w[0] <= w[1] <= w[2]
-        Eigen::Matrix3d V = es.eigenvectors();   // columns are eigenvectors
+        // Deflate and find second eigenvector (use original M to compute Rayleigh quotient)
+        double M2[3][3];
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 3; ++c)
+                M2[r][c] = M[r][c] - lambda1 * v[r] * v[c];
 
-        lambda1 = w[2];
-        lambda2 = w[1];
-        lambda3 = w[0];
+        double u[3] = { v[1] - v[2] + 1e-1, v[2] - v[0] + 1e-1, v[0] - v[1] + 1e-1 };
+        nrm = std::sqrt(dot3(u, u));
+        if (nrm == 0.0) { u[0]=1; u[1]=0; u[2]=0; nrm = 1.0; }
+        u[0]/=nrm; u[1]/=nrm; u[2]/=nrm;
+        double lambda2_prev = 0.0;
+        for (int it = 0; it < MAX_IT; ++it)
+        {
+            mat_vec(M2, u, tmp);
+            double tmpn = std::sqrt(dot3(tmp, tmp));
+            if (tmpn == 0.0) break;
+            u[0] = tmp[0] / tmpn; u[1] = tmp[1] / tmpn; u[2] = tmp[2] / tmpn;
+            mat_vec(M, u, tmp); // original matrix for Rayleigh
+            double lambda = dot3(u, tmp);
+            if (std::abs(lambda - lambda2_prev) < TOL * std::max(1.0, std::abs(lambda))) { lambda2_prev = lambda; break; }
+            lambda2_prev = lambda;
+        }
+        lambda2 = lambda2_prev;
+
+        // Ordering and safety
+        if (!std::isfinite(lambda1) || !std::isfinite(lambda2) || lambda2 > lambda1 + 1e-12)
+        {
+            // fallback to robust Eigen solver
+            Eigen::Matrix3d E;
+            E << A[0][0], A[0][1], A[0][2],
+                 A[1][0], A[1][1], A[1][2],
+                 A[2][0], A[2][1], A[2][2];
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
+            es.compute(E);
+            if (es.info() == Eigen::Success)
+            {
+                Eigen::Vector3d w = es.eigenvalues(); // ascending
+                lambda1 = w[2];
+                lambda2 = w[1];
+            }
+            else
+            {
+                lambda1 = lambda2 = 0.0;
+            }
+        }
     };
 
     std::vector<uint32_t> neighbor_idxs;
@@ -166,6 +229,7 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
     std::vector<int> is_wire(vertCount, 0);
     std::vector<float> linearity_scores(vertCount, 0.0f);
 
+    auto start = std::chrono::high_resolution_clock::now();
     for (uint32_t i = 0; i < vertCount; ++i)
     {
         const Vec3 &pi = verts[i];
@@ -219,8 +283,8 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
         compute_cov(neighbor_idxs, cov);
 
         // compute eigenvalues: largest via power iteration
-        double lambda1, lambda2, lambda3;
-        eig3(cov, lambda1, lambda2, lambda3);
+        double lambda1, lambda2;
+        eig3(cov, lambda1, lambda2);
 
         double lin = 0.0;
         if (lambda1 > 0.0)
@@ -229,12 +293,16 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
         if (lin > LINEARITY_THRESHOLD)
             is_wire[i] = 1;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Time to compute linearity: " << duration.count() << " ms" << std::endl;
 
     std::vector<bool> final_is_wire(vertCount, false);
     std::vector<bool> visited(vertCount, false);
     std::vector<int> boundary_indices;
 
     // Populate final_is_wire
+    start = std::chrono::high_resolution_clock::now();
     for (uint32_t i = 0; i < vertCount; ++i)
     {
         if (is_wire[i] && visited[i] == false)
@@ -279,8 +347,12 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
             }
         }
     }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Time to eliminate small wire groups: " << duration.count() << " ms" << std::endl;
 
     std::queue<uint32_t> queue;
+    start = std::chrono::high_resolution_clock::now();
     for (uint32_t idx : boundary_indices)
     {
         queue.push(idx);
@@ -305,6 +377,9 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
             }
         }
     }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Time to grow wire selection: " << duration.count() << " ms" << std::endl;
 
     return final_is_wire;
 }
@@ -358,8 +433,17 @@ void align_min_bounds(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces
     // Calculate vertex adjacency lists
     std::vector<std::vector<uint32_t>> adj_verts(vertCount);
     build_adj_vertices(verts, vertCount, faces, faceCount, adj_verts);
+    
+    auto start = std::chrono::high_resolution_clock::now();
 
     auto is_wire = elim_wires(verts, vertCount, adj_verts);
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Time: " << duration.count() << " ms" << std::endl;
+    
+    // auto is_wire = std::vector<bool>(vertCount, false);
+    // timeFunction([&]() { is_wire = elim_wires(verts, vertCount, adj_verts); });
 
     std::vector<Vec2> hull = convex_hull_2D(verts, vertCount, is_wire);
     std::vector<float> angles = get_edge_angles_2D(hull);
