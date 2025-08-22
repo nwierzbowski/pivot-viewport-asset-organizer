@@ -89,7 +89,7 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
 
     // Parameters
     const uint32_t K = std::min<uint32_t>(100, vertCount); // neighborhood size
-    const float LINEARITY_THRESHOLD = 0.95f;
+    const float LINEARITY_THRESHOLD = 0.9f;
     const int MAX_POWER_ITERS = 50;
     const float POWER_TOL = 1e-6f;
     const uint8_t MIN_WIRE_GROUP_SIZE = 10;
@@ -299,8 +299,8 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
                 }
             }
 
-            // If group is large enough, mark all as wire
-            if (group.size() >= MIN_WIRE_GROUP_SIZE)
+            // If group is large enough or is it's whole island, mark all as wire
+            if (group.size() >= MIN_WIRE_GROUP_SIZE || group.size() == neighbor_idxs.size())
             {
                 for (uint32_t idx : group)
                 {
@@ -318,7 +318,6 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
     for (uint32_t idx : boundary_indices)
     {
         queue.push(idx);
-        // std::cout << "Pushing starting bounds: " << idx << std::endl;
     }
 
     while (!queue.empty())
@@ -340,13 +339,8 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
             }
         }
     }
-    return final_is_wire;
 
-    // NOTE:
-    // - This function currently only classifies and reports wire-like points.
-    // - To actually remove them or return indices, change the API (e.g. return a vector<uint32_t>
-    //   of wire indices) or provide out parameters. Consider implementing seed-and-grow
-    //   region expansion on high-confidence seeds (higher threshold) to make a robust removal.
+    return final_is_wire;
 }
 
 void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces, uint32_t faceCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
