@@ -26,6 +26,30 @@ struct Vec2i {
     }
 };
 
+
+struct uVec2i {
+    uint32_t x = 0, y = 0;
+
+    uVec2i() = default;
+    uVec2i(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
+
+    bool operator<(const uVec2i &other) const {
+        return x < other.x || (x == other.x && y < other.y);
+    }
+
+    uVec2i operator-(const uVec2i& other) const {
+        return {x - other.x, y - other.y};
+    }
+
+    uVec2i operator+(const uVec2i& other) const {
+        return {x + other.x, y + other.y};
+    }
+
+    uVec2i operator*(uint32_t scale) const {
+        return {x * scale, y * scale};
+    }
+};
+
 struct Vec3i {
     int32_t x = 0, y = 0, z = 0;
 
@@ -45,6 +69,29 @@ struct Vec3i {
     }
 
     Vec3i operator*(int32_t scale) const {
+        return {x * scale, y * scale, z * scale};
+    }
+};
+
+struct uVec3i {
+    uint32_t x = 0, y = 0, z = 0;
+
+    uVec3i() = default;
+    uVec3i(uint32_t x_val, uint32_t y_val, uint32_t z_val) : x(x_val), y(y_val), z(z_val) {}
+
+    bool operator<(const uVec3i &other) const {
+        return x < other.x || (x == other.x && y < other.y) || (x == other.x && y == other.y && z < other.z);
+    }
+
+    uVec3i operator-(const uVec3i& other) const {
+        return {x - other.x, y - other.y, z - other.z};
+    }
+
+    uVec3i operator+(const uVec3i& other) const {
+        return {x + other.x, y + other.y, z + other.z};
+    }
+
+    uVec3i operator*(uint32_t scale) const {
         return {x * scale, y * scale, z * scale};
     }
 };

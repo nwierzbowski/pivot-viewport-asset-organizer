@@ -232,20 +232,6 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
         // ensure we have at least one index (avoid empty neighborhood)
         if (neighbor_idxs.empty())
             neighbor_idxs.push_back(i);
-        // for (uint32_t j = 0; j < vertCount; ++j)
-        // {
-        //     double dx = pi.x - verts[j].x;
-        //     double dy = pi.y - verts[j].y;
-        //     double dz = pi.z - verts[j].z;
-        //     double dsq = dx * dx + dy * dy + dz * dz;
-        //     dists.push_back({dsq, j});
-        // }
-        // std::nth_element(dists.begin(), dists.begin() + (K - 1), dists.end(),
-        //                  [](const DistIdx &a, const DistIdx &b)
-        //                  { return a.d < b.d; });
-        // neighbor_idxs.clear();
-        // for (uint32_t t = 0; t < K; ++t)
-        //     neighbor_idxs.push_back(dists[t].idx);
 
         // compute covariance
         double cov[3][3];
@@ -363,7 +349,7 @@ std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::v
     //   region expansion on high-confidence seeds (higher threshold) to make a robust removal.
 }
 
-void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const Vec3i *faces, uint32_t faceCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
+void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces, uint32_t faceCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
 {
     if (!verts || vertCount == 0 || !faces || faceCount == 0)
         return;
@@ -371,7 +357,7 @@ void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const Vec3i *face
     // Build adjacency list
     for (uint32_t i = 0; i < faceCount; ++i)
     {
-        const Vec3i &f = faces[i];
+        const uVec3i &f = faces[i];
         if (f.x < vertCount && f.y < vertCount)
         {
             out_adj_verts[f.x].push_back(f.y);
@@ -397,7 +383,7 @@ void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const Vec3i *face
     }
 }
 
-void align_min_bounds(const Vec3 *verts, uint32_t vertCount, const Vec3i *faces, uint32_t faceCount, Vec3 *out_rot, Vec3 *out_trans)
+void align_min_bounds(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces, uint32_t faceCount, Vec3 *out_rot, Vec3 *out_trans)
 {
     if (!verts || vertCount == 0 || !faces || faceCount == 0 || !out_rot || !out_trans)
         return;

@@ -1,7 +1,7 @@
 from libc.stdint cimport uint32_t
 
 from splatter.cython_api.bounds_api cimport align_min_bounds as align_min_bounds_cpp
-from splatter.cython_api.util_api cimport Vec3, Vec3i
+from splatter.cython_api.util_api cimport Vec3, uVec3i
 
 def align_min_bounds(float[:, ::1] verts, int[:, ::1] faces):
 
@@ -17,7 +17,7 @@ def align_min_bounds(float[:, ::1] verts, int[:, ::1] faces):
     cdef Vec3* verts_ptr = <Vec3*> &verts[0, 0]
     cdef uint32_t vertCount = verts.shape[0]
 
-    cdef Vec3i* faces_ptr = <Vec3i*> &faces[0, 0]
+    cdef uVec3i* faces_ptr = <uVec3i*> &faces[0, 0]
     cdef uint32_t faceCount = faces.shape[0]
 
     cdef Vec3 out_rot, out_trans
