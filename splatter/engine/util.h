@@ -153,12 +153,29 @@ struct Vec3 {
         return x < other.x || (x == other.x && y < other.y) || (x == other.x && y == other.y && z < other.z);
     }
 
+    bool operator==(const Vec3& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
+
+    // Vec3& operator=(const Vec3& other) {
+    //     if (this != &other) {
+    //         x = other.x;
+    //         y = other.y;
+    //         z = other.z;
+    //     }
+    //     return *this;
+    // }
+
     Vec3 operator-(const Vec3& other) const {
     return {x - other.x, y - other.y, z - other.z};
     }
 
     Vec3 operator+(const Vec3& other) const {
         return {x + other.x, y + other.y, z + other.z};
+    }
+
+    Vec3 operator/(uint32_t other) const {
+        return {x / other, y / other, z / other};
     }
     
     Vec3 operator*(float scale) const {

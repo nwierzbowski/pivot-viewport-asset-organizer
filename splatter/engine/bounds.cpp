@@ -88,7 +88,7 @@ std::vector<float> get_edge_angles_2D(const std::vector<Vec2> &hull)
     return angles;
 }
 
-static inline void eig3(const float A[3][3], float &lambda1, float &lambda2)
+void eig3(const float A[3][3], float &lambda1, float &lambda2, Vec3 &prim_vec, Vec3 &sec_vec)
 {
     // Fast power-iteration for largest eigenvalue + deflation for second.
     // Fall back to Eigen if something goes wrong.
@@ -143,7 +143,9 @@ static inline void eig3(const float A[3][3], float &lambda1, float &lambda2)
         }
         lambda_prev = lambda;
     }
+
     lambda1 = lambda_prev;
+    prim_vec = Vec3{v[0], v[1], v[2]};
 
     // Deflate and find second eigenvector (use original M to compute Rayleigh quotient)
     float M2[3][3];
@@ -183,324 +185,169 @@ static inline void eig3(const float A[3][3], float &lambda1, float &lambda2)
         lambda2_prev = lambda;
     }
     lambda2 = lambda2_prev;
+    sec_vec = Vec3{u[0], u[1], u[2]};
 
     // Ordering and safety
-    if (!std::isfinite(lambda1) || !std::isfinite(lambda2) || lambda2 > lambda1 + 1e-12)
+    // if (!std::isfinite(lambda1) || !std::isfinite(lambda2) || lambda2 > lambda1 + 1e-12)
+    // {
+    //     // fallback to robust Eigen solver
+    //     Eigen::Matrix3d E;
+    //     E << A[0][0], A[0][1], A[0][2],
+    //         A[1][0], A[1][1], A[1][2],
+    //         A[2][0], A[2][1], A[2][2];
+    //     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
+    //     es.compute(E);
+    //     if (es.info() == Eigen::Success)
+    //     {
+    //         Eigen::Vector3d w = es.eigenvalues(); // ascending
+    //         lambda1 = w[2];
+    //         lambda2 = w[1];
+    //     }
+    //     else
+    //     {
+    //         lambda1 = lambda2 = 0.0;
+    //     }
+    // }
+};
+
+// A hash function for our Vec3 struct, enabling it to be used as a key
+// in std::unordered_map.
+struct Vec3Hash
+{
+    std::size_t operator()(const Vec3 &v) const
     {
-        // fallback to robust Eigen solver
-        Eigen::Matrix3d E;
-        E << A[0][0], A[0][1], A[0][2],
-            A[1][0], A[1][1], A[1][2],
-            A[2][0], A[2][1], A[2][2];
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
-        es.compute(E);
-        if (es.info() == Eigen::Success)
-        {
-            Eigen::Vector3d w = es.eigenvalues(); // ascending
-            lambda1 = w[2];
-            lambda2 = w[1];
-        }
-        else
-        {
-            lambda1 = lambda2 = 0.0;
-        }
+        // A common way to combine hashes of multiple integer members.
+        // The prime numbers are used to reduce collisions.
+        const std::size_t p1 = 73856093;
+        const std::size_t p2 = 19349663;
+        const std::size_t p3 = 83492791;
+
+        return (static_cast<std::size_t>(v.x) * p1) ^
+               (static_cast<std::size_t>(v.y) * p2) ^
+               (static_cast<std::size_t>(v.z) * p3);
     }
 };
 
-struct PointCloud
+auto compute_cov(const std::vector<uint32_t> &idxs, const Vec3 *verts, float cov[3][3])
 {
-    const Vec3* pts;
-    uint32_t ptCount;
-
-    inline size_t kdtree_get_point_count() const { return ptCount; }
-
-    // Returns the dim'th component of the idx'th point in the class:
-    // Since Vec3 is {x,y,z}, this is straight-forward.
-    inline float kdtree_get_pt(const size_t idx, const size_t dim) const
+    const size_t n = idxs.size();
+    float mean[3] = {0.0f, 0.0f, 0.0f};
+    for (uint32_t id : idxs)
     {
-        if (dim == 0) return pts[idx].x;
-        else if (dim == 1) return pts[idx].y;
-        else return pts[idx].z;
+        const Vec3 &p = verts[id];
+        mean[0] += p.x;
+        mean[1] += p.y;
+        mean[2] += p.z;
     }
-
-    // Optional bounding-box computation: is not essential but helps performance.
-    template <class BBOX>
-    bool kdtree_get_bbox(BBOX& /* bb */) const { return false; }
+    mean[0] /= n;
+    mean[1] /= n;
+    mean[2] /= n;
+    // zero cov
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c)
+            cov[r][c] = 0.0;
+    for (uint32_t id : idxs)
+    {
+        const Vec3 &p = verts[id];
+        float d0 = p.x - mean[0];
+        float d1 = p.y - mean[1];
+        float d2 = p.z - mean[2];
+        cov[0][0] += d0 * d0;
+        cov[0][1] += d0 * d1;
+        cov[0][2] += d0 * d2;
+        cov[1][0] += d1 * d0;
+        cov[1][1] += d1 * d1;
+        cov[1][2] += d1 * d2;
+        cov[2][0] += d2 * d0;
+        cov[2][1] += d2 * d1;
+        cov[2][2] += d2 * d2;
+    }
+    // Normalize by n
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c)
+            cov[r][c] /= static_cast<double>(n);
 };
 
-std::vector<bool> elim_wires(const Vec3 *verts, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts)
+std::vector<bool> elim_wires(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts, const std::vector<uint32_t> &guess_indices)
 {
-    if (!verts || vertCount == 0)
+    if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty())
         return std::vector<bool>(vertCount, false);
 
     // Parameters
-    const uint32_t K = std::min<uint32_t>(70, vertCount); // neighborhood size
-    const float LINEARITY_THRESHOLD = 0.9f;
+    // const uint32_t K = std::min<uint32_t>(70, vertCount); // neighborhood size
+    // const float LINEARITY_THRESHOLD = 0.9f;
     // const uint8_t MIN_WIRE_GROUP_SIZE = 10;
 
     // Helper: compute covariance matrix (3x3) for a set of points given their indices
-    auto compute_cov = [&](const std::vector<uint32_t> &idxs, float cov[3][3])
-    {
-        const size_t n = idxs.size();
-        float mean[3] = {0.0f, 0.0f, 0.0f};
-        for (uint32_t id : idxs)
-        {
-            const Vec3 &p = verts[id];
-            mean[0] += p.x;
-            mean[1] += p.y;
-            mean[2] += p.z;
-        }
-        mean[0] /= n;
-        mean[1] /= n;
-        mean[2] /= n;
-        // zero cov
-        for (int r = 0; r < 3; ++r)
-            for (int c = 0; c < 3; ++c)
-                cov[r][c] = 0.0;
-        for (uint32_t id : idxs)
-        {
-            const Vec3 &p = verts[id];
-            float d0 = p.x - mean[0];
-            float d1 = p.y - mean[1];
-            float d2 = p.z - mean[2];
-            cov[0][0] += d0 * d0;
-            cov[0][1] += d0 * d1;
-            cov[0][2] += d0 * d2;
-            cov[1][0] += d1 * d0;
-            cov[1][1] += d1 * d1;
-            cov[1][2] += d1 * d2;
-            cov[2][0] += d2 * d0;
-            cov[2][1] += d2 * d1;
-            cov[2][2] += d2 * d2;
-        }
-        // Normalize by n
-        for (int r = 0; r < 3; ++r)
-            for (int c = 0; c < 3; ++c)
-                cov[r][c] /= static_cast<double>(n);
-    };
 
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
 
     std::vector<bool> is_wire(vertCount, false);
-    std::vector<float> linearity_scores(vertCount, 0.0f);
-
-    std::vector<float> total_weights(vertCount, 0.0f);
-    std::vector<float> votes(vertCount, 0.0f);
-
-    // --- Replaced BFS data structures with Dijkstra structures ---
-    // std::vector<int32_t> visit_tag(vertCount, -1);          // marks last source index that touched this node
-    // std::vector<float>   graph_dist(vertCount, 0.0f);       // distance from current source
-    std::vector<uint32_t> ret_indices(K);
-    std::vector<float> out_dists_sqr(K);
-    std::vector<uint32_t> neighbor_idxs;
-    neighbor_idxs.reserve(K);
-    // ------------------------------------------------------------
-
-    // --- 2. Build the k-d Tree (Do this ONCE) ---
-    PointCloud cloud = { verts, vertCount };
-    using my_kd_tree_t = nanoflann::KDTreeSingleIndexAdaptor<
-        nanoflann::L2_Simple_Adaptor<float, PointCloud>,
-        PointCloud,
-        3
-    >;
-
-    my_kd_tree_t index(3, cloud, nanoflann::KDTreeSingleIndexAdaptorParams(60));
-    index.buildIndex();
-
-    std::random_device rd;
-    std::mt19937 generator(rd());
-
-    // 2. Create a uniform integer distribution for your desired range [min, max].
-    int min = 0;
-    int max = 23;
-    std::uniform_int_distribution<int> distribution(min, max);
-
-    // 3. Generate and print a random number.
-    int random_number = distribution(generator);
-    printf("%i\n", random_number);
-
-     for (uint32_t i = random_number; i < vertCount; i += 24)
+    for (const uint32_t &guess : guess_indices)
     {
-        const float query_pt[3] = { verts[i].x, verts[i].y, verts[i].z };
-
-        ret_indices.clear();
-        out_dists_sqr.clear();
-        
-        nanoflann::KNNResultSet<float, uint32_t> resultSet(K);
-        resultSet.init(ret_indices.data(), out_dists_sqr.data());
-
-        nanoflann::SearchParameters params;
-        params.eps = 2.5;
-
-        index.findNeighbors(resultSet, query_pt, params);
-        // -----------------------
-
-        neighbor_idxs.assign(ret_indices.begin(), ret_indices.begin() + resultSet.size());
-
-        if (neighbor_idxs.empty())
-            neighbor_idxs.push_back(i);
-
-        float cov[3][3];
-        compute_cov(neighbor_idxs, cov);
-
-        float lambda1, lambda2;
-        eig3(cov, lambda1, lambda2);
-
-        float lin = 0.0f;
-        if (lambda1 > 0.0f)
-            lin = (lambda1 - lambda2) / lambda1;
-        linearity_scores[i] = lin;
-
-        for (size_t j = 0; j < resultSet.size(); ++j)
-        {
-            uint32_t idx_n = ret_indices[j];
-            if (idx_n == i) continue;
-
-            float d_sq = out_dists_sqr[j];
-            if (d_sq <= 0.0f) continue;
-            
-            float weight = 1.0f / d_sq;
-            total_weights[idx_n] += weight;
-            votes[idx_n] += weight * lin;
-        }
+        is_wire[guess] = true;
     }
 
-    for (uint32_t i = 0; i < vertCount; ++i)
-    {
-        if (linearity_scores[i] == 0.0f)
-        {
-            linearity_scores[i] = votes[i] / (total_weights[i] + 1e-6f);
-        }
-        is_wire[i] = (linearity_scores[i] > LINEARITY_THRESHOLD);
-    }
+    // std::vector<float> linearity_scores(vertCount, 0.0f);
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Time to compute linearity: " << duration.count() << " ms" << std::endl;
+    // std::queue<uint32_t> queue;
+    // // start = std::chrono::high_resolution_clock::now();
+    // for (uint32_t idx : boundary_indices)
+    // {
+    //     queue.push(idx);
+    // }
 
-    std::vector<bool> group_visited(vertCount, false);
-    std::vector<int> boundary_indices;
+    // while (!queue.empty())
+    // {
+    //     uint32_t current = queue.front();
+    //     queue.pop();
 
-    // Populate final_is_wire
-    // start = std::chrono::high_resolution_clock::now();
-    for (uint32_t i = 0; i < vertCount; ++i)
-    {
-        if (is_wire[i] && group_visited[i] == false)
-        {
-            std::vector<uint32_t> group;
-            std::queue<uint32_t> queue;
-            std::vector<uint32_t> current_bounds;
-            queue.push(i);
-            group_visited[i] = true;
-            while (!queue.empty())
-            {
-                uint32_t idx = queue.front();
-                queue.pop();
-                group.push_back(idx);
+    //     if (linearity_scores[current] > 0.1 && !is_wire[current])
+    //     {
 
-                // Check neighbors
-                for (uint32_t neighbor : adj_verts[idx])
-                {
-                    if (is_wire[neighbor] && !group_visited[neighbor])
-                    {
-                        group_visited[neighbor] = true;
-                        queue.push(neighbor);
-                    }
-                    else if (!is_wire[neighbor] && std::find(current_bounds.begin(), current_bounds.end(), neighbor) == current_bounds.end())
-                    {
-                        current_bounds.push_back(neighbor);
-                    }
-                }
-            }
-
-            // If group is large enough or is it's whole island, mark all as wire
-            if (group.size() < 10 && !current_bounds.empty())
-            {
-                for (uint32_t idx : group)
-                {
-                    is_wire[idx] = false;
-                }
-                
-            } else {
-                for (uint32_t idx : current_bounds)
-                {
-                    boundary_indices.push_back(idx);
-                }
-            }
-        }
-    }
-    // end = std::chrono::high_resolution_clock::now();
-    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    // std::cout << "Time to eliminate small wire groups: " << duration.count() << " ms" << std::endl;
-
-    std::queue<uint32_t> queue;
-    // start = std::chrono::high_resolution_clock::now();
-    for (uint32_t idx : boundary_indices)
-    {
-        queue.push(idx);
-    }
-
-    while (!queue.empty())
-    {
-        uint32_t current = queue.front();
-        queue.pop();
-
-        if (linearity_scores[current] > 0.1 && !is_wire[current])
-        {
-
-            is_wire[current] = true;
-            // Check neighbors
-            for (uint32_t neighbor : adj_verts[current])
-            {
-                if (!is_wire[neighbor])
-                {
-                    queue.push(neighbor);
-                }
-            }
-        }
-    }
+    //         is_wire[current] = true;
+    //         // Check neighbors
+    //         for (uint32_t neighbor : adj_verts[current])
+    //         {
+    //             if (!is_wire[neighbor])
+    //             {
+    //                 queue.push(neighbor);
+    //             }
+    //         }
+    //     }
+    // }
     // end = std::chrono::high_resolution_clock::now();
     // duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     // std::cout << "Time to grow wire selection: " << duration.count() << " ms" << std::endl;
-    // uint32_t wire_count = 0;
-    // for (uint32_t i = 0; i < is_wire.size(); ++i)
-    // {
-    //     if (is_wire[i])
-    //     {
-    //         printf("%i ", i);
-    //         wire_count++;
-    //     }
-    // }
+    uint32_t wire_count = 0;
+    for (uint32_t i = 0; i < is_wire.size(); ++i)
+    {
+        if (is_wire[i])
+        {
+            printf("%i ", i);
+            wire_count++;
+        }
+    }
 
-    // std::cout << "Number of wire vertices: " << wire_count << std::endl;
+    std::cout << "Number of wire vertices: " << wire_count << std::endl;
 
     return is_wire;
 }
 
-void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces, uint32_t faceCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
+void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
 {
-    if (!verts || vertCount == 0 || !faces || faceCount == 0)
+    if (!edges || edgeCount == 0)
         return;
 
     // Build adjacency list
-    for (uint32_t i = 0; i < faceCount; ++i)
+    for (uint32_t i = 0; i < edgeCount; ++i)
     {
-        const uVec3i &f = faces[i];
-        if (f.x < vertCount && f.y < vertCount)
-        {
-            out_adj_verts[f.x].push_back(f.y);
-            out_adj_verts[f.y].push_back(f.x);
-        }
-        if (f.y < vertCount && f.z < vertCount)
-        {
-            out_adj_verts[f.y].push_back(f.z);
-            out_adj_verts[f.z].push_back(f.y);
-        }
-        if (f.z < vertCount && f.x < vertCount)
-        {
-            out_adj_verts[f.z].push_back(f.x);
-            out_adj_verts[f.x].push_back(f.z);
-        }
+        const uVec2i &e = edges[i];
+        // if (e.x < vertCount && e.y < vertCount)
+        // {
+        out_adj_verts[e.x].push_back(e.y);
+        out_adj_verts[e.y].push_back(e.x);
+        // }
     }
 
     // Remove duplicates and sort each adjacency list
@@ -511,9 +358,69 @@ void build_adj_vertices(const Vec3 *verts, uint32_t vertCount, const uVec3i *fac
     }
 }
 
-void align_min_bounds(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces, uint32_t faceCount, Vec3 *out_rot, Vec3 *out_trans)
+Vec3 get_voxel_coord(const Vec3 &point, float voxel_size)
 {
-    if (!verts || vertCount == 0 || !faces || faceCount == 0 || !out_rot || !out_trans)
+    return Vec3{
+        std::floor(point.x / voxel_size),
+        std::floor(point.y / voxel_size),
+        std::floor(point.z / voxel_size)};
+}
+
+struct VoxelData
+{
+    std::vector<uint32_t> vertex_indices;
+    Vec3 facing;
+    Vec3 dir;
+};
+
+std::unordered_map<Vec3, VoxelData, Vec3Hash> build_voxel_map(const Vec3 *verts, uint32_t vertCount, float voxel_size)
+{
+    std::unordered_map<Vec3, VoxelData, Vec3Hash> voxel_map;
+
+    if (!verts || vertCount == 0 || voxel_size <= 0.0f)
+        return voxel_map;
+
+    for (uint32_t i = 0; i < vertCount; ++i)
+    {
+        const Vec3 &p = verts[i];
+        Vec3 voxel_coord = get_voxel_coord(p, voxel_size);
+        voxel_map[voxel_coord].vertex_indices.push_back(i);
+    }
+
+    return voxel_map;
+}
+
+void calculate_voxel_map_stats(std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map, const Vec3 *norms, const Vec3 *verts, std::vector<Vec3> &wire_guesses)
+{
+    for (auto &[voxel_coord, voxel_data] : voxel_map)
+    {
+        Vec3 avg_facing = {0, 0, 0};
+        for (const auto &i : voxel_data.vertex_indices)
+        {
+            avg_facing = avg_facing + norms[i];
+        }
+        avg_facing = avg_facing / voxel_data.vertex_indices.size();
+
+        float cov[3][3];
+        compute_cov(voxel_data.vertex_indices, verts, cov);
+
+        float lambda1, lambda2;
+        Vec3 prim_vec, sec_vec;
+        eig3(cov, lambda1, lambda2, prim_vec, sec_vec);
+
+        voxel_data.facing = avg_facing;
+        voxel_data.dir = prim_vec;
+
+        if (avg_facing.length() < 0.3 && lambda1 / (lambda1 + lambda2) > 0.95f)
+        {
+            wire_guesses.push_back(voxel_coord);
+        }
+    }
+}
+
+void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCount, const uVec2i *edges, uint32_t edgeCount, Vec3 *out_rot, Vec3 *out_trans)
+{
+    if (!verts || vertCount == 0 || !vert_norms || vertCount == 0 || !edges || edgeCount == 0 || !out_rot || !out_trans)
         return;
 
     if (vertCount == 1)
@@ -525,18 +432,27 @@ void align_min_bounds(const Vec3 *verts, uint32_t vertCount, const uVec3i *faces
 
     // Calculate vertex adjacency lists
     std::vector<std::vector<uint32_t>> adj_verts(vertCount);
-    build_adj_vertices(verts, vertCount, faces, faceCount, adj_verts);
-
     auto start = std::chrono::high_resolution_clock::now();
+    build_adj_vertices(edges, edgeCount, adj_verts);
 
-    auto is_wire = elim_wires(verts, vertCount, adj_verts);
+    auto voxel_map = build_voxel_map(verts, vertCount, 0.04f);
+
+    std::vector<Vec3> wire_guesses;
+    calculate_voxel_map_stats(voxel_map, vert_norms, (Vec3 *)verts, wire_guesses);
+
+    std::vector<uint32_t> vertex_guess_indices;
+    for (const Vec3 &voxel_guess : wire_guesses)
+    {
+        auto local_vertex_guess_indices = voxel_map.at(voxel_guess).vertex_indices;
+        for (const auto &index : local_vertex_guess_indices)
+            vertex_guess_indices.push_back(index);
+    }
+
+    auto is_wire = elim_wires(verts, vert_norms, vertCount, adj_verts, vertex_guess_indices);
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Time: " << duration.count() << " ms" << std::endl;
-
-    // auto is_wire = std::vector<bool>(vertCount, false);
-    // timeFunction([&]() { is_wire = elim_wires(verts, vertCount, adj_verts); });
 
     std::vector<Vec2> hull = convex_hull_2D(verts, vertCount, is_wire);
     std::vector<float> angles = get_edge_angles_2D(hull);

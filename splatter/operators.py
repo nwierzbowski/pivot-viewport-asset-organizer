@@ -269,6 +269,10 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
     bl_label = "Align to Axes"
     bl_options = {"REGISTER", "UNDO"}
 
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None and context.active_object.type == 'MESH'
+
     def execute(self, context):
         
         obj = context.active_object
@@ -277,36 +281,26 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             return {CANCELLED}
 
         mesh = obj.data
-        mesh.calc_loop_triangles() 
+
         vert_count = len(mesh.vertices)
-
         verts_np = np.empty(vert_count * 3, dtype=np.float32)
-
         mesh.vertices.foreach_get("co", verts_np)
         verts_np.shape = (vert_count, 3)
 
-        # 2. Get triangulated face vertex indices (M x 3 array)
-        num_triangles = len(mesh.loop_triangles)
-        triangles_np = np.empty(num_triangles * 3, dtype=np.int32)
-        # loop_triangles store indices into mesh.loops, but we want vertex indices [5]
-        # We need to get loop_vertex_indices first
-        num_loops = len(mesh.loops)
-        loop_vertex_indices = np.empty(num_loops, dtype=np.int32)
-        mesh.loops.foreach_get("vertex_index", loop_vertex_indices)
+        verts_norm_np = np.empty(vert_count * 3, dtype=np.float32)
+        mesh.vertices.foreach_get("normal", verts_norm_np)
+        verts_norm_np.shape = (vert_count, 3)
 
-        # Now, get the loop indices for each triangle
-        triangle_loop_indices = np.empty(num_triangles * 3, dtype=np.int32)
-        mesh.loop_triangles.foreach_get("loops", triangle_loop_indices)
-        
-        # Map loop indices to vertex indices
-        # This is the crucial step: use the obtained loop indices to look up the actual vertex indices
-        triangles_np = loop_vertex_indices[triangle_loop_indices].reshape(-1, 3)
+        edge_count = len(mesh.edges)
+        edges_np = np.empty(edge_count * 2, dtype=np.uint32)
+        mesh.edges.foreach_get("vertices", edges_np)
+        edges_np.shape = (edge_count, 2)
 
         start = time.perf_counter()
-        rot, trans = bridge.align_min_bounds(verts_np, triangles_np)
+        rot, trans = bridge.align_min_bounds(verts_np, verts_norm_np, edges_np)
         elapsed = time.perf_counter() - start
         obj.rotation_euler = rot
         
-        print(f"Align to axes elapsed: {elapsed:.6f}s")
+        print(f"Align to axes elapsed: {elapsed * 1000:.2f}ms")
 
         return {FINISHED}
