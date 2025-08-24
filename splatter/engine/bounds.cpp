@@ -273,22 +273,11 @@ std::vector<bool> elim_wires(const Vec3 *verts, const Vec3 *vert_norms, uint32_t
     if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty())
         return std::vector<bool>(vertCount, false);
 
-    // Parameters
-    // const uint32_t K = std::min<uint32_t>(70, vertCount); // neighborhood size
-    // const float LINEARITY_THRESHOLD = 0.9f;
-    // const uint8_t MIN_WIRE_GROUP_SIZE = 10;
-
-    // Helper: compute covariance matrix (3x3) for a set of points given their indices
-
-    // auto start = std::chrono::high_resolution_clock::now();
-
     std::vector<bool> is_wire(vertCount, false);
     for (const uint32_t &guess : guess_indices)
     {
         is_wire[guess] = true;
     }
-
-    // std::vector<float> linearity_scores(vertCount, 0.0f);
 
     // std::queue<uint32_t> queue;
     // // start = std::chrono::high_resolution_clock::now();
@@ -316,9 +305,7 @@ std::vector<bool> elim_wires(const Vec3 *verts, const Vec3 *vert_norms, uint32_t
     //         }
     //     }
     // }
-    // end = std::chrono::high_resolution_clock::now();
-    // duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    // std::cout << "Time to grow wire selection: " << duration.count() << " ms" << std::endl;
+
     uint32_t wire_count = 0;
     for (uint32_t i = 0; i < is_wire.size(); ++i)
     {
@@ -411,7 +398,20 @@ void calculate_voxel_map_stats(std::unordered_map<Vec3, VoxelData, Vec3Hash> &vo
         voxel_data.facing = avg_facing;
         voxel_data.dir = prim_vec;
 
-        if (avg_facing.length() < 0.3 && lambda1 / (lambda1 + lambda2) > 0.95f)
+        std::vector<Vec3> neighbor_dirs = {{0, 0, 1}, {0, 1, 0}, {1, 0, 0}, {0, 0, -1}, {0, -1, 0}, {-1, 0, 0}};
+
+        uint8_t neighbor_voxels = 0;
+
+        for (const auto &dir : neighbor_dirs)
+        {
+            Vec3 neighbor_coord = voxel_coord + dir;
+            if (voxel_map.find(neighbor_coord) != voxel_map.end())
+            {
+                neighbor_voxels++;
+            }
+        }
+        // 0.3, 0.9
+        if (avg_facing.length() < 0.3 && lambda1 / (lambda1 + lambda2) > 0.8f && neighbor_voxels <= 3)
         {
             wire_guesses.push_back(voxel_coord);
         }
@@ -435,17 +435,26 @@ void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCo
     auto start = std::chrono::high_resolution_clock::now();
     build_adj_vertices(edges, edgeCount, adj_verts);
 
-    auto voxel_map = build_voxel_map(verts, vertCount, 0.04f);
+    auto voxel_map = build_voxel_map(verts, vertCount, 0.03f);
 
     std::vector<Vec3> wire_guesses;
     calculate_voxel_map_stats(voxel_map, vert_norms, (Vec3 *)verts, wire_guesses);
 
     std::vector<uint32_t> vertex_guess_indices;
+    uint32_t guessed_vertex_count = 0;
     for (const Vec3 &voxel_guess : wire_guesses)
     {
-        auto local_vertex_guess_indices = voxel_map.at(voxel_guess).vertex_indices;
-        for (const auto &index : local_vertex_guess_indices)
-            vertex_guess_indices.push_back(index);
+        guessed_vertex_count += voxel_map.at(voxel_guess).vertex_indices.size();
+    }
+
+    if (guessed_vertex_count < vertCount / 6)
+    {
+        for (const Vec3 &voxel_guess : wire_guesses)
+        {
+            auto local_vertex_guess_indices = voxel_map.at(voxel_guess).vertex_indices;
+            for (const auto &index : local_vertex_guess_indices)
+                vertex_guess_indices.push_back(index);
+        }
     }
 
     auto is_wire = elim_wires(verts, vert_norms, vertCount, adj_verts, vertex_guess_indices);
