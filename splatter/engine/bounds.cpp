@@ -379,29 +379,8 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
         boundary_groups.push_back(group);
     }
 
-    std::cout << "Number of boundary groups: " << boundary_groups.size() << std::endl;
-
-    for (const auto &group : boundary_groups)
-    {
-        std::cout << "Boundary group size: " << group.size() << std::endl;
-    }
-    printf("\n");
-
-    // for (uint32_t i = 0; i < is_wire.size(); ++i)
-    // {
-    //     if (is_wire[i])
-    //     {
-    //         printf("%i ", i);
-    //     }
-    // }
-
-    visited.assign(vertCount, false);
-    std::cout << "Density: " << density << std::endl;
     for (auto &group : boundary_groups)
     {
-        // auto frontier_size = std::max((int)group.size(), 16);
-        auto frontier_size = density;
-        uint16_t iterations = 0;
         while (!group.empty())
         {
             const auto current = group.front();
@@ -416,27 +395,14 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
                 }
             }
 
-            if (group.size() > frontier_size * 2.0)
+            if (group.size() > density * 2.0)
             {
                 std::cout << "Group exceeded size limit: " << group.size() << std::endl;
-                break; // Limit growth to 1.2 times the original frontier size
+                break;
             }
-            // frontier_size = (frontier_size * 2 + group.size()) / 3;
-        }
-        // std::cout << "Finished group" << std::endl;
-    }
-
-    uint32_t wire_count = 0;
-    for (uint32_t i = 0; i < is_wire.size(); ++i)
-    {
-        if (is_wire[i])
-        {
-            // printf("%i ", i);
-            wire_count++;
         }
     }
 
-    std::cout << "\nNumber of wire vertices: " << wire_count << std::endl;
 
     return is_wire;
 }
