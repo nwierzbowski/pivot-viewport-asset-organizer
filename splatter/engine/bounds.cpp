@@ -10,7 +10,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <queue>
+#include <stack>
 #include <chrono>
 #include <random>
 #include <limits>
@@ -275,6 +275,14 @@ struct VoxelData
     Vec3 dir;
 };
 
+Vec3 get_voxel_coord(const Vec3 &point)
+{
+    return Vec3{
+        std::floor(point.x / 0.03f),
+        std::floor(point.y / 0.03f),
+        std::floor(point.z / 0.03f)};
+}
+
 std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts, const std::vector<Vec3> &voxel_guesses, std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map)
 {
     if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty())
@@ -299,19 +307,39 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     }
 
     std::vector<bool> is_wire(vertCount, false);
-    std::queue<uint32_t> boundary;
+    std::stack<uint32_t> boundary;
     for (const uint32_t &guess : vertex_guess_indices)
     {
         is_wire[guess] = true;
         boundary.push(guess);
     }
 
+    Vec3 prev_dir = voxel_map.at(voxel_guesses[0]).dir;
+    std::vector<bool> visited(vertCount, false);
     while (!boundary.empty())
     {
-        uint32_t current = boundary.front();
+        uint32_t current = boundary.top();
         boundary.pop();
+        visited[current] = true;
+        auto new_dir = voxel_map.at(get_voxel_coord(verts[current])).dir;
+
+        bool is_good_voxel = new_dir.dot(prev_dir) > 0.1f;
+
+        for (const auto &neighbor : adj_verts[current])
+        {
+            if (!is_wire[neighbor] && !visited[neighbor] && (is_good_voxel || vert_norms[neighbor].dot(prev_dir) < 0.3f))
+            {
+                is_wire[neighbor] = true;
+                boundary.push(neighbor);
+            }
+        }
 
         
+
+        if (is_good_voxel)
+        {
+            prev_dir = new_dir;
+        }
     }
 
     uint32_t wire_count = 0;
@@ -329,7 +357,7 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     return is_wire;
 }
 
-void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, uint32_t vertCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
+void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
 {
     if (!edges || edgeCount == 0)
         return;
@@ -364,27 +392,21 @@ void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, uint32_t vertCo
     }
 }
 
-Vec3 get_voxel_coord(const Vec3 &point, float voxel_size)
-{
-    return Vec3{
-        std::floor(point.x / voxel_size),
-        std::floor(point.y / voxel_size),
-        std::floor(point.z / voxel_size)};
-}
 
 
 
-std::unordered_map<Vec3, VoxelData, Vec3Hash> build_voxel_map(const Vec3 *verts, uint32_t vertCount, float voxel_size)
+
+std::unordered_map<Vec3, VoxelData, Vec3Hash> build_voxel_map(const Vec3 *verts, uint32_t vertCount)
 {
     std::unordered_map<Vec3, VoxelData, Vec3Hash> voxel_map;
 
-    if (!verts || vertCount == 0 || voxel_size <= 0.0f)
+    if (!verts || vertCount == 0)
         return voxel_map;
 
     for (uint32_t i = 0; i < vertCount; ++i)
     {
         const Vec3 &p = verts[i];
-        Vec3 voxel_coord = get_voxel_coord(p, voxel_size);
+        Vec3 voxel_coord = get_voxel_coord(p);
         voxel_map[voxel_coord].vertex_indices.push_back(i);
     }
 
@@ -447,9 +469,9 @@ void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCo
     // Calculate vertex adjacency lists
     std::vector<std::vector<uint32_t>> adj_verts(vertCount);
     auto start = std::chrono::high_resolution_clock::now();
-    build_adj_vertices(edges, edgeCount, vertCount, adj_verts);
+    build_adj_vertices(edges, edgeCount, adj_verts);
 
-    auto voxel_map = build_voxel_map(verts, vertCount, 0.03f);
+    auto voxel_map = build_voxel_map(verts, vertCount);
 
     std::vector<Vec3> voxel_guesses;
     calculate_voxel_map_stats(voxel_map, vert_norms, (Vec3 *)verts, voxel_guesses);
