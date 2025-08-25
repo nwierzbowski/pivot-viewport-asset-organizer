@@ -186,28 +186,6 @@ void eig3(const float A[3][3], float &lambda1, float &lambda2, Vec3 &prim_vec, V
     }
     lambda2 = lambda2_prev;
     sec_vec = Vec3{u[0], u[1], u[2]};
-
-    // Ordering and safety
-    // if (!std::isfinite(lambda1) || !std::isfinite(lambda2) || lambda2 > lambda1 + 1e-12)
-    // {
-    //     // fallback to robust Eigen solver
-    //     Eigen::Matrix3d E;
-    //     E << A[0][0], A[0][1], A[0][2],
-    //         A[1][0], A[1][1], A[1][2],
-    //         A[2][0], A[2][1], A[2][2];
-    //     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
-    //     es.compute(E);
-    //     if (es.info() == Eigen::Success)
-    //     {
-    //         Eigen::Vector3d w = es.eigenvalues(); // ascending
-    //         lambda1 = w[2];
-    //         lambda2 = w[1];
-    //     }
-    //     else
-    //     {
-    //         lambda1 = lambda2 = 0.0;
-    //     }
-    // }
 };
 
 // A hash function for our Vec3 struct, enabling it to be used as a key
@@ -288,7 +266,6 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty() || voxel_map.empty() || voxel_guesses.empty())
         return std::vector<bool>(vertCount, false);
 
-    // Convert voxel guesses to vertex indices
     std::vector<uint32_t> vertex_guess_indices;
     uint32_t guessed_vertex_count = 0;
     for (const Vec3 &voxel_guess : voxel_guesses)
@@ -297,8 +274,10 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     }
 
     // If too many vertices are guessed don't guess any
+    float density = 0;
     if (guessed_vertex_count < vertCount / 6)
     {
+        // Convert voxel guesses to vertex indices
         for (const Vec3 &voxel_guess : voxel_guesses)
         {
             auto local_vertex_guess_indices = voxel_map.at(voxel_guess).vertex_indices;
@@ -307,6 +286,22 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
         }
     }
 
+    // Count the number of vertices that neighbor the guesses from this voxel that are not in the guess
+    uint32_t neighbor_count = 0;
+    for (const auto &index : vertex_guess_indices)
+    {
+        for (const auto &neighbor : adj_verts[index])
+        {
+            if (std::find(vertex_guess_indices.begin(), vertex_guess_indices.end(), neighbor) == vertex_guess_indices.end())
+            {
+                neighbor_count++;
+            }
+        }
+    }
+
+    density += neighbor_count;
+    density = density / static_cast<float>(voxel_guesses.size());
+
     std::vector<bool> is_wire(vertCount, false);
 
     for (const uint32_t &guess : vertex_guess_indices)
@@ -314,11 +309,8 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
         is_wire[guess] = true;
     }
 
-    // std::cout << "Initial wire guesses size: " << vertex_guess_indices.size() << std::endl;
-
+    // Build boundaries
     std::queue<uint32_t> seed;
-    // seed.push(vertex_guess_indices[0]); // Start from the first guess
-
     std::vector<bool> visited(vertCount, false);
     std::vector<uint32_t> boundaries;
     for (const auto &idx : vertex_guess_indices)
@@ -352,15 +344,6 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
             }
         }
     }
-
-    // std::cout << "Boundary vertices size: " << boundaries.size() << std::endl;
-    std::cout << "Boundary vertices: ";
-    std::sort(boundaries.begin(), boundaries.end());
-    for (const auto &index : boundaries)
-    {
-        std::cout << index << " ";
-    }
-    std::cout << std::endl;
 
     // Split boundaries into connected groups
     std::vector<std::queue<uint32_t>> boundary_groups;
@@ -398,30 +381,26 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
 
     std::cout << "Number of boundary groups: " << boundary_groups.size() << std::endl;
 
-    // for (const auto &group : boundary_groups)
-    // {
-    //     std::cout << "Boundary group: ";
-    //     for (const auto &index : group)
-    //     {
-    //         std::cout << index << " ";
-    //     }
-    //     std::cout << std::endl;
-    // }
+    for (const auto &group : boundary_groups)
+    {
+        std::cout << "Boundary group size: " << group.size() << std::endl;
+    }
     printf("\n");
 
-    for (uint32_t i = 0; i < is_wire.size(); ++i)
-    {
-        if (is_wire[i])
-        {
-            printf("%i ", i);
-        }
-    }
+    // for (uint32_t i = 0; i < is_wire.size(); ++i)
+    // {
+    //     if (is_wire[i])
+    //     {
+    //         printf("%i ", i);
+    //     }
+    // }
 
     visited.assign(vertCount, false);
-
+    std::cout << "Density: " << density << std::endl;
     for (auto &group : boundary_groups)
     {
-        auto frontier_size = std::max((int) group.size(), 6);
+        // auto frontier_size = std::max((int)group.size(), 16);
+        auto frontier_size = density;
         uint16_t iterations = 0;
         while (!group.empty())
         {
@@ -437,14 +416,14 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
                 }
             }
 
-            if (group.size() > frontier_size * 2.5)
+            if (group.size() > frontier_size * 2.0)
             {
                 std::cout << "Group exceeded size limit: " << group.size() << std::endl;
-                break; // Limit growth to 2 times the original frontier size
+                break; // Limit growth to 1.2 times the original frontier size
             }
             // frontier_size = (frontier_size * 2 + group.size()) / 3;
         }
-        std::cout << "Finished group" << std::endl;
+        // std::cout << "Finished group" << std::endl;
     }
 
     uint32_t wire_count = 0;
