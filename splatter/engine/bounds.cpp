@@ -10,7 +10,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
-#include <stack>
+#include <queue>
 #include <chrono>
 #include <random>
 #include <limits>
@@ -296,6 +296,7 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
         guessed_vertex_count += voxel_map.at(voxel_guess).vertex_indices.size();
     }
 
+    // If too many vertices are guessed don't guess any
     if (guessed_vertex_count < vertCount / 6)
     {
         for (const Vec3 &voxel_guess : voxel_guesses)
@@ -307,39 +308,143 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     }
 
     std::vector<bool> is_wire(vertCount, false);
-    std::stack<uint32_t> boundary;
+
     for (const uint32_t &guess : vertex_guess_indices)
     {
         is_wire[guess] = true;
-        boundary.push(guess);
     }
 
-    Vec3 prev_dir = voxel_map.at(voxel_guesses[0]).dir;
+    // std::cout << "Initial wire guesses size: " << vertex_guess_indices.size() << std::endl;
+
+    std::queue<uint32_t> seed;
+    // seed.push(vertex_guess_indices[0]); // Start from the first guess
+
     std::vector<bool> visited(vertCount, false);
-    while (!boundary.empty())
+    std::vector<uint32_t> boundaries;
+    for (const auto &idx : vertex_guess_indices)
     {
-        uint32_t current = boundary.top();
-        boundary.pop();
-        visited[current] = true;
-        auto new_dir = voxel_map.at(get_voxel_coord(verts[current])).dir;
-
-        bool is_good_voxel = new_dir.dot(prev_dir) > 0.0f;
-
-        for (const auto &neighbor : adj_verts[current])
+        if (!visited[idx])
         {
-            if (!is_wire[neighbor] && !visited[neighbor] && (is_good_voxel || vert_norms[neighbor].dot(prev_dir) < 0.3f))
+            visited[idx] = true;
+            seed.push(idx);
+        }
+
+        while (!seed.empty())
+        {
+            uint32_t current = seed.front();
+            seed.pop();
+
+            bool is_boundary = false;
+
+            for (auto neighbor : adj_verts[current])
             {
-                is_wire[neighbor] = true;
-                boundary.push(neighbor);
+                if (!visited[neighbor] && is_wire[neighbor])
+                {
+                    visited[neighbor] = true;
+                    seed.push(neighbor);
+                }
+                is_boundary |= !is_wire[neighbor];
+            }
+
+            if (is_boundary)
+            {
+                boundaries.push_back(current);
+            }
+        }
+    }
+
+    // std::cout << "Boundary vertices size: " << boundaries.size() << std::endl;
+    std::cout << "Boundary vertices: ";
+    std::sort(boundaries.begin(), boundaries.end());
+    for (const auto &index : boundaries)
+    {
+        std::cout << index << " ";
+    }
+    std::cout << std::endl;
+
+    // Split boundaries into connected groups
+    std::vector<std::queue<uint32_t>> boundary_groups;
+    std::vector<bool> boundary_visited(vertCount, false);
+
+    for (const auto &current : boundaries)
+    {
+        if (boundary_visited[current])
+            continue;
+
+        boundary_visited[current] = true;
+
+        std::queue<uint32_t> group;
+        std::queue<uint32_t> q;
+        q.push(current);
+
+        while (!q.empty())
+        {
+            uint32_t node = q.front();
+            q.pop();
+            group.push(node);
+
+            for (auto neighbor : adj_verts[node])
+            {
+                if (!boundary_visited[neighbor] && boundaries.end() != std::find(boundaries.begin(), boundaries.end(), neighbor))
+                {
+                    boundary_visited[neighbor] = true;
+                    q.push(neighbor);
+                }
             }
         }
 
-        
+        boundary_groups.push_back(group);
+    }
 
-        if (is_good_voxel)
+    std::cout << "Number of boundary groups: " << boundary_groups.size() << std::endl;
+
+    // for (const auto &group : boundary_groups)
+    // {
+    //     std::cout << "Boundary group: ";
+    //     for (const auto &index : group)
+    //     {
+    //         std::cout << index << " ";
+    //     }
+    //     std::cout << std::endl;
+    // }
+    printf("\n");
+
+    for (uint32_t i = 0; i < is_wire.size(); ++i)
+    {
+        if (is_wire[i])
         {
-            prev_dir = new_dir;
+            printf("%i ", i);
         }
+    }
+
+    visited.assign(vertCount, false);
+
+    for (auto &group : boundary_groups)
+    {
+        auto frontier_size = std::max((int) group.size(), 6);
+        uint16_t iterations = 0;
+        while (!group.empty())
+        {
+            const auto current = group.front();
+            group.pop();
+
+            for (const auto neighbor : adj_verts[current])
+            {
+                if (!is_wire[neighbor])
+                {
+                    is_wire[neighbor] = true;
+                    group.push(neighbor);
+                }
+            }
+
+            if (group.size() > frontier_size * 2.5)
+            {
+                std::cout << "Group exceeded size limit: " << group.size() << std::endl;
+                break; // Limit growth to 2 times the original frontier size
+            }
+            // frontier_size = (frontier_size * 2 + group.size()) / 3;
+        }
+        std::cout << "Finished group" << std::endl;
     }
 
     uint32_t wire_count = 0;
@@ -347,12 +452,12 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     {
         if (is_wire[i])
         {
-            printf("%i ", i);
+            // printf("%i ", i);
             wire_count++;
         }
     }
 
-    std::cout << "Number of wire vertices: " << wire_count << std::endl;
+    std::cout << "\nNumber of wire vertices: " << wire_count << std::endl;
 
     return is_wire;
 }
@@ -391,10 +496,6 @@ void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std
         neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
     }
 }
-
-
-
-
 
 std::unordered_map<Vec3, VoxelData, Vec3Hash> build_voxel_map(const Vec3 *verts, uint32_t vertCount)
 {
@@ -475,8 +576,6 @@ void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCo
 
     std::vector<Vec3> voxel_guesses;
     calculate_voxel_map_stats(voxel_map, vert_norms, (Vec3 *)verts, voxel_guesses);
-
-    
 
     auto is_wire = select_wire_verts(verts, vert_norms, vertCount, adj_verts, voxel_guesses, voxel_map);
 
