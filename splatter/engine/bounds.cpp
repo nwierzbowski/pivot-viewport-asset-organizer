@@ -285,7 +285,7 @@ Vec3 get_voxel_coord(const Vec3 &point)
 
 std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts, const std::vector<Vec3> &voxel_guesses, std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map)
 {
-    if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty())
+    if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty() || voxel_map.empty() || voxel_guesses.empty())
         return std::vector<bool>(vertCount, false);
 
     // Convert voxel guesses to vertex indices
@@ -323,7 +323,7 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
         visited[current] = true;
         auto new_dir = voxel_map.at(get_voxel_coord(verts[current])).dir;
 
-        bool is_good_voxel = new_dir.dot(prev_dir) > 0.1f;
+        bool is_good_voxel = new_dir.dot(prev_dir) > 0.0f;
 
         for (const auto &neighbor : adj_verts[current])
         {
