@@ -14,6 +14,7 @@
 #include <chrono>
 #include <random>
 #include <limits>
+#include <map>
 
 // Rotate points by angle (radians) around origin
 void rotate_points_2D(const std::vector<Vec2> &points, float angle, std::vector<Vec2> &out)
@@ -206,6 +207,20 @@ struct Vec3Hash
     }
 };
 
+struct Vec2Hash
+{
+    std::size_t operator()(const Vec2 &v) const
+    {
+        // A common way to combine hashes of multiple integer members.
+        // The prime numbers are used to reduce collisions.
+        const std::size_t p1 = 73856093;
+        const std::size_t p2 = 19349663;
+
+        return (static_cast<std::size_t>(v.x) * p1) ^
+               (static_cast<std::size_t>(v.y) * p2);
+    }
+};
+
 auto compute_cov(const std::vector<uint32_t> &idxs, const Vec3 *verts, float cov[3][3])
 {
     const size_t n = idxs.size();
@@ -261,10 +276,49 @@ Vec3 get_voxel_coord(const Vec3 &point)
         std::floor(point.z / 0.03f)};
 }
 
-std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts, const std::vector<Vec3> &voxel_guesses, std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map)
+// Function to find the median of a vector
+double find_median(std::vector<uint32_t>& data) {
+    size_t n = data.size();
+    if (n % 2 == 1) {
+        return static_cast<double>(data[n / 2]);
+    } else {
+        return (static_cast<double>(data[n / 2 - 1]) + data[n / 2]) / 2.0;
+    }
+}
+
+// Function to exclude outliers using the IQR method
+std::vector<uint32_t> exclude_outliers_iqr(std::vector<uint32_t> data) {
+    // Sort the data to find quartiles
+    std::sort(data.begin(), data.end());
+
+    size_t n = data.size();
+    if (n < 4) return data; // Not enough data to reliably find quartiles
+
+    // Find Q1 and Q3
+    std::vector<uint32_t> lower_half(data.begin(), data.begin() + n / 2);
+    std::vector<uint32_t> upper_half(data.begin() + (n + 1) / 2, data.end());
+
+    double q1 = find_median(lower_half);
+    double q3 = find_median(upper_half);
+
+    double iqr = q3 - q1;
+    double lower_bound = q1 - 1.5 * iqr;
+    double upper_bound = q3 + 1.5 * iqr;
+
+    // Use a temporary vector to store the non-outliers
+    std::vector<uint32_t> filtered_data;
+    for (uint32_t val : data) {
+        if (val >= lower_bound && val <= upper_bound) {
+            filtered_data.push_back(val);
+        }
+    }
+    return filtered_data;
+}
+
+std::vector<char> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts, const std::vector<Vec3> &voxel_guesses, std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map)
 {
     if (!verts || vertCount == 0 || !vert_norms || adj_verts.empty() || voxel_map.empty() || voxel_guesses.empty())
-        return std::vector<bool>(vertCount, false);
+        return std::vector<char>(vertCount, false);
 
     std::vector<uint32_t> vertex_guess_indices;
     uint32_t guessed_vertex_count = 0;
@@ -274,40 +328,62 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     }
 
     // If too many vertices are guessed don't guess any
-    float density = 0;
+    
+    std::vector<uint32_t> neighbor_sizes;
+    std::vector<char> is_neighbor(vertCount, false);
     if (guessed_vertex_count < vertCount / 6)
     {
         // Convert voxel guesses to vertex indices
         for (const Vec3 &voxel_guess : voxel_guesses)
         {
+            uint32_t neighbor_count = 0;
             auto local_vertex_guess_indices = voxel_map.at(voxel_guess).vertex_indices;
             for (const auto &index : local_vertex_guess_indices)
+            {
                 vertex_guess_indices.push_back(index);
+                for (const auto &neighbor : adj_verts[index])
+                {
+                    if (std::find(vertex_guess_indices.begin(), vertex_guess_indices.end(), neighbor) == vertex_guess_indices.end() && is_neighbor[neighbor] == false)
+                    {
+                        neighbor_count++;
+                        is_neighbor[neighbor] = true;
+                    }
+                }
+            }
+            neighbor_sizes.push_back(neighbor_count);
         }
     }
 
     // Count the number of vertices that neighbor the guesses from this voxel that are not in the guess
-    uint32_t neighbor_count = 0;
-    for (const auto &index : vertex_guess_indices)
+    std::sort(neighbor_sizes.begin(), neighbor_sizes.end());
+    //Print neighbor sizes
+    for (const auto &size : neighbor_sizes)
     {
-        for (const auto &neighbor : adj_verts[index])
-        {
-            if (std::find(vertex_guess_indices.begin(), vertex_guess_indices.end(), neighbor) == vertex_guess_indices.end())
-            {
-                neighbor_count++;
-            }
-        }
+        std::cout << size << " ";
     }
-
-    density += neighbor_count;
+    std::cout << std::endl;
+    float density = 0;
+    for (uint32_t size : exclude_outliers_iqr(neighbor_sizes))
+    {
+        density += static_cast<float>(size);
+    }
     density = density / static_cast<float>(voxel_guesses.size());
 
-    std::vector<bool> is_wire(vertCount, false);
+    std::vector<char> is_wire(vertCount, false);
 
     for (const uint32_t &guess : vertex_guess_indices)
     {
         is_wire[guess] = true;
     }
+
+    // Print guessed indices
+    // std::cout << "Guessed vertex indices: ";
+    // std::sort(vertex_guess_indices.begin(), vertex_guess_indices.end());
+    // for (const auto &index : vertex_guess_indices)
+    // {
+    //     std::cout << index << " ";
+    // }
+    // std::cout << std::endl;
 
     // Build boundaries
     std::queue<uint32_t> seed;
@@ -315,35 +391,31 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
     std::vector<uint32_t> boundaries;
     for (const auto &idx : vertex_guess_indices)
     {
-        if (!visited[idx])
+        bool is_boundary = false;
+
+        for (auto nb : adj_verts[idx])
         {
-            visited[idx] = true;
-            seed.push(idx);
-        }
-
-        while (!seed.empty())
-        {
-            uint32_t current = seed.front();
-            seed.pop();
-
-            bool is_boundary = false;
-
-            for (auto neighbor : adj_verts[current])
+            if (!visited[nb] && !is_wire[nb])
             {
-                if (!visited[neighbor] && is_wire[neighbor])
-                {
-                    visited[neighbor] = true;
-                    seed.push(neighbor);
-                }
-                is_boundary |= !is_wire[neighbor];
-            }
-
-            if (is_boundary)
-            {
-                boundaries.push_back(current);
+                is_boundary |= !is_wire[nb];
+                visited[nb] = true;
+                boundaries.push_back(nb);
             }
         }
+
+        // if (is_boundary)
+        // {
+        //     boundaries.push_back(idx);
+        // }
     }
+
+    // Print boundaries
+    // std::cout << "Boundary vertices: ";
+    // for (const auto &boundary : boundaries)
+    // {
+    //     std::cout << boundary << " ";
+    // }
+    // std::cout << std::endl;
 
     // Split boundaries into connected groups
     std::vector<std::queue<uint32_t>> boundary_groups;
@@ -379,35 +451,96 @@ std::vector<bool> select_wire_verts(const Vec3 *verts, const Vec3 *vert_norms, u
         boundary_groups.push_back(group);
     }
 
-    for (auto &group : boundary_groups)
+    // Print groups
+    // for (const auto &group : boundary_groups)
+    // {
+    //     std::cout << "Group: ";
+    //     std::queue<uint32_t> temp = group;
+    //     while (!temp.empty())
+    //     {
+    //         std::cout << temp.front() << " ";
+    //         temp.pop();
+    //     }
+    //     std::cout << std::endl;
+    // }
+
+    float limit = density * 0.4f;
+    std::cout << "Limit: " << limit << std::endl;
+
+    std::queue<uint32_t> next_frontier;
+    for (auto &curr_frontier : boundary_groups)
     {
-        while (!group.empty())
+        while (!curr_frontier.empty())
         {
-            const auto current = group.front();
-            group.pop();
+            const auto current = curr_frontier.front();
+            curr_frontier.pop();
 
             for (const auto neighbor : adj_verts[current])
             {
                 if (!is_wire[neighbor])
                 {
                     is_wire[neighbor] = true;
-                    group.push(neighbor);
+                    next_frontier.push(neighbor);
                 }
             }
 
-            if (group.size() > density * 2.0)
+            if (next_frontier.size() > limit)
             {
-                std::cout << "Group exceeded size limit: " << group.size() << std::endl;
+                // Print curr_frontier
+                 std::cout << "Group exceeded size limit: " << next_frontier.size() << std::endl;
+
+                std::cout << "Next frontier: ";
+                std::queue<uint32_t> temp = next_frontier;
+                while (!temp.empty())
+                {
+                    std::cout << temp.front() << " ";
+                    temp.pop();
+                }
+                std::cout << std::endl;
+                while (!next_frontier.empty()) next_frontier.pop();
                 break;
+            }
+
+            if (curr_frontier.empty())
+            {
+                curr_frontier.swap(next_frontier);
             }
         }
     }
 
+    // Print final guesses
+    std::cout << "Final wire guesses: ";
+    for (uint32_t i = 0; i < is_wire.size(); ++i)
+    {
+        if (is_wire[i])
+        {
+            std::cout << i << " ";
+        }
+    }
+    std::cout << std::endl;
 
     return is_wire;
 }
 
-void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std::vector<uint32_t>> &out_adj_verts)
+struct Vec2Comparator
+{
+    double epsilon;
+
+    Vec2Comparator(double eps) : epsilon(eps) {}
+
+    bool operator()(const Vec2 &a, const Vec2 &b) const
+    {
+        // Compare based on x and y components within epsilon tolerance.
+        // A lexicographical sort order is required for std::map.
+        if (std::fabs(a.x - b.x) > epsilon)
+        {
+            return a.x < b.x;
+        }
+        return a.y < b.y - epsilon;
+    }
+};
+
+void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, const Vec3 *verts, std::vector<std::vector<uint32_t>> &out_adj_verts, std::map<Vec2, uint32_t, Vec2Comparator> &edge_map)
 {
     if (!edges || edgeCount == 0)
         return;
@@ -419,6 +552,11 @@ void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std
         const uVec2i &e = edges[i];
         degrees[e.x]++;
         degrees[e.y]++;
+        Vec3 edge3 = (verts[e.x] - verts[e.y]).normalized();
+
+        Vec2 edge2 = {edge3.x, edge3.y};
+        if (edge2.length_squared() > 0.2f) // Avoid degenerate edges
+            edge_map[edge2.normalized()]++;
     }
 
     // --- Reserve memory for each adjacency list ---
@@ -442,20 +580,47 @@ void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std
     }
 }
 
-std::unordered_map<Vec3, VoxelData, Vec3Hash> build_voxel_map(const Vec3 *verts, uint32_t vertCount)
+// 2D helper (XY plane) to build an orthonormal frame aligned with direction.
+inline void make_aligned_basis_2D(const Vec2 &dir, Vec2 &u, Vec2 &vPerp)
+{
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    if (len < 1e-12f)
+    {
+        u = {1, 0};
+        vPerp = {0, 1};
+        return;
+    }
+    u = {dir.x / len, dir.y / len};
+    vPerp = {-u.y, u.x};
+}
+
+std::unordered_map<Vec3, VoxelData, Vec3Hash>
+build_voxel_map(const Vec3 *verts, uint32_t vertCount,
+                float voxelSize, const Vec2 &alignDirXY)
 {
     std::unordered_map<Vec3, VoxelData, Vec3Hash> voxel_map;
-
     if (!verts || vertCount == 0)
         return voxel_map;
+
+    Vec2 u, v;
+    make_aligned_basis_2D(alignDirXY, u, v);
+    std::cout << "New axes are: (" << u.x << ", " << u.y << "), (" << v.x << ", " << v.y << ")" << std::endl;
+
+    const float invSize = 1.0f / voxelSize;
+    voxel_map.reserve(vertCount / 4 + 1);
 
     for (uint32_t i = 0; i < vertCount; ++i)
     {
         const Vec3 &p = verts[i];
-        Vec3 voxel_coord = get_voxel_coord(p);
-        voxel_map[voxel_coord].vertex_indices.push_back(i);
+        // Project XY into rotated frame
+        float xu = p.x * u.x + p.y * u.y;
+        float xv = p.x * v.x + p.y * v.y;
+        int ix = static_cast<int>(std::floor(xu * invSize));
+        int iy = static_cast<int>(std::floor(xv * invSize));
+        int iz = static_cast<int>(std::floor(p.z * invSize));
+        Vec3 key{ix, iy, iz};
+        voxel_map[key].vertex_indices.push_back(i);
     }
-
     return voxel_map;
 }
 
@@ -515,9 +680,23 @@ void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCo
     // Calculate vertex adjacency lists
     std::vector<std::vector<uint32_t>> adj_verts(vertCount);
     auto start = std::chrono::high_resolution_clock::now();
-    build_adj_vertices(edges, edgeCount, adj_verts);
+    double epsilon = 1e-6; // or another suitable value
+    std::map<Vec2, uint32_t, Vec2Comparator> directionCounts{Vec2Comparator(epsilon)};
+    build_adj_vertices(edges, edgeCount, verts, adj_verts, directionCounts);
 
-    auto voxel_map = build_voxel_map(verts, vertCount);
+    // Find the entry with the highest count.
+    int maxCount = 0;
+    Vec2 mostFrequentDirection = {0.0, 0.0};
+    for (const auto &pair : directionCounts)
+    {
+        if (pair.second > maxCount)
+        {
+            maxCount = pair.second;
+            mostFrequentDirection = pair.first;
+        }
+    }
+    std::cout << "Most frequent edge direction: (" << mostFrequentDirection.x << ", " << mostFrequentDirection.y << ") with count " << maxCount << std::endl;
+    auto voxel_map = build_voxel_map(verts, vertCount, 0.04f, mostFrequentDirection);
 
     std::vector<Vec3> voxel_guesses;
     calculate_voxel_map_stats(voxel_map, vert_norms, (Vec3 *)verts, voxel_guesses);
@@ -546,6 +725,9 @@ void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCo
             best_box = box;
         }
     }
+    // float angle = std::atan2(mostFrequentDirection.y, mostFrequentDirection.x);
+    // angle = std::fmod(angle, (M_PI / 2));
+    // *out_rot = {0, 0, -angle};
     *out_rot = {0, 0, best_box.rotation_angle};
     *out_trans = {0, 0, 0};
     return;

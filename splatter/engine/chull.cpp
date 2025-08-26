@@ -4,7 +4,7 @@
 #include <vector>
 #include <algorithm>
 
-std::vector<Vec2> convex_hull_2D(const Vec3* verts, uint32_t vertCount, const std::vector<bool>& selection) {
+std::vector<Vec2> convex_hull_2D(const Vec3* verts, uint32_t vertCount, const std::vector<char>& selection) {
     std::vector<Vec2> points;
     points.reserve(vertCount);
 
