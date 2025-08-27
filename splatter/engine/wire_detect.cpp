@@ -58,8 +58,8 @@ std::vector<char> select_wire_verts(const Vec3 *verts,
                                     const Vec3 *vert_norms,
                                     uint32_t vertCount,
                                     const std::vector<std::vector<uint32_t>> &adj_verts,
-                                    const std::vector<Vec3> &voxel_guesses,
-                                    std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map)
+                                    const std::vector<VoxelKey> &voxel_guesses,
+                                    VoxelMap &voxel_map)
 {
     if (!verts || vertCount == 0 || !vert_norms ||
         adj_verts.empty() || voxel_map.empty() || voxel_guesses.empty())
@@ -69,7 +69,7 @@ std::vector<char> select_wire_verts(const Vec3 *verts,
     vertex_guess_indices.reserve(voxel_guesses.size() * 4);
 
     uint32_t guessed_vertex_count = 0;
-    for (const Vec3 &vg : voxel_guesses)
+    for (const VoxelKey &vg : voxel_guesses)
         guessed_vertex_count += voxel_map.at(vg).vertex_indices.size();
 
     std::vector<uint32_t> neighbor_sizes;
@@ -79,7 +79,7 @@ std::vector<char> select_wire_verts(const Vec3 *verts,
     if (guessed_vertex_count < vertCount / 6)
     {
         std::vector<char> neighbor_mark(vertCount, false);
-        for (const Vec3 &vg : voxel_guesses)
+        for (const VoxelKey &vg : voxel_guesses)
         {
             uint32_t neighbor_count = 0;
             const auto &vIdxs = voxel_map.at(vg).vertex_indices;

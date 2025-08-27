@@ -5,19 +5,30 @@
 #include <unordered_map>
 #include <vector>
 
-struct Vec3Hash
-{
-    std::size_t operator()(const Vec3 &v) const
-    {
-        const std::size_t p1 = 73856093;
-        const std::size_t p2 = 19349663;
-        const std::size_t p3 = 83492791;
+struct VoxelKey {
+    int32_t x, y, z;
+    bool operator==(const VoxelKey& o) const noexcept {
+        return x==o.x && y==o.y && z==o.z;
+    }
 
-        return (static_cast<std::size_t>(v.x) * p1) ^
-               (static_cast<std::size_t>(v.y) * p2) ^
-               (static_cast<std::size_t>(v.z) * p3);
+    VoxelKey operator+(const Vec3i& other) const {
+        return {x + other.x, y + other.y, z + other.z};
     }
 };
+
+struct VoxelKeyHash {
+    size_t operator()(const VoxelKey& k) const noexcept {
+        return (size_t)k.x * 73856093u ^ (size_t)k.y * 19349663u ^ (size_t)k.z * 83492791u;
+    }
+};
+
+inline VoxelKey make_voxel_key(const Vec3& p, float voxelSize) {
+    return {
+        (int32_t)std::floor(p.x / voxelSize),
+        (int32_t)std::floor(p.y / voxelSize),
+        (int32_t)std::floor(p.z / voxelSize)
+    };
+}
 
 struct VoxelData
 {
@@ -26,9 +37,9 @@ struct VoxelData
     Vec3 dir;
 };
 
-std::unordered_map<Vec3, VoxelData, Vec3Hash>
-build_voxel_map(const Vec3 *verts, uint32_t vertCount,
-                float voxelSize);
+using VoxelMap = std::unordered_map<VoxelKey, VoxelData, VoxelKeyHash>;
 
-void calculate_voxel_map_stats(std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map,
-                               const Vec3 *norms, const Vec3 *verts, std::vector<Vec3> &wire_guesses);
+VoxelMap build_voxel_map(const Vec3 *verts, uint32_t vertCount, float voxelSize);
+
+void calculate_voxel_map_stats(VoxelMap &voxel_map,
+                               const Vec3 *norms, const Vec3 *verts, std::vector<VoxelKey> &wire_guesses);

@@ -5,19 +5,11 @@
 #include <vector>
 #include <unordered_map>
 
-Vec3 get_voxel_coord(const Vec3 &point, float voxel_size)
-{
-    return Vec3{
-        std::floor(point.x / voxel_size),
-        std::floor(point.y / voxel_size),
-        std::floor(point.z / voxel_size)};
-}
-
-std::unordered_map<Vec3, VoxelData, Vec3Hash>
+VoxelMap
 build_voxel_map(const Vec3 *verts, uint32_t vertCount,
                 float voxelSize)
 {
-    std::unordered_map<Vec3, VoxelData, Vec3Hash> voxel_map;
+    VoxelMap voxel_map;
     if (!verts || vertCount == 0)
         return voxel_map;
 
@@ -25,16 +17,16 @@ build_voxel_map(const Vec3 *verts, uint32_t vertCount,
 
     for (uint32_t i = 0; i < vertCount; ++i)
     {
-        const Vec3 &p = verts[i];
-        voxel_map[get_voxel_coord(p, voxelSize)].vertex_indices.push_back(i);
+        VoxelKey key = make_voxel_key(verts[i], voxelSize);
+        voxel_map[key].vertex_indices.push_back(i);
     }
     return voxel_map;
 }
 
-void calculate_voxel_map_stats(std::unordered_map<Vec3, VoxelData, Vec3Hash> &voxel_map,
-                               const Vec3 *norms, const Vec3 *verts, std::vector<Vec3> &wire_guesses)
+void calculate_voxel_map_stats(VoxelMap &voxel_map,
+                               const Vec3 *norms, const Vec3 *verts, std::vector<VoxelKey> &wire_guesses)
 {
-    constexpr std::array<Vec3, 6> neighbor_dirs = {{{0, 0, 1}, {0, 1, 0}, {1, 0, 0}, {0, 0, -1}, {0, -1, 0}, {-1, 0, 0}}};
+    constexpr std::array<Vec3i, 6> neighbor_dirs = {{{0, 0, 1}, {0, 1, 0}, {1, 0, 0}, {0, 0, -1}, {0, -1, 0}, {-1, 0, 0}}};
     wire_guesses.reserve(wire_guesses.size() + voxel_map.size() / 16 + 4);
 
     for (auto &[voxel_coord, voxel_data] : voxel_map)

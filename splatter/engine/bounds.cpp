@@ -17,7 +17,7 @@ void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std
     if (!edges || edgeCount == 0)
         return;
 
-    // Build adjacency list
+    // --- Reserve memory for each adjacency list ---
     std::vector<uint32_t> degrees(out_adj_verts.size(), 0);
     for (uint32_t i = 0; i < edgeCount; ++i)
     {
@@ -26,12 +26,13 @@ void build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, std::vector<std
         degrees[e.y]++;
     }
 
-    // --- Reserve memory for each adjacency list ---
+    
     for (uint32_t i = 0; i < out_adj_verts.size(); ++i)
     {
         out_adj_verts[i].reserve(degrees[i]);
     }
 
+    // Build adjacency list
     for (uint32_t i = 0; i < edgeCount; ++i)
     {
         const uVec2i &e = edges[i];
@@ -68,7 +69,7 @@ void align_min_bounds(const Vec3 *verts, const Vec3 *vert_norms, uint32_t vertCo
 
     auto voxel_map = build_voxel_map(verts, vertCount, 0.03f);
 
-    std::vector<Vec3> voxel_guesses;
+    std::vector<VoxelKey> voxel_guesses;
     calculate_voxel_map_stats(voxel_map, vert_norms, verts, voxel_guesses);
 
     auto is_wire = select_wire_verts(verts, vert_norms, vertCount, adj_verts, voxel_guesses, voxel_map);

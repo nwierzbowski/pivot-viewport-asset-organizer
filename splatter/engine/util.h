@@ -53,8 +53,8 @@ struct uVec2i {
 struct Vec3i {
     int32_t x = 0, y = 0, z = 0;
 
-    Vec3i() = default;
-    Vec3i(int32_t x_val, int32_t y_val, int32_t z_val) : x(x_val), y(y_val), z(z_val) {}
+    constexpr Vec3i() = default;
+    constexpr Vec3i(int32_t x_val, int32_t y_val, int32_t z_val) : x(x_val), y(y_val), z(z_val) {}
 
     bool operator<(const Vec3i &other) const {
         return x < other.x || (x == other.x && y < other.y) || (x == other.x && y == other.y && z < other.z);
