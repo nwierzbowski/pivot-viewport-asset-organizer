@@ -1,210 +1,110 @@
 #pragma once
-
-#include <cmath>
 #include <cstdint>
+#include <cmath>
+#include <type_traits>
 
-struct Vec2i {
-    int32_t x = 0, y = 0;
+// Primary template flag
+template<typename T>
+inline constexpr bool TVecIsFloat = std::is_floating_point_v<T>;
 
-    Vec2i() = default;
-    Vec2i(int32_t x_val, int32_t y_val) : x(x_val), y(y_val) {}
-
-    bool operator<(const Vec2i &other) const {
-        return x < other.x || (x == other.x && y < other.y);
+// ---------------- 2D ----------------
+template<typename T, bool IsFloat = TVecIsFloat<T>>
+struct TVec2 {
+    T x{}, y{};
+    constexpr TVec2() = default;
+    constexpr TVec2(T x_val, T y_val) : x(x_val), y(y_val) {}
+    constexpr bool operator<(const TVec2& o) const {
+        return x < o.x || (x == o.x && y < o.y);
     }
+    constexpr TVec2 operator-(const TVec2& o) const { return {T(x - o.x), T(y - o.y)}; }
+    constexpr TVec2 operator+(const TVec2& o) const { return {T(x + o.x), T(y + o.y)}; }
+    constexpr TVec2 operator*(T s) const { return {T(x * s), T(y * s)}; }
+    // dot/cross kept for all types (remove if you want them float-only)
+    constexpr auto dot(const TVec2& o) const { return x * o.x + y * o.y; }
+    constexpr auto cross(const TVec2& o) const { return x * o.y - y * o.x; }
+};
 
-    Vec2i operator-(const Vec2i& other) const {
-        return {x - other.x, y - other.y};
+// Floating-point 2D specialization adds length utilities
+template<typename T>
+struct TVec2<T, true> {
+    T x{}, y{};
+    constexpr TVec2() = default;
+    constexpr TVec2(T x_val, T y_val) : x(x_val), y(y_val) {}
+    constexpr bool operator<(const TVec2& o) const {
+        return x < o.x || (x == o.x && y < o.y);
     }
-    
-    Vec2i operator+(const Vec2i& other) const {
-        return {x + other.x, y + other.y};
-    }
-    
-    Vec2i operator*(int32_t scale) const {
-        return {x * scale, y * scale};
+    constexpr TVec2 operator-(const TVec2& o) const { return {T(x - o.x), T(y - o.y)}; }
+    constexpr TVec2 operator+(const TVec2& o) const { return {T(x + o.x), T(y + o.y)}; }
+    constexpr TVec2 operator*(T s) const { return {T(x * s), T(y * s)}; }
+    constexpr T dot(const TVec2& o) const { return x * o.x + y * o.y; }
+    constexpr T cross(const TVec2& o) const { return x * o.y - y * o.x; }
+    constexpr T length_squared() const { return x * x + y * y; }
+    T length() const { return std::sqrt(length_squared()); }
+    TVec2 normalized() const {
+        T len = length();
+        return (len > T(0)) ? TVec2{x / len, y / len} : TVec2{};
     }
 };
 
-
-struct uVec2i {
-    uint32_t x = 0, y = 0;
-
-    uVec2i() = default;
-    uVec2i(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
-
-    bool operator<(const uVec2i &other) const {
-        return x < other.x || (x == other.x && y < other.y);
+// ---------------- 3D ----------------
+template<typename T, bool IsFloat = TVecIsFloat<T>>
+struct TVec3 {
+    T x{}, y{}, z{};
+    constexpr TVec3() = default;
+    constexpr TVec3(T x_val, T y_val, T z_val) : x(x_val), y(y_val), z(z_val) {}
+    constexpr TVec3(const TVec2<T>& v2, T z_val = T{}) : x(v2.x), y(v2.y), z(z_val) {}
+    constexpr bool operator<(const TVec3& o) const {
+        return x < o.x || (x == o.x && (y < o.y || (y == o.y && z < o.z)));
     }
-
-    uVec2i operator-(const uVec2i& other) const {
-        return {x - other.x, y - other.y};
-    }
-
-    uVec2i operator+(const uVec2i& other) const {
-        return {x + other.x, y + other.y};
-    }
-
-    uVec2i operator*(uint32_t scale) const {
-        return {x * scale, y * scale};
-    }
-};
-
-struct Vec3i {
-    int32_t x = 0, y = 0, z = 0;
-
-    constexpr Vec3i() = default;
-    constexpr Vec3i(int32_t x_val, int32_t y_val, int32_t z_val) : x(x_val), y(y_val), z(z_val) {}
-
-    bool operator<(const Vec3i &other) const {
-        return x < other.x || (x == other.x && y < other.y) || (x == other.x && y == other.y && z < other.z);
-    }
-
-    Vec3i operator-(const Vec3i& other) const {
-        return {x - other.x, y - other.y, z - other.z};
-    }
-
-    Vec3i operator+(const Vec3i& other) const {
-        return {x + other.x, y + other.y, z + other.z};
-    }
-
-    Vec3i operator*(int32_t scale) const {
-        return {x * scale, y * scale, z * scale};
-    }
-};
-
-struct uVec3i {
-    uint32_t x = 0, y = 0, z = 0;
-
-    uVec3i() = default;
-    uVec3i(uint32_t x_val, uint32_t y_val, uint32_t z_val) : x(x_val), y(y_val), z(z_val) {}
-
-    bool operator<(const uVec3i &other) const {
-        return x < other.x || (x == other.x && y < other.y) || (x == other.x && y == other.y && z < other.z);
-    }
-
-    uVec3i operator-(const uVec3i& other) const {
-        return {x - other.x, y - other.y, z - other.z};
-    }
-
-    uVec3i operator+(const uVec3i& other) const {
-        return {x + other.x, y + other.y, z + other.z};
-    }
-
-    uVec3i operator*(uint32_t scale) const {
-        return {x * scale, y * scale, z * scale};
-    }
-};
-
-struct Vec2 { 
-    float x = 0.0f, y = 0.0f;
-
-    Vec2() = default;
-    Vec2(float x_val, float y_val) : x(x_val), y(y_val) {}
-
-    bool operator<(const Vec2 &other) const {
-        return x < other.x || (x == other.x && y < other.y);
-    }
-
-    Vec2 operator-(const Vec2& other) const {
-    return {x - other.x, y - other.y};
-    }
-    
-    Vec2 operator+(const Vec2& other) const {
-        return {x + other.x, y + other.y};
-    }
-    
-    Vec2 operator*(float scale) const {
-        return {x * scale, y * scale};
-    }
-    
-    float dot(const Vec2& other) const {
-        return x * other.x + y * other.y;
-    }
-    
-    float cross(const Vec2& other) const {
-        return x * other.y - y * other.x;
-    }
-    
-    float length_squared() const {
-        return x * x + y * y;
-    }
-    
-    float length() const {
-        return std::sqrt(length_squared());
-    }
-    
-    Vec2 normalized() const {
-        float len = length();
-        return len > 0 ? Vec2{x / len, y / len} : Vec2{0, 0};
-    }
-};
-
-
-struct Vec3 {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-
-    constexpr Vec3() = default;
-    constexpr Vec3(float x_val, float y_val, float z_val) : x(x_val), y(y_val), z(z_val) {}
-    constexpr Vec3(const Vec2& v2, float z_val = 0.0f) : x(v2.x), y(v2.y), z(z_val) {}
-
-    bool operator<(const Vec3 &other) const {
-        return x < other.x || (x == other.x && y < other.y) || (x == other.x && y == other.y && z < other.z);
-    }
-
-    bool operator==(const Vec3& other) const {
-        return x == other.x && y == other.y && z == other.z;
-    }
-
-    // Vec3& operator=(const Vec3& other) {
-    //     if (this != &other) {
-    //         x = other.x;
-    //         y = other.y;
-    //         z = other.z;
-    //     }
-    //     return *this;
-    // }
-
-    Vec3 operator-(const Vec3& other) const {
-    return {x - other.x, y - other.y, z - other.z};
-    }
-
-    Vec3 operator+(const Vec3& other) const {
-        return {x + other.x, y + other.y, z + other.z};
-    }
-
-    Vec3 operator/(uint32_t other) const {
-        return {x / other, y / other, z / other};
-    }
-    
-    Vec3 operator*(float scale) const {
-        return {x * scale, y * scale, z * scale};
-    }
-    
-    float dot(const Vec3& other) const {
-        return x * other.x + y * other.y + z * other.z;
-    }
-    
-    Vec3 cross(const Vec3& other) const {
-        return Vec3{
-            y * other.z - z * other.y,
-            z * other.x - x * other.z,
-            x * other.y - y * other.x
+    constexpr bool operator==(const TVec3& o) const { return x == o.x && y == o.y && z == o.z; }
+    constexpr TVec3 operator-(const TVec3& o) const { return {T(x - o.x), T(y - o.y), T(z - o.z)}; }
+    constexpr TVec3 operator+(const TVec3& o) const { return {T(x + o.x), T(y + o.y), T(z + o.z)}; }
+    TVec3 operator/(uint32_t s) const { return {T(x / s), T(y / s), T(z / s)}; }
+    constexpr TVec3 operator*(float s) const { return {T(x * s), T(y * s), T(z * s)}; }
+    constexpr auto dot(const TVec3& o) const { return x * o.x + y * o.y + z * o.z; }
+    constexpr TVec3 cross(const TVec3& o) const {
+        return TVec3{
+            T(y * o.z - z * o.y),
+            T(z * o.x - x * o.z),
+            T(x * o.y - y * o.x)
         };
     }
-    
-    float length_squared() const {
-        return x * x + y * y + z * z;
+};
+
+// Floating-point 3D specialization adds length utilities
+template<typename T>
+struct TVec3<T, true> {
+    T x{}, y{}, z{};
+    constexpr TVec3() = default;
+    constexpr TVec3(T x_val, T y_val, T z_val) : x(x_val), y(y_val), z(z_val) {}
+    constexpr TVec3(const TVec2<T>& v2, T z_val = T{}) : x(v2.x), y(v2.y), z(z_val) {}
+    constexpr bool operator<(const TVec3& o) const {
+        return x < o.x || (x == o.x && (y < o.y || (y == o.y && z < o.z)));
     }
-    
-    float length() const {
-        return std::sqrt(length_squared());
+    constexpr bool operator==(const TVec3& o) const { return x == o.x && y == o.y && z == o.z; }
+    constexpr TVec3 operator-(const TVec3& o) const { return {T(x - o.x), T(y - o.y), T(z - o.z)}; }
+    constexpr TVec3 operator+(const TVec3& o) const { return {T(x + o.x), T(y + o.y), T(z + o.z)}; }
+    TVec3 operator/(uint32_t s) const { return {T(x / s), T(y / s), T(z / s)}; }
+    constexpr TVec3 operator*(float s) const { return {T(x * s), T(y * s), T(z * s)}; }
+    constexpr T dot(const TVec3& o) const { return x * o.x + y * o.y + z * o.z; }
+    constexpr TVec3 cross(const TVec3& o) const {
+        return TVec3{
+            T(y * o.z - z * o.y),
+            T(z * o.x - x * o.z),
+            T(x * o.y - y * o.x)
+        };
     }
-    
-    Vec3 normalized() const {
-        float len = length();
-        return len > 0 ? Vec3{x / len, y / len, z / len} : Vec3{0, 0, 0};
+    constexpr T length_squared() const { return x * x + y * y + z * z; }
+    T length() const { return std::sqrt(length_squared()); }
+    TVec3 normalized() const {
+        T len = length();
+        return (len > T(0)) ? TVec3{x / len, y / len, z / len} : TVec3{};
     }
 };
+
+using Vec2  = TVec2<float>;
+using Vec3  = TVec3<float>;
+using Vec2i = TVec2<int32_t>;
+using uVec2i = TVec2<uint32_t>;
+using Vec3i = TVec3<int32_t>;
+using uVec3i = TVec3<uint32_t>;
