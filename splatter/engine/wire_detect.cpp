@@ -1,5 +1,5 @@
 #include "wire_detect.h"
-#include "util.h"
+#include "vec.h"
 #include "voxel.h"
 
 #include <vector>

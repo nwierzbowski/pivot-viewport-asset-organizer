@@ -1,5 +1,5 @@
 #include "linalg3.h"
-#include "util.h"
+#include "vec.h"
 
 #include <vector>
 #include <cstdint>

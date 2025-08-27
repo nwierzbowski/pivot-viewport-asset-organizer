@@ -1,5 +1,5 @@
 #include "chull.h"
-#include "util.h"
+#include "vec.h"
 #include <cstdint>
 #include <vector>
 #include <algorithm>

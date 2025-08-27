@@ -1,5 +1,5 @@
 #include "geo2d.h"
-#include "util.h"
+#include "vec.h"
 
 #include <vector>
 #include <cmath>

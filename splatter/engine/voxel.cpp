@@ -1,5 +1,5 @@
 #include "voxel.h"
-#include "util.h"
+#include "vec.h"
 #include "linalg3.h"
 
 #include <vector>
