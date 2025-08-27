@@ -3,7 +3,6 @@
 #include "chull.h"
 
 #include <Eigen/Eigenvalues>
-#include <nanoflann.hpp>
 
 #include <iostream>
 #include <cstdint>
@@ -12,9 +11,6 @@
 #include <algorithm>
 #include <queue>
 #include <chrono>
-#include <random>
-#include <limits>
-#include <map>
 
 // Rotate points by angle (radians) around origin
 void rotate_points_2D(const std::vector<Vec2> &points, float angle, std::vector<Vec2> &out)
