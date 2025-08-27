@@ -12,6 +12,10 @@ find_program(CYTHON_EXECUTABLE cython REQUIRED)
 set(ENGINE_SOURCES
     splatter/engine/chull.cpp
     splatter/engine/bounds.cpp
+    splatter/engine/voxel.cpp
+    splatter/engine/wire_detect.cpp
+    splatter/engine/geo2d.cpp
+    splatter/engine/linalg3.cpp
 )
 
 add_library(splatter_engine SHARED ${ENGINE_SOURCES})

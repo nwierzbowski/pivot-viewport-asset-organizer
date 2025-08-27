@@ -208,12 +208,3 @@ struct Vec3 {
         return len > 0 ? Vec3{x / len, y / len, z / len} : Vec3{0, 0, 0};
     }
 };
-
-struct BoundingBox2D {
-    Vec2 min_corner;
-    Vec2 max_corner;
-    float area;
-    float rotation_angle;  // Radians
-
-    BoundingBox2D() : area(std::numeric_limits<float>::max()), rotation_angle(0) {}
-};
