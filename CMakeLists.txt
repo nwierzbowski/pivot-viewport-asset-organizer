@@ -22,7 +22,7 @@ target_compile_options(splatter_engine PRIVATE
     -pedantic       # Enforce strict standard compliance, disallow compiler extensions
 )
 
-target_compile_features(splatter_engine PRIVATE cxx_std_17)
+target_compile_features(splatter_engine PRIVATE cxx_std_20)
 target_include_directories(splatter_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/splatter/engine
     ${CMAKE_CURRENT_SOURCE_DIR}/splatter/nanoflann
