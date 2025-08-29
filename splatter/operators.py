@@ -298,10 +298,14 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
 
         startCPP = time.perf_counter()
         rot, trans = bridge.align_min_bounds(verts_np, verts_norm_np, edges_np)
-        
+        endCPP = time.perf_counter()
+        elapsedCPP = endCPP - startCPP
+
         obj.rotation_euler = rot
+        bpy.context.scene.cursor.location = Vector(trans) + obj.location
+        # bpy.ops.transform.translate(value=trans)
+
         end = time.perf_counter()
-        elapsedCPP = end - startCPP
         elapsedPython = end - startPython
         print(f"C++ time elapsed: {elapsedCPP * 1000:.2f}ms")
         print(f"Python time elapsed: {elapsedPython * 1000:.2f}ms")
