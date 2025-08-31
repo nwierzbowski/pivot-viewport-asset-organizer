@@ -189,8 +189,9 @@ PolyData calc_cog_area(const std::vector<Vec2>& vertices) {
 
 Vec3 calc_cog_volume(const Vec3* verts, uint32_t vertCount, const std::vector<std::vector<uint32_t>> &adj_verts, BoundingBox3D full_box)
 {
-    const uint8_t slice_count = 10;
-    const float slice_height = (full_box.max_corner.z - full_box.min_corner.z) / (slice_count);
+    const float slice_height = .01f;
+    const uint8_t slice_count = static_cast<uint8_t>((full_box.max_corner.z - full_box.min_corner.z) / slice_height);
+
 
     std::vector<Slice> slices(slice_count);
 
