@@ -15,6 +15,7 @@ set(ENGINE_SOURCES
     splatter/engine/geo2d.cpp
     splatter/engine/linalg3.cpp
     splatter/engine/engine.cpp
+    splatter/engine/analysis.cpp
 )
 
 add_library(splatter_engine SHARED ${ENGINE_SOURCES})
