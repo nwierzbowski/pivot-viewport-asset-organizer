@@ -107,7 +107,6 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     
     auto mask = calc_mask(vertCount, adj_verts, voxel_map);
 
-    
 
     //Create a copy of the original vertices masking for wires
     std::vector<Vec3> working_verts;
@@ -117,7 +116,6 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
         if (!mask[i])
             working_verts.push_back(verts[i]);
 
-    //Calculate the center of gravity by volume
 
     //Global sort for good convex hull cache locality
     std::sort(working_verts.begin(), working_verts.end());
@@ -139,7 +137,9 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     // Compute the center of the base 2D bounding box
     auto base_center = (base_2DBB.max_corner + base_2DBB.min_corner) * 0.5f;
     auto start = std::chrono::high_resolution_clock::now();
+
     Vec3 cog = calc_cog_volume_edges_intersections(verts, vertCount, edges, edgeCount, full_3DBB, 0.02f);
+    
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
     std::cout << "COG Full Calc Time: " << (float) duration.count() / 1000000 << " ms" << std::endl;
