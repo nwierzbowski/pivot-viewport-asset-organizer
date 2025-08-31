@@ -149,7 +149,7 @@ BoundingBox3D compute_aabb_3D(const std::vector<V> &points)
 }
 
 template<HasXY V>
-std::vector<Vec2> convex_hull_2D(const std::vector<V>& verts, float V::*coord, float min_val, float max_val) {
+std::vector<Vec2> monotonic_chain(const std::vector<V>& verts, float V::*coord, float min_val, float max_val) {
     std::vector<Vec2> points;
     points.reserve(verts.size());
 
@@ -198,9 +198,9 @@ std::vector<Vec2> convex_hull_2D(const std::vector<V>& verts, float V::*coord, f
 }
 
 template<HasXY V>
-std::vector<Vec2> convex_hull_2D(const std::vector<V>& verts)
+std::vector<Vec2> monotonic_chain(const std::vector<V>& verts)
 {
-    return convex_hull_2D(verts, &V::x, -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity());
+    return monotonic_chain(verts, &V::x, -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity());
 }
 
 std::vector<float> get_edge_angles_2D(const std::vector<Vec2> &hull);

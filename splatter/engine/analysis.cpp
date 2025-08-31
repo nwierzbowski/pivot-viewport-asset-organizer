@@ -8,7 +8,7 @@
 
 std::vector<Vec2> calc_base_convex_hull(const std::vector<Vec3> &verts, BoundingBox3D full_box)
 {
-    return convex_hull_2D(verts, &Vec3::z, full_box.min_corner.z, full_box.min_corner.z + 0.001);
+    return monotonic_chain(verts, &Vec3::z, full_box.min_corner.z, full_box.min_corner.z + 0.001);
 }
 
 float calc_ratio_full_to_base(const BoundingBox2D &full_box, const BoundingBox2D &base_box)
@@ -46,30 +46,6 @@ static inline void bucket_edges_per_slice(
         if (last >= slice_count) last = slice_count - 1;
         for (int si = first; si <= last; ++si) slice_edges[si].push_back(ei);
     }
-}
-
-// Local monotonic chain hull (returns hull in CCW, no duplicate last point)
-static inline void monotonic_chain(std::vector<Vec2>& pts, std::vector<Vec2>& hull) {
-    if (pts.size() < 3) { hull.clear(); return; }
-    auto cmp = [](const Vec2& a, const Vec2& b){ return (a.x < b.x) || (a.x == b.x && a.y < b.y); };
-    std::sort(pts.begin(), pts.end(), cmp);
-    pts.erase(std::unique(pts.begin(), pts.end(), [](const Vec2& a,const Vec2& b){ return a.x==b.x && a.y==b.y; }), pts.end());
-    if (pts.size() < 3) { hull.clear(); return; }
-    hull.resize(0); hull.reserve(pts.size()*2);
-    auto cross = [](const Vec2& a,const Vec2& b,const Vec2& c){ return (b.x - a.x)*(c.y - a.y) - (b.y - a.y)*(c.x - a.x); };
-    // Lower
-    for (const auto &p : pts) {
-        while (hull.size() >= 2 && cross(hull[hull.size()-2], hull[hull.size()-1], p) <= 0.f) hull.pop_back();
-        hull.push_back(p);
-    }
-    // Upper
-    size_t lower_sz = hull.size();
-    for (int i = (int)pts.size() - 2; i >= 0; --i) {
-        const auto &p = pts[i];
-        while (hull.size() > lower_sz && cross(hull[hull.size()-2], hull[hull.size()-1], p) <= 0.f) hull.pop_back();
-        hull.push_back(p);
-    }
-    if (!hull.empty()) hull.pop_back(); // remove duplicate start
 }
 
 // Build slice islands and directly compute aggregated area and COG (avoids storing hulls)
@@ -144,7 +120,12 @@ static inline void build_slice_islands(
     for (uint32_t idx : active) {
         auto &pts = comp_points[idx];
         if (pts.size() < 3) continue;
-        monotonic_chain(pts, hull);
+        // Sort and dedup pts
+        auto cmp = [](const Vec2& a, const Vec2& b){ return (a.x < b.x) || (a.x == b.x && a.y < b.y); };
+        std::sort(pts.begin(), pts.end(), cmp);
+        pts.erase(std::unique(pts.begin(), pts.end(), [](const Vec2& a,const Vec2& b){ return a.x==b.x && a.y==b.y; }), pts.end());
+        if (pts.size() < 3) continue;
+        hull = monotonic_chain(pts);
         size_t hsz = hull.size(); if (hsz < 3) continue;
         double A = 0.0, Cx = 0.0, Cy = 0.0;
         for (size_t k = 0; k < hsz; ++k) {

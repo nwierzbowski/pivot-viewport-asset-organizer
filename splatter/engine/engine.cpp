@@ -123,7 +123,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     std::sort(working_verts.begin(), working_verts.end());
 
     //Get full 2d convex hull and calculate the angle the object is facing
-    auto full_hull2D = convex_hull_2D(working_verts);
+    auto full_hull2D = monotonic_chain(working_verts);
     float angle_to_forward = calc_forward_angle(full_hull2D);
 
     // Rotate working vertices to align object with +Y axis
