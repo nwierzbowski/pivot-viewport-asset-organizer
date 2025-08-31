@@ -64,7 +64,7 @@ float calc_forward_angle(std::vector<Vec2> &hull)
     best_box.area = std::numeric_limits<float>::infinity();
 
     std::vector<Vec2> rot_hull(hull.size());
-    auto start = std::chrono::high_resolution_clock::now();
+    
     for (float angle : angles)
     {
         rotate_points_2D(hull, -angle, rot_hull);
@@ -73,9 +73,7 @@ float calc_forward_angle(std::vector<Vec2> &hull)
         if (box.area < best_box.area)
             best_box = box;
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    std::cout << "Time: " << (float) duration.count() / 1000000 << " ms" << std::endl;
+    
 
     return best_box.rotation_angle;
 }
@@ -140,8 +138,11 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
 
     // Compute the center of the base 2D bounding box
     auto base_center = (base_2DBB.max_corner + base_2DBB.min_corner) * 0.5f;
-
+    auto start = std::chrono::high_resolution_clock::now();
     Vec3 cog = calc_cog_volume(verts, vertCount, adj_verts, full_3DBB);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cout << "COG Full Calc Time: " << (float) duration.count() / 1000000 << " ms" << std::endl;
     rotate_vector(cog, angle_to_forward);
 
     *out_rot = {0, 0, angle_to_forward}; // Rotation to align object front with +Y axis

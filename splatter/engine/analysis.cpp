@@ -6,6 +6,9 @@
 #include <cstdint>
 #include <unordered_set>
 
+#include <chrono>
+#include <iostream>
+
 std::vector<Vec2> calc_base_convex_hull(const std::vector<Vec3> &verts, BoundingBox3D full_box)
 {
     return convex_hull_2D(verts, &Vec3::z, full_box.min_corner.z, full_box.min_corner.z + 0.001);
@@ -37,97 +40,61 @@ static inline void build_slice_island_hulls(
     if (s.vert_indices.empty())
         return;
 
+    // Ensure output is only from this invocation
+    s.chulls.clear();
+    // Rough heuristic reserve (most slices have few islands)
+    s.chulls.reserve(std::min<size_t>(8, s.vert_indices.size()));
+
+    // Mark which vertices belong to this slice (O(|slice|))
     std::vector<uint8_t> in_slice(vertCount, 0);
-    for (uint32_t vi : s.vert_indices) in_slice[vi] = 1;
-
-    std::vector<int32_t> vertex_to_island(vertCount, -1);
-    std::vector<std::vector<uint32_t>> islands;
-    std::vector<std::unordered_set<uint32_t>> island_frontiers;
-
-    islands.reserve(s.vert_indices.size() / 4 + 1);
-    island_frontiers.reserve(islands.capacity());
-
     for (uint32_t vi : s.vert_indices)
+        in_slice[vi] = 1;
+
+    // Visited flags only for vertices in slice
+    std::vector<uint8_t> visited(vertCount, 0);
+
+    // Reusable buffers
+    std::vector<uint32_t> stack;
+    stack.reserve(128);
+
+    std::vector<uint32_t> island_indices;
+    island_indices.reserve(256);
+
+    std::vector<Vec3> island_verts;
+    island_verts.reserve(256);
+
+    for (uint32_t seed : s.vert_indices)
     {
-        if (vertex_to_island[vi] != -1) continue;
+        if (visited[seed]) continue;
 
-        const auto &nbrs = adj_verts[vi];
+        // Start new island
+        stack.clear();
+        island_indices.clear();
+        stack.push_back(seed);
+        visited[seed] = 1;
 
-        std::vector<int32_t> neighbor_islands;
-        neighbor_islands.reserve(4);
+        while (!stack.empty())
         {
-            std::unordered_set<int32_t> dedup;
+            uint32_t v = stack.back();
+            stack.pop_back();
+            island_indices.push_back(v);
+
+            const auto &nbrs = adj_verts[v];
             for (uint32_t n : nbrs)
             {
-                if (!in_slice[n]) continue;
-                int32_t iid = vertex_to_island[n];
-                if (iid != -1 && dedup.insert(iid).second)
-                    neighbor_islands.push_back(iid);
+                if (!in_slice[n] || visited[n]) continue;
+                visited[n] = 1;
+                stack.push_back(n);
             }
         }
 
-        if (neighbor_islands.empty())
-        {
-            int32_t new_id = (int32_t)islands.size();
-            islands.emplace_back().push_back(vi);
-            vertex_to_island[vi] = new_id;
-            island_frontiers.emplace_back();
-            for (uint32_t n : nbrs)
-                if (in_slice[n] && vertex_to_island[n] == -1)
-                    island_frontiers[new_id].insert(n);
-        }
-        else if (neighbor_islands.size() == 1)
-        {
-            int32_t iid = neighbor_islands[0];
-            islands[iid].push_back(vi);
-            vertex_to_island[vi] = iid;
-            island_frontiers[iid].erase(vi);
-            for (uint32_t n : nbrs)
-                if (in_slice[n] && vertex_to_island[n] == -1)
-                    island_frontiers[iid].insert(n);
-        }
-        else
-        {
-            int32_t base = neighbor_islands[0];
-            islands[base].push_back(vi);
-            vertex_to_island[vi] = base;
+        // Build verts array for hull (copy unavoidable unless hull API extended)
+        island_verts.clear();
+        island_verts.reserve(island_indices.size());
+        for (uint32_t vi : island_indices)
+            island_verts.push_back(verts[vi]);
 
-            for (size_t k = 1; k < neighbor_islands.size(); ++k)
-            {
-                int32_t other = neighbor_islands[k];
-                if (other == base) continue;
-
-                for (uint32_t vj : islands[other])
-                {
-                    islands[base].push_back(vj);
-                    vertex_to_island[vj] = base;
-                }
-                islands[other].clear();
-
-                for (uint32_t f : island_frontiers[other])
-                    if (vertex_to_island[f] == -1)
-                        island_frontiers[base].insert(f);
-                island_frontiers[other].clear();
-            }
-
-            for (uint32_t n : nbrs)
-                if (in_slice[n] && vertex_to_island[n] == -1)
-                    island_frontiers[base].insert(n);
-
-            for (uint32_t vj : islands[base])
-                island_frontiers[base].erase(vj);
-        }
-    }
-
-    for (const auto &island : islands)
-    {
-        if (island.empty()) continue;
-        std::vector<Vec3> islandVerts;
-        islandVerts.reserve(island.size());
-        for (uint32_t vi : island)
-            islandVerts.push_back(verts[vi]);
-
-        auto hull = convex_hull_2D(islandVerts, &Vec3::z, s.z_lower, s.z_upper);
+        auto hull = convex_hull_2D(island_verts, &Vec3::z, s.z_lower, s.z_upper);
         if (!hull.empty())
             s.chulls.push_back(std::move(hull));
     }
@@ -194,7 +161,7 @@ Vec3 calc_cog_volume(const Vec3* verts, uint32_t vertCount, const std::vector<st
 
 
     std::vector<Slice> slices(slice_count);
-
+    auto start = std::chrono::high_resolution_clock::now();
     // Init slices
     for (uint8_t i = 0; i < slice_count; ++i)
     {
@@ -202,7 +169,11 @@ Vec3 calc_cog_volume(const Vec3* verts, uint32_t vertCount, const std::vector<st
         slices[i].z_lower = full_box.min_corner.z + i * slice_height;
         slices[i].vert_indices.reserve(vertCount / slice_count);
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cout << "init slices: " << (float) duration.count() / 1000000 << " ms" << std::endl;
 
+    start = std::chrono::high_resolution_clock::now();
     // Distribute vertices into slices
     for (uint32_t i = 0; i < vertCount; i++)
     {
@@ -214,12 +185,22 @@ Vec3 calc_cog_volume(const Vec3* verts, uint32_t vertCount, const std::vector<st
         uint8_t slice_index = static_cast<uint8_t>(idx);
         slices[slice_index].vert_indices.push_back(i);
     }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cout << "Distribute vertices: " << (float) duration.count() / 1000000 << " ms" << std::endl;
 
+    start = std::chrono::high_resolution_clock::now();
     // Calculate convex hulls for the connected islands in each slice
+    long long total_build_time = 0;
+    long long total_avg_time = 0;
     for (Slice &s : slices)
     {
+        auto loop_start = std::chrono::high_resolution_clock::now();
         build_slice_island_hulls(s, verts, vertCount, adj_verts);
+        auto build_end = std::chrono::high_resolution_clock::now();
+        total_build_time += std::chrono::duration_cast<std::chrono::nanoseconds>(build_end - loop_start).count();
 
+        auto avg_start = std::chrono::high_resolution_clock::now();
         //Average the cog weighted by area
         Vec2 weighted_cog_sum = {0.0f, 0.0f};
         float total_area = 0.0f;
@@ -240,8 +221,17 @@ Vec3 calc_cog_volume(const Vec3* verts, uint32_t vertCount, const std::vector<st
 
         s.cog = weighted_cog_sum;
         s.area = total_area;
+        auto avg_end = std::chrono::high_resolution_clock::now();
+        total_avg_time += std::chrono::duration_cast<std::chrono::nanoseconds>(avg_end - avg_start).count();
     }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cout << "Total build_slice_island_hulls time: " << (float) total_build_time / 1000000 << " ms" << std::endl;
+    std::cout << "Total averaging time: " << (float) total_avg_time / 1000000 << " ms" << std::endl;
+    std::cout << "Calculate convex hulls: " << (float) duration.count() / 1000000 << " ms" << std::endl;
+    
 
+    start = std::chrono::high_resolution_clock::now();
     //Average the cog of each slice weighted by their areas
     Vec3 overall_cog = {0.0f, 0.0f, 0.0f};
     float total_area = 0.0f;
@@ -260,6 +250,9 @@ Vec3 calc_cog_volume(const Vec3* verts, uint32_t vertCount, const std::vector<st
         overall_cog.y /= total_area;
         overall_cog.z /= total_area;
     }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    std::cout << "Average COG: " << (float) duration.count() / 1000000 << " ms" << std::endl;
 
     return overall_cog;
 }
