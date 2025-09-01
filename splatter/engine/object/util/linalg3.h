@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vec.h"
+#include "share/vec.h"
 
 #include <vector>
 

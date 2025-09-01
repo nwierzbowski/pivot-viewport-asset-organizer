@@ -1,9 +1,11 @@
 #include "engine.h"
-#include "vec.h"
-#include "voxel.h"
-#include "wire_detect.h"
-#include "geo2d.h"
-#include "analysis.h"
+#include "share/vec.h"
+#include "object/computation/voxel.h"
+#include "object/computation/chull.h"
+#include "object/computation/wire_detect.h"
+#include "object/util/geo2d.h"
+#include "object/analysis/analysis.h"
+#include "object/computation/cog.h"
 
 #include <vector>
 #include <chrono>
@@ -121,7 +123,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     std::sort(working_verts.begin(), working_verts.end());
 
     //Get full 2d convex hull and calculate the angle the object is facing
-    auto full_hull2D = monotonic_chain(working_verts);
+    std::vector<Vec2> full_hull2D = monotonic_chain(working_verts);
     float angle_to_forward = calc_forward_angle(full_hull2D);
 
     // Rotate working vertices to align object with +Y axis

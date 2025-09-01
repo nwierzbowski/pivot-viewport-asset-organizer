@@ -1,5 +1,6 @@
-#include "linalg3.h"
-#include "vec.h"
+#include "object/util/linalg3.h"
+
+#include "share/vec.h"
 
 #include <vector>
 #include <cstdint>

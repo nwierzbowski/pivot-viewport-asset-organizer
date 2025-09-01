@@ -10,12 +10,13 @@ find_package(Python COMPONENTS Interpreter Development REQUIRED)
 find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
 set(ENGINE_SOURCES
-    splatter/engine/voxel.cpp
-    splatter/engine/wire_detect.cpp
-    splatter/engine/geo2d.cpp
-    splatter/engine/linalg3.cpp
     splatter/engine/engine.cpp
-    splatter/engine/analysis.cpp
+    splatter/engine/share/stats.cpp
+    splatter/engine/object/computation/voxel.cpp
+    splatter/engine/object/computation/wire_detect.cpp
+    splatter/engine/object/util/linalg3.cpp
+    splatter/engine/object/computation/cog.cpp
+    splatter/engine/object/analysis/analysis.cpp
 )
 
 add_library(splatter_engine SHARED ${ENGINE_SOURCES})

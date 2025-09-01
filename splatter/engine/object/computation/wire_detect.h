@@ -1,10 +1,8 @@
 #pragma once
 
-#include "vec.h"
-#include "voxel.h"
+#include "object/computation/voxel.h"
 
 #include <vector>
-#include <unordered_map>
 
 void select_wire_verts(
     uint32_t vertCount,

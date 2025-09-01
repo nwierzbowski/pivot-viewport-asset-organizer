@@ -1,6 +1,7 @@
 #include "voxel.h"
-#include "vec.h"
-#include "linalg3.h"
+
+#include "share/vec.h"
+#include "object/util/linalg3.h"
 
 #include <vector>
 #include <unordered_map>

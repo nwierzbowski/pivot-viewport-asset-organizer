@@ -1,9 +1,9 @@
 #pragma once
 
-#include "vec.h"
+#include "share/vec.h"
+#include "share/concepts.h"
 
 #include <vector>
-#include <concepts>
 
 struct BoundingBox2D {
     Vec2 min_corner;
@@ -22,35 +22,6 @@ struct BoundingBox3D {
 
     BoundingBox3D() : volume(0), rotation_angle(0) {}
 };
-
-template<class V>
-concept HasXY = requires(V v) {
-    { v.x } -> std::convertible_to<float>;
-    { v.y } -> std::convertible_to<float>;
-};
-
-
-template<HasXY V>
-void rotate_points_2D(const std::vector<V> &points, float angle, std::vector<V> &out)
-{
-    if (out.size() != points.size())
-        out.resize(points.size());
-
-    float c = std::cos(angle);
-    float s = std::sin(angle);
-
-    for (size_t i = 0; i < points.size(); ++i)
-    {
-        // Cache originals so in-place rotation works
-        float ox = points[i].x;
-        float oy = points[i].y;
-        out[i].x = ox * c - oy * s;
-        out[i].y = ox * s + oy * c;
-        // Preserve extra components (e.g. z) if present
-        if constexpr (requires { points[i].z; })
-            out[i].z = points[i].z;
-    }
-}
 
 template<class V, class Pred>
 inline BoundingBox2D compute_aabb_2D_impl(const std::vector<V>& points, Pred pred) {
@@ -147,60 +118,3 @@ BoundingBox3D compute_aabb_3D(const std::vector<V> &points)
 {
     return compute_aabb_3D_impl(points, [](const V&) { return true; });
 }
-
-template<HasXY V>
-std::vector<Vec2> monotonic_chain(const std::vector<V>& verts, float V::*coord, float min_val, float max_val) {
-    std::vector<Vec2> points;
-    points.reserve(verts.size());
-
-    if (verts.empty()) return points;
-
-    for (const V& v : verts) {
-        if (v.*coord >= min_val && v.*coord <= max_val) {
-            points.emplace_back(Vec2{v.x, v.y});
-        }
-    }
-
-    if (points.size() <= 3) {
-        return points;
-    }
-
-    // Inline cross product for speed
-    auto cross = [](const Vec2& O, const Vec2& A, const Vec2& B) -> float {
-        return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
-    };
-
-    std::vector<Vec2> hull;
-    hull.reserve(verts.size());  // Pre-allocate worst case
-
-    // Lower hull
-    for (const Vec2& p : points) {
-        while (hull.size() >= 2 && cross(hull[hull.size()-2], hull[hull.size()-1], p) <= 0) {
-            hull.pop_back();
-        }
-        hull.push_back(p);
-    }
-
-    // Upper hull
-    const size_t lower_size = hull.size();
-    for (int i = points.size() - 2; i >= 0; --i) {
-        const Vec2& p = points[i];
-        while (hull.size() > lower_size && cross(hull[hull.size()-2], hull[hull.size()-1], p) <= 0) {
-            hull.pop_back();
-        }
-        hull.push_back(p);
-    }
-
-    // Remove duplicate last point
-    if (hull.size() > 1) hull.pop_back();
-
-    return hull;
-}
-
-template<HasXY V>
-std::vector<Vec2> monotonic_chain(const std::vector<V>& verts)
-{
-    return monotonic_chain(verts, &V::x, -std::numeric_limits<float>::infinity(), std::numeric_limits<float>::infinity());
-}
-
-std::vector<float> get_edge_angles_2D(const std::vector<Vec2> &hull);
