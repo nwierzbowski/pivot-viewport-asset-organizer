@@ -190,19 +190,20 @@ static inline void build_slice_islands(
 }
 
 // Driver function
-Vec3 calc_cog_volume_edges_intersections(const Vec3 *verts,
-                                         uint32_t vertCount,
-                                         const uVec2i *edges,
-                                         uint32_t edgeCount,
-                                         BoundingBox3D full_box,
-                                         float slice_height)
+COGResult calc_cog_volume_edges_intersections(const Vec3 *verts,
+                                              uint32_t vertCount,
+                                              const uVec2i *edges,
+                                              uint32_t edgeCount,
+                                              BoundingBox3D full_box,
+                                              float slice_height)
 {
+    COGResult result;
     if (!verts || !edges || vertCount == 0 || edgeCount == 0 || slice_height <= 0.f)
-        return {0, 0, 0};
+        return result;
 
     float total_h = full_box.max_corner.z - full_box.min_corner.z;
     if (total_h <= 0.f)
-        return {0, 0, full_box.min_corner.z};
+        return result;
 
     // Precompute vertex data for cache efficiency
     std::vector<float> vert_z(vertCount);
@@ -295,13 +296,19 @@ Vec3 calc_cog_volume_edges_intersections(const Vec3 *verts,
         }
     }
 
-    // Aggregate on the fly
+    // Collect per-slice data
+    result.slices.reserve(slice_count);
     Vec3 overall{0, 0, 0};
     float total_area = 0.f;
     for (uint8_t si = 0; si < slice_count; ++si)
     {
         if (slice_edges[si].empty())
+        {
+            // Even if empty, add a slice with zero area
+            float mid_z = 0.5f * (slice_z_lower[si] + slice_z_upper[si]);
+            result.slices.push_back({0.f, {0.f, 0.f}, mid_z});
             continue;
+        }
         float z_lower = slice_z_lower[si];
         float z_upper = slice_z_upper[si];
         Vec2 slice_cog;
@@ -311,9 +318,10 @@ Vec3 calc_cog_volume_edges_intersections(const Vec3 *verts,
             z_lower, z_upper, slice_vertices[si],
             vertex_comp, cid_to_index, num_components,
             slice_cog, slice_area);
+        float mid_z = 0.5f * (z_lower + z_upper);
+        result.slices.push_back({slice_area, slice_cog, mid_z});
         if (slice_area <= 0.f)
             continue;
-        float mid_z = 0.5f * (z_lower + z_upper);
         overall.x += slice_cog.x * slice_area;
         overall.y += slice_cog.y * slice_area;
         overall.z += mid_z * slice_area;
@@ -325,5 +333,6 @@ Vec3 calc_cog_volume_edges_intersections(const Vec3 *verts,
         overall.y /= total_area;
         overall.z /= total_area;
     }
-    return overall;
+    result.overall_cog = overall;
+    return result;
 }
