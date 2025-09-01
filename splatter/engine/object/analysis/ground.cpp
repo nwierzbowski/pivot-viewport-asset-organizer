@@ -50,4 +50,32 @@ bool is_ground(const std::vector<Vec3> &verts, Vec3 cog, BoundingBox3D full_box,
     return base_large_enough && cog_over_base && is_thick_enough;
 }
 
+bool snapStandToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis)
+{
+    if (cog_result.slices.empty())
+        return false;
+
+    uint8_t count = 0;
+    Vec2 avg_cog = {0, 0};
+
+    for (auto &slice : cog_result.slices)
+    {
+        if (full_box.area / slice.area > 5)
+        {
+            count++;
+            avg_cog += slice.centroid;
+        }
+    }
+
+    if (count == 0)
+        return false;
+
+    avg_cog /= static_cast<float>(count);
+    avg_cog -= cog_result.overall_cog;
+
+    front_axis += get_most_similar_axis(avg_cog) + 2;
+
+    return count > 1;
+}
+
 

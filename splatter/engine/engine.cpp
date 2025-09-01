@@ -128,6 +128,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     rotate_points_2D(full_hull2D, angle_to_forward, full_hull2D);
 
     auto full_3DBB = compute_aabb_3D(working_verts);
+    auto full_2DBB = compute_aabb_2D(working_verts);
 
     // auto start = std::chrono::high_resolution_clock::now();
 
@@ -137,17 +138,27 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     // auto end = std::chrono::high_resolution_clock::now();
     // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
     // std::cout << "COG Full Calc Time: " << (float)duration.count() / 1000000 << " ms" << std::endl;
-    Vec3 working_cog = cog_result.overall_cog;
-    rotate_vector(working_cog, angle_to_forward);
+    COGResult working_cog_result = {cog_result.overall_cog, cog_result.slices};
+
+    rotate_vector(working_cog_result.overall_cog, angle_to_forward);
+    for (auto &slice : working_cog_result.slices)
+    {
+        rotate_vector(slice.centroid, angle_to_forward);
+    }
 
     // Compute the center of the base 2D bounding box
     // auto base_center = (base_2DBB.max_corner + base_2DBB.min_corner) * 0.5f;
 
     uint8_t curr_front_axis = 0;
 
-    if (is_ground(working_verts, working_cog, full_3DBB, cog_result.slices))
+    if (is_ground(working_verts, working_cog_result.overall_cog, full_3DBB, working_cog_result.slices))
     {
         std::cout << "Classified as Ground" << std::endl;
+
+        if (snapStandToYN(working_cog_result, full_2DBB, curr_front_axis))
+        {
+            std::cout << "Snapped to YN Axis" << std::endl;
+        }
     }
     else if (is_wall(working_verts, full_3DBB, curr_front_axis))
     {
@@ -158,8 +169,10 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
         std::cout << "Classified as Ceiling" << std::endl;
     }
 
-    angle_to_forward += static_cast<float>(curr_front_axis % 4) * M_PI_2;
+    angle_to_forward += static_cast<float>(curr_front_axis) * M_PI_2;
+    std::cout << "Curr front axis: " << static_cast<int>(curr_front_axis) << std::endl;
 
+    std::cout << "Angle to forward: " << angle_to_forward << std::endl;
     *out_rot = {0, 0, angle_to_forward}; // Rotation to align object front with +Y axis
     // *out_trans = {base_center.x, base_center.y, 0.0f};               // Vector from object origin to calculated point of contact
     Vec3 final_cog = cog_result.overall_cog;

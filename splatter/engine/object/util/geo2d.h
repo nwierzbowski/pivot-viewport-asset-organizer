@@ -5,8 +5,9 @@
 
 #include <vector>
 #include <algorithm>
+#include <iostream>
 
-template<HasXY V>
+template <HasXY V>
 void rotate_points_2D(const std::vector<V> &points, float angle, std::vector<V> &out)
 {
     if (out.size() != points.size())
@@ -28,7 +29,7 @@ void rotate_points_2D(const std::vector<V> &points, float angle, std::vector<V> 
     }
 }
 
-template<HasXY V>
+template <HasXY V>
 std::vector<float> get_edge_angles_2D(const std::vector<V> &verts)
 {
     std::vector<float> angles;
@@ -62,19 +63,54 @@ std::vector<float> get_edge_angles_2D(const std::vector<V> &verts)
     return angles;
 }
 
-template<HasXY V, HasXY U>
-bool is_point_inside_polygon_2D(const V& point, const std::vector<U>& verts) {
-    if (verts.size() < 3) return false; // Not a polygon
+template <HasXY V, HasXY U>
+bool is_point_inside_polygon_2D(const V &point, const std::vector<U> &verts)
+{
+    if (verts.size() < 3)
+        return false; // Not a polygon
 
     bool inside = false;
     size_t n = verts.size();
-    for (size_t i = 0, j = n - 1; i < n; j = i++) {
-        const U& a = verts[i];
-        const U& b = verts[j];
+    for (size_t i = 0, j = n - 1; i < n; j = i++)
+    {
+        const U &a = verts[i];
+        const U &b = verts[j];
         if ((a.y > point.y) != (b.y > point.y) &&
-            (point.x < a.x + (b.x - a.x) * (point.y - a.y) / (b.y - a.y + 1e-8f))) {
+            (point.x < a.x + (b.x - a.x) * (point.y - a.y) / (b.y - a.y + 1e-8f)))
+        {
             inside = !inside;
         }
     }
     return inside;
+}
+
+template <HasXY V>
+uint8_t get_most_similar_axis(const V &v)
+{
+    float posX = v.x;
+    float negX = -v.x;
+    float posY = v.y;
+    float negY = -v.y;
+
+    // Find the maximum value among the four
+    float maxVal = std::max({posX, negX, posY, negY});
+
+    // Determine which one(s) have the max value; in case of tie, prioritize in order: posX, negX, posY, negY
+    if (maxVal == posX)
+    {
+        // std::cout << "Axis: +X" << std::endl;
+        return 1;
+    }
+    if (maxVal == negX)
+    {
+        // std::cout << "Axis: -X" << std::endl;
+        return 3;
+    }
+    if (maxVal == posY)
+    {
+        // std::cout << "Axis: +Y" << std::endl;
+        return 0;
+    }
+    // std::cout << "Axis: -Y" << std::endl;
+    return 2; // Only if all others are less
 }
