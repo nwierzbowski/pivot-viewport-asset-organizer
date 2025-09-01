@@ -65,7 +65,10 @@ bool is_wall(std::vector<Vec3> &verts, BoundingBox3D full_box, uint8_t &front_ax
 
     bool is_side_large_enough = (full_area / side.area) < 10.0f;
 
-    front_axis_out += side.axis;
+    if (is_side_large_enough)
+    {
+        front_axis_out += side.axis;
+    }
 
     return is_side_large_enough;
 }
