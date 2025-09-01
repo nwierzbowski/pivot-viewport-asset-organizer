@@ -128,26 +128,24 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     rotate_points_2D(full_hull2D, angle_to_forward, full_hull2D);
 
     auto full_3DBB = compute_aabb_3D(working_verts);
-    auto full_2DBB = compute_aabb_2D(full_hull2D);
 
-    
     auto start = std::chrono::high_resolution_clock::now();
 
     COGResult cog_result = calc_cog_volume_edges_intersections(verts, vertCount, edges, edgeCount, full_3DBB, 0.02f);
-    Vec3 cog = cog_result.overall_cog;
+    Vec3 working_cog = cog_result.overall_cog;
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
     std::cout << "COG Full Calc Time: " << (float)duration.count() / 1000000 << " ms" << std::endl;
 
-    rotate_vector(cog, angle_to_forward);
+    rotate_vector(working_cog, angle_to_forward);
 
     // Compute the center of the base 2D bounding box
     // auto base_center = (base_2DBB.max_corner + base_2DBB.min_corner) * 0.5f;
 
     uint8_t curr_front_axis = 0;
 
-    if (is_ground(working_verts, cog, full_3DBB, cog_result.slices))
+    if (is_ground(working_verts, working_cog, full_3DBB, cog_result.slices))
     {
         std::cout << "Classified as Ground" << std::endl;
     }
@@ -164,5 +162,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
 
     *out_rot = {0, 0, angle_to_forward}; // Rotation to align object front with +Y axis
     // *out_trans = {base_center.x, base_center.y, 0.0f};               // Vector from object origin to calculated point of contact
-    *out_trans = cog;
+    Vec3 final_cog = cog_result.overall_cog;
+    rotate_vector(final_cog, angle_to_forward);
+    *out_trans = final_cog;
 }
