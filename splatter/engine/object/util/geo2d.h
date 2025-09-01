@@ -61,3 +61,20 @@ std::vector<float> get_edge_angles_2D(const std::vector<V> &verts)
     angles.erase(last, angles.end());
     return angles;
 }
+
+template<HasXY V, HasXY U>
+bool is_point_inside_polygon_2D(const V& point, const std::vector<U>& verts) {
+    if (verts.size() < 3) return false; // Not a polygon
+
+    bool inside = false;
+    size_t n = verts.size();
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+        const U& a = verts[i];
+        const U& b = verts[j];
+        if ((a.y > point.y) != (b.y > point.y) &&
+            (point.x < a.x + (b.x - a.x) * (point.y - a.y) / (b.y - a.y + 1e-8f))) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
