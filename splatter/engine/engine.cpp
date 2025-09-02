@@ -151,7 +151,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
 
     uint8_t curr_front_axis = 0;
 
-    if (is_ground(working_verts, working_cog_result.overall_cog, full_3DBB, working_cog_result.slices))
+    if (is_ground(working_verts, working_cog_result, full_3DBB))
     {
         std::cout << "Classified as Ground" << std::endl;
 
@@ -170,9 +170,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     }
 
     angle_to_forward += static_cast<float>(curr_front_axis) * M_PI_2;
-    std::cout << "Curr front axis: " << static_cast<int>(curr_front_axis) << std::endl;
 
-    std::cout << "Angle to forward: " << angle_to_forward << std::endl;
     *out_rot = {0, 0, angle_to_forward}; // Rotation to align object front with +Y axis
     // *out_trans = {base_center.x, base_center.y, 0.0f};               // Vector from object origin to calculated point of contact
     Vec3 final_cog = cog_result.overall_cog;

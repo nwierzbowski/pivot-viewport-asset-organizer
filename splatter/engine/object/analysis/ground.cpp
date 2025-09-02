@@ -11,7 +11,7 @@
 // Calculate the base convex hull from vertices projected onto the XY plane at a specific Z level
 static inline std::vector<Vec2> calc_base_convex_hull(const std::vector<Vec3> &verts, BoundingBox3D full_box)
 {
-    return monotonic_chain(verts, &Vec3::z, full_box.min_corner.z, full_box.min_corner.z + 0.001);
+    return monotonic_chain(verts, &Vec3::z, factor_to_coord(0.0f, full_box).z, factor_to_coord(0.05f, full_box).z);
 }
 
 // Compute the ratio of the full bounding box area to the base bounding box area
@@ -19,6 +19,8 @@ static inline float calc_ratio_full_to_base(const BoundingBox3D &full_box, const
 {
     if (base_box.area == 0)
         return 0;
+
+    std::cout << "Full box volume: " << full_box.volume << ", Base box area: " << base_box.area << std::endl;
     return (full_box.volume / (full_box.max_corner.z - full_box.min_corner.z)) / base_box.area;
 }
 
@@ -34,18 +36,22 @@ static inline float get_min_cross_section(std::vector<SliceData> slices)
     return min_section;
 }
 
-bool is_ground(const std::vector<Vec3> &verts, Vec3 cog, BoundingBox3D full_box, std::vector<SliceData> slices)
+bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBox3D full_box)
 {
-    if (slices.empty())
+    if (cog_result.slices.empty())
         return false;
 
-    float min_cross_section = get_min_cross_section(slices);
+    float min_cross_section = get_min_cross_section(cog_result.slices);
     auto base_chull = calc_base_convex_hull(verts, full_box);
     float ratio = calc_ratio_full_to_base(full_box, compute_aabb_2D(base_chull));
 
     bool base_large_enough = ratio < 4.0f;
     bool is_thick_enough = min_cross_section > 25e-5f;
-    bool cog_over_base = is_point_inside_polygon_2D(cog, base_chull);
+    bool cog_over_base = is_point_inside_polygon_2D(cog_result.overall_cog, base_chull);
+
+    std::cout << "Base large enough: " << base_large_enough << std::endl;
+    std::cout << "COG over base: " << cog_over_base << std::endl;
+    std::cout << "Thick enough: " << is_thick_enough << std::endl;
 
     return base_large_enough && cog_over_base && is_thick_enough;
 }
