@@ -42,8 +42,10 @@ struct VoxelData
     Vec3 avg_normal;
     float lambda1;
     float lambda2;
+    float lambda3;
     Vec3 prim_vec;
     Vec3 sec_vec;
+    Vec3 third_vec;
 };
 
 using VoxelMap = std::unordered_map<VoxelKey, VoxelData, VoxelKeyHash>;

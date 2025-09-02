@@ -30,21 +30,23 @@ VoxelMap build_voxel_map(const Vec3 *verts, const Vec3 *norms, uint32_t vertCoun
             avg_normal = avg_normal + norms[i];
         avg_normal = avg_normal / static_cast<float>(cnt);
 
-        float lambda1 = 0.f, lambda2 = 0.f;
-        Vec3 prim_vec{0, 0, 0}, sec_vec{0, 0, 0};
+        float lambda1 = 0.f, lambda2 = 0.f, lambda3 = 0.f;
+        Vec3 prim_vec{0, 0, 0}, sec_vec{0, 0, 0}, third_vec{0, 0, 0};
 
         if (cnt >= 3)
         {
             float cov[3][3];
             compute_cov(voxel_data.vertex_indices, verts, cov);
-            eig3(cov, lambda1, lambda2, prim_vec, sec_vec);
+            eig3(cov, lambda1, lambda2, lambda3, prim_vec, sec_vec, third_vec);
         }
 
         voxel_data.avg_normal = avg_normal;
         voxel_data.prim_vec = prim_vec;
         voxel_data.sec_vec = sec_vec;
+        voxel_data.third_vec = third_vec;
         voxel_data.lambda1 = lambda1;
         voxel_data.lambda2 = lambda2;
+        voxel_data.lambda3 = lambda3;
     }
 
     return voxel_map;
