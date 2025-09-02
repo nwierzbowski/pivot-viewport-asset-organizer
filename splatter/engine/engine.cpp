@@ -113,7 +113,7 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     working_verts.reserve(vertCount);
 
     for (uint32_t i = 0; i < vertCount; ++i)
-        // if (!mask[i])
+        if (!mask[i])
             working_verts.push_back(verts[i]);
 
     // Global sort for good convex hull cache locality
@@ -133,10 +133,9 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
     auto full_3DBB = compute_aabb_3D(working_verts);
     auto full_2DBB = compute_aabb_2D(working_verts);
 
-    // auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
 
     COGResult cog_result = calc_cog_volume_edges_intersections(verts, vertCount, edges, edgeCount, full_3DBB, 0.02f);
-    
 
     // auto end = std::chrono::high_resolution_clock::now();
     // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -161,6 +160,11 @@ void standardize_object_transform(const Vec3 *verts, const Vec3 *vert_norms, uin
         if (snapStandToYN(working_cog_result, full_2DBB, curr_front_axis))
         {
             std::cout << "Snapped to YN Axis" << std::endl;
+        }
+        else
+        {
+            snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
+            std::cout << "Snapped to Dense Axis" << std::endl;
         }
     }
     else if (is_wall(working_verts, full_3DBB, curr_front_axis))

@@ -8,6 +8,7 @@
 struct SliceData
 {
     float area;
+    BoundingBox2D box;
     Vec2 centroid;
     float mid_z;
 };

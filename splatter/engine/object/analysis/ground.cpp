@@ -29,7 +29,6 @@ static inline float get_min_cross_section(std::vector<SliceData> slices)
     for (size_t i = 1; i < slices.size() - 1; ++i)
     {
         const auto &slice = slices[i];
-        std::cout << "Slice area: " << slice.area << std::endl;
         float section = slice.area;
         if (section < min_section)
             min_section = section;
@@ -65,9 +64,11 @@ bool snapStandToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front
     uint8_t count = 0;
     Vec2 avg_cog = {0, 0};
 
-    for (auto &slice : cog_result.slices)
+    // Exclude top and bottom slices
+    for (size_t i = 1; i < cog_result.slices.size() - 1; ++i)
     {
-        if (full_box.area / slice.area > 5)
+        const auto &slice = cog_result.slices[i];
+        if (full_box.area / slice.box.area > 5)
         {
             count++;
             avg_cog += slice.centroid;
@@ -77,12 +78,24 @@ bool snapStandToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front
     if (count == 0)
         return false;
 
-    avg_cog /= static_cast<float>(count);
-    avg_cog -= cog_result.overall_cog;
+    if (count > 1) {
+        avg_cog /= static_cast<float>(count);
+        avg_cog -= cog_result.overall_cog;
+        front_axis += get_most_similar_axis(avg_cog) + 2;
+    }
 
-    front_axis += get_most_similar_axis(avg_cog) + 2;
 
     return count > 1;
 }
 
+bool snapDenseToYN( COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis)
+{
+    if (cog_result.slices.empty())
+        return false;
 
+    Vec3 relative_cog = cog_result.overall_cog - Vec2{(full_box.min_corner.x + full_box.max_corner.x) * 0.5f, (full_box.min_corner.y + full_box.max_corner.y) * 0.5f};
+
+    front_axis += get_most_similar_axis(relative_cog) + 2;
+
+    return true;
+}

@@ -7,7 +7,7 @@
 #include <vector>
 #include <cstdint>
 #include <algorithm>
-
+#include <limits>
 
 // Build per-slice edge buckets: slice_edges[slice_index] contains indices of edges overlapping slice slice_index.
 static inline void bucket_edges_per_slice(
@@ -59,10 +59,18 @@ static inline void build_slice_islands(
     const std::vector<uint32_t> &cid_to_index,
     uint32_t num_components,
     Vec2 &out_cog,
-    float &out_area)
+    float &out_area,
+    BoundingBox2D &out_box)
 {
     out_cog = {0.f, 0.f};
     out_area = 0.f;
+    out_box = BoundingBox2D{};
+    out_box.area = 0.f; // Initialize to 0 for empty case
+    float min_x = std::numeric_limits<float>::max();
+    float max_x = std::numeric_limits<float>::lowest();
+    float min_y = std::numeric_limits<float>::max();
+    float max_y = std::numeric_limits<float>::lowest();
+    bool has_points = false;
     if (slice_edge_indices.empty())
         return;
     const float EPS = 1e-8f;
@@ -158,6 +166,13 @@ static inline void build_slice_islands(
         size_t hull_size = hull.size();
         if (hull_size < 3)
             continue;
+        for (const Vec2 &p : hull) {
+            if (p.x < min_x) min_x = p.x;
+            if (p.x > max_x) max_x = p.x;
+            if (p.y < min_y) min_y = p.y;
+            if (p.y > max_y) max_y = p.y;
+        }
+        has_points = true;
         double area = 0.0, centroid_x = 0.0, centroid_y = 0.0;
         for (size_t k = 0; k < hull_size; ++k)
         {
@@ -182,6 +197,13 @@ static inline void build_slice_islands(
         double inv = 1.0 / out_area;
         out_cog.x = (float)(weighted_centroid_x * inv);
         out_cog.y = (float)(weighted_centroid_y * inv);
+    }
+    if (has_points) {
+        out_box.min_corner = {min_x, min_y};
+        out_box.max_corner = {max_x, max_y};
+        out_box.area = (max_x - min_x) * (max_y - min_y);
+    } else {
+        out_box.area = 0.f;
     }
 }
 
@@ -302,20 +324,23 @@ COGResult calc_cog_volume_edges_intersections(const Vec3 *verts,
         {
             // Even if empty, add a slice with zero area
             float mid_z = 0.5f * (slice_z_lower[slice_index] + slice_z_upper[slice_index]);
-            result.slices.push_back({0.f, {0.f, 0.f}, mid_z});
+            BoundingBox2D empty_box;
+            empty_box.area = 0.f;
+            result.slices.push_back({0.f, empty_box, {0.f, 0.f}, mid_z});
             continue;
         }
         float z_lower = slice_z_lower[slice_index];
         float z_upper = slice_z_upper[slice_index];
         Vec2 slice_cog;
         float slice_area;
+        BoundingBox2D slice_box;
         build_slice_islands(
             vert_xy, vert_z, edges, slice_edges[slice_index],
             z_lower, z_upper, slice_vertices[slice_index],
             vertex_comp, cid_to_index, num_components,
-            slice_cog, slice_area);
+            slice_cog, slice_area, slice_box);
         float mid_z = 0.5f * (z_lower + z_upper);
-        result.slices.push_back({slice_area, slice_cog, mid_z});
+        result.slices.push_back({slice_area, slice_box, slice_cog, mid_z});
         if (slice_area <= 0.f)
             continue;
         overall.x += slice_cog.x * slice_area;

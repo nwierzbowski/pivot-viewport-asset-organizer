@@ -9,3 +9,5 @@
 bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBox3D full_box);
 
 bool snapStandToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis);
+
+bool snapDenseToYN( COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis);
