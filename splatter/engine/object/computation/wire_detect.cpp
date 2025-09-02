@@ -26,35 +26,14 @@ std::vector<VoxelKey> guess_wire_voxels(VoxelMap &voxel_map)
         float sum_lambda = voxel_data.lambda1 + voxel_data.lambda2;
         if (voxel_data.avg_normal.length_squared() < 0.25f * 0.25f &&
             sum_lambda > 0.0f &&
-            voxel_data.lambda1 > 0.85f * sum_lambda &&
-            neighbors <= 4)
+            voxel_data.lambda1 > 0.9f * sum_lambda &&
+            neighbors <= 3)
         {
             wire_guesses.push_back(voxel_coord);
         }
     }
 
-    // Remove wire guesses that don't have at least one adjacent wire guess
-    std::unordered_set<VoxelKey, VoxelKeyHash> wire_set(wire_guesses.begin(), wire_guesses.end());
-    std::vector<VoxelKey> filtered_guesses;
-    for (const VoxelKey &vg : wire_guesses)
-    {
-        bool has_adjacent_wire = false;
-        for (const auto &d : neighbor_dirs)
-        {
-            VoxelKey neighbor = vg + d;
-            if (wire_set.find(neighbor) != wire_set.end())
-            {
-                has_adjacent_wire = true;
-                break;
-            }
-        }
-        if (has_adjacent_wire)
-        {
-            filtered_guesses.push_back(vg);
-        }
-    }
-
-    return filtered_guesses;
+    return wire_guesses;
 }
 
 void select_wire_verts(
@@ -102,12 +81,6 @@ void select_wire_verts(
             neighbor_sizes.push_back(neighbor_count);
         }
     }
-
-    // Print vertex guess indices
-    std::cout << "Vertex guess indices: ";
-    for (uint32_t idx : vertex_guess_indices)
-        std::cout << idx << " ";
-    std::cout << std::endl;
 
     float density = 0.f;
     if (!neighbor_sizes.empty())

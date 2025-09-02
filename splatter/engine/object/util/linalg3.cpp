@@ -170,3 +170,27 @@ void eig2(const float A[2][2], float &lambda1, float &lambda2, Vec2 &prim_vec, V
     prim_vec = Vec2{ev1.x(), ev1.y()};
     sec_vec = Vec2{ev2.x(), ev2.y()};
 }
+
+/**
+ * @brief Project a target vector onto the basis defined by two basis vectors and return coefficients
+ * @param basis1 First basis vector
+ * @param basis2 Second basis vector
+ * @param target Vector to project
+ * @return Vec2 with coefficients (u, v) where projected = u * basis1 + v * basis2
+ */
+Vec2 project_to_basis_coeffs(const Vec3 &basis1, const Vec3 &basis2, const Vec3 &target)
+{
+    // Compute coefficients for projection
+    float u_len_sq = basis1.dot(basis1);
+    float v_len_sq = basis2.dot(basis2);
+
+    // Avoid division by zero
+    if (u_len_sq == 0.0f || v_len_sq == 0.0f) {
+        return Vec2{0.0f, 0.0f};
+    }
+
+    float coeff1 = target.dot(basis1) / u_len_sq;
+    float coeff2 = target.dot(basis2) / v_len_sq;
+
+    return Vec2{coeff1, coeff2};
+}

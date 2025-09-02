@@ -12,3 +12,5 @@ void compute_cov(const std::vector<uint32_t> &idxs, const Vec2 *verts, float cov
 void eig3(const float A[3][3], float &lambda1, float &lambda2, float &lambda3, Vec3 &prim_vec, Vec3 &sec_vec, Vec3 &third_vec);
 
 void eig2(const float A[2][2], float &lambda1, float &lambda2, Vec2 &prim_vec, Vec2 &sec_vec);
+
+Vec2 project_to_basis_coeffs(const Vec3 &basis1, const Vec3 &basis2, const Vec3 &target);
