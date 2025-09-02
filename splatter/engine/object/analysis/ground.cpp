@@ -25,8 +25,11 @@ static inline float calc_ratio_full_to_base(const BoundingBox3D &full_box, const
 static inline float get_min_cross_section(std::vector<SliceData> slices)
 {
     float min_section = std::numeric_limits<float>::max();
-    for (const auto &slice : slices)
+    // Exclude top and bottom slices
+    for (size_t i = 1; i < slices.size() - 1; ++i)
     {
+        const auto &slice = slices[i];
+        std::cout << "Slice area: " << slice.area << std::endl;
         float section = slice.area;
         if (section < min_section)
             min_section = section;
@@ -44,7 +47,7 @@ bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBo
     float ratio = calc_ratio_full_to_base(full_box, compute_aabb_2D(base_chull));
 
     bool base_large_enough = ratio < 4.0f;
-    bool is_thick_enough = min_cross_section > 25e-5f;
+    bool is_thick_enough = min_cross_section > 15e-5f;
     bool cog_over_base = is_point_inside_polygon_2D(cog_result.overall_cog, base_chull);
 
     std::cout << "Base large enough: " << base_large_enough << std::endl;
