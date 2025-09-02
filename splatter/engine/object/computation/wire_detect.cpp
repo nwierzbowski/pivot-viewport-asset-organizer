@@ -32,6 +32,10 @@ std::vector<VoxelKey> guess_wire_voxels(VoxelMap &voxel_map)
             voxel_data.lambda1 > 0.85f * sum_lambda
             &&
             neighbors <= 3
+            &&
+            neighbors >= 1
+            &&
+            voxel_data.avg_normal.length() < 0.5f
         )
         {
             wire_guesses.emplace_back(voxel_coord);
@@ -86,6 +90,13 @@ void select_wire_verts(
             neighbor_sizes.push_back(neighbor_count);
         }
     }
+
+    // Print vertex_guess_indices
+    std::sort(vertex_guess_indices.begin(), vertex_guess_indices.end());
+    std::cout << "Vertex Guess Indices: ";
+    for (uint32_t idx : vertex_guess_indices)
+        std::cout << idx << " ";
+    std::cout << std::endl;
 
     float density = 0.f;
     if (!neighbor_sizes.empty())
