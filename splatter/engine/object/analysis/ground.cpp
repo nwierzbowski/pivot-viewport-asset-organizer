@@ -45,7 +45,7 @@ bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBo
     auto base_chull = calc_base_convex_hull(verts, full_box);
     float ratio = calc_ratio_full_to_base(full_box, compute_aabb_2D(base_chull));
 
-    bool base_large_enough = ratio < 4.0f;
+    bool base_large_enough = ratio < 6.0f;
     bool is_thick_enough = min_cross_section > 15e-5f;
     bool cog_over_base = is_point_inside_polygon_2D(cog_result.overall_cog, base_chull);
 
@@ -78,17 +78,41 @@ bool snapStandToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front
     if (count == 0)
         return false;
 
-    if (count > 1) {
+    if (count > 1)
+    {
         avg_cog /= static_cast<float>(count);
         avg_cog -= cog_result.overall_cog;
         front_axis += get_most_similar_axis(avg_cog) + 2;
     }
 
-
     return count > 1;
 }
 
-bool snapDenseToYN( COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis)
+bool snapHighToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis)
+{
+    if (cog_result.slices.empty())
+        return false;
+
+    Vec2 top_cog = cog_result.slices.back().centroid;
+
+    Vec2 relative_cog = top_cog - Vec2{(full_box.min_corner.x + full_box.max_corner.x) * 0.5f, (full_box.min_corner.y + full_box.max_corner.y) * 0.5f};
+    float fac = 0.05f;
+
+    float x_fac = factor_to_coord(fac, full_box).x - factor_to_coord(0.0f, full_box).x;
+    float y_fac = factor_to_coord(fac, full_box).y - factor_to_coord(0.0f, full_box).y;
+
+    if (relative_cog.length() < std::max(x_fac, y_fac))
+    {
+        return false;
+    }
+    else
+    {
+        front_axis += get_most_similar_axis(relative_cog) + 2;
+        return true;
+    }
+}
+
+bool snapDenseToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis)
 {
     if (cog_result.slices.empty())
         return false;

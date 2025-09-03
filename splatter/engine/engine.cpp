@@ -159,12 +159,22 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
 
         if (snapStandToYN(working_cog_result, full_2DBB, curr_front_axis))
         {
-            std::cout << "Snapped to YN Axis" << std::endl;
+            std::cout << "Snapped to Stand Axis" << std::endl;
+        }
+        else if (snapHighToYN(working_cog_result, full_2DBB, curr_front_axis))
+        {
+            std::cout << "Snapped to High Axis" << std::endl;
+        }
+        else if (full_3DBB.volume > 0.05f)
+        {
+            snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
+            std::cout << "Large, snapped dense to -Y" << std::endl;
         }
         else
         {
             snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
-            std::cout << "Snapped to Dense Axis" << std::endl;
+            std::cout << "Small, snapped dense to +Y" << std::endl;
+            curr_front_axis -= 2;
         }
     }
     else if (is_wall(working_verts, full_3DBB, curr_front_axis))
