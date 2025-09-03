@@ -11,7 +11,7 @@
 // Calculate the base convex hull from vertices projected onto the XY plane at a specific Z level
 static inline std::vector<Vec2> calc_base_convex_hull(const std::vector<Vec3> &verts, BoundingBox3D full_box)
 {
-    return monotonic_chain(verts, &Vec3::z, factor_to_coord(0.0f, full_box).z, factor_to_coord(0.05f, full_box).z);
+    return monotonic_chain(verts, &Vec3::z, factor_to_coord(0.0f, full_box).z, factor_to_coord(0.02f, full_box).z);
 }
 
 // Compute the ratio of the full bounding box area to the base bounding box area
