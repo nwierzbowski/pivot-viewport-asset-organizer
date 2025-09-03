@@ -39,7 +39,6 @@ inline VoxelKey make_voxel_key(const Vec3 &p, float voxelSize)
 struct VoxelData
 {
     std::vector<uint32_t> vertex_indices;
-    Vec3 avg_normal;
     float projected_lambda1;
     float projected_lambda2;
     Vec2 projected_prim_vec;
@@ -50,6 +49,7 @@ struct VoxelData
     Vec3 prim_vec;
     Vec3 sec_vec;
     Vec3 third_vec;
+    Vec3 centroid;
 };
 
 using VoxelMap = std::unordered_map<VoxelKey, VoxelData, VoxelKeyHash>;

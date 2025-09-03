@@ -26,7 +26,7 @@ std::vector<VoxelKey> guess_wire_voxels(VoxelMap &voxel_map)
         float normal_uniformity = voxel_data.projected_lambda2 / voxel_data.projected_lambda1;
         float sum_lambda = voxel_data.lambda1 + voxel_data.lambda2;
         if (
-            normal_uniformity > 0.9f 
+            normal_uniformity > 0.8f 
             &&
             sum_lambda > 0.0f &&
             voxel_data.lambda1 > 0.85f * sum_lambda
@@ -34,8 +34,6 @@ std::vector<VoxelKey> guess_wire_voxels(VoxelMap &voxel_map)
             neighbors <= 3
             &&
             neighbors >= 1
-            &&
-            voxel_data.avg_normal.length() < 0.5f
         )
         {
             wire_guesses.emplace_back(voxel_coord);

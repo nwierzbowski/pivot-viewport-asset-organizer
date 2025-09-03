@@ -287,9 +287,12 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         mesh.vertices.foreach_get("co", verts_np)
         verts_np.shape = (vert_count, 3)
 
+        start_normals = time.perf_counter()
         verts_norm_np = np.empty(vert_count * 3, dtype=np.float32)
         mesh.vertices.foreach_get("normal", verts_norm_np)
         verts_norm_np.shape = (vert_count, 3)
+        end_normals = time.perf_counter()
+        elapsed_normals = end_normals - start_normals
 
         edge_count = len(mesh.edges)
         edges_np = np.empty(edge_count * 2, dtype=np.uint32)
@@ -309,4 +312,5 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         elapsedPython = end - startPython
         print(f"C++ time elapsed: {elapsedCPP * 1000:.2f}ms")
         print(f"Python time elapsed: {elapsedPython * 1000:.2f}ms")
+        print(f"Normals time elapsed: {elapsed_normals * 1000:.2f}ms")
         return {FINISHED}
