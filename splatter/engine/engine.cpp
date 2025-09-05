@@ -212,3 +212,47 @@ void prepare_object_batch(const Vec3 *verts_flat, const uVec2i *edges_flat, cons
     }
 }
 
+void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, const Vec3 *offsets, const Vec3 *rotations, uint32_t num_objects)
+{
+    if (!verts_flat || !edges_flat || !vert_counts || !edge_counts || !offsets || !rotations || num_objects == 0)
+        return;
+
+    // Calculate total sizes
+    uint32_t total_verts = 0, total_edges = 0;
+    for (uint32_t i = 0; i < num_objects; ++i) {
+        total_verts += vert_counts[i];
+        total_edges += edge_counts[i];
+    }
+
+    // Transform vertices and edges in place
+    uint32_t vert_offset = 0, edge_offset = 0;
+    for (uint32_t i = 0; i < num_objects; ++i) {
+        uint32_t v_count = vert_counts[i];
+        uint32_t e_count = edge_counts[i];
+        
+        // Rotate and offset vertices
+        for (uint32_t j = 0; j < v_count; ++j) {
+            Vec3 v = verts_flat[vert_offset + j];
+            // Apply rotation (Euler XYZ)
+            float cx = cos(rotations[i].x), sx = sin(rotations[i].x);
+            float cy = cos(rotations[i].y), sy = sin(rotations[i].y);
+            float cz = cos(rotations[i].z), sz = sin(rotations[i].z);
+            Vec3 rotated;
+            rotated.x = v.x * (cy * cz) + v.y * (cx * sz + sx * sy * cz) + v.z * (sx * sz - cx * sy * cz);
+            rotated.y = v.x * (-cy * sz) + v.y * (cx * cz - sx * sy * sz) + v.z * (sx * cz + cx * sy * sz);
+            rotated.z = v.x * sy + v.y * (-sx * cy) + v.z * (cx * cy);
+            // Offset
+            rotated += offsets[i];
+            verts_flat[vert_offset + j] = rotated;
+        }
+        
+        // Adjust edge indices
+        for (uint32_t j = 0; j < e_count; ++j) {
+            edges_flat[edge_offset + j].x += vert_offset;
+            edges_flat[edge_offset + j].y += vert_offset;
+        }
+        
+        vert_offset += v_count;
+        edge_offset += e_count;
+    }
+}
