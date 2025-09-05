@@ -271,46 +271,72 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.active_object is not None and context.active_object.type == 'MESH'
+        return any(obj for obj in context.selected_objects if obj.type == 'MESH')
 
     def execute(self, context):
         startPython = time.perf_counter()
-        obj = context.active_object
-        if not obj:
-            self.report({ERROR}, "No active object to align")
+        
+        # Collect data for all selected mesh objects
+        all_verts = []
+        all_edges = []
+        all_vert_counts = []
+        all_edge_counts = []
+        valid_objects = []
+        
+        for obj in context.selected_objects:
+            if obj.type != 'MESH':
+                continue
+            mesh = obj.data
+            vert_count = len(mesh.vertices)
+            if vert_count == 0:
+                continue
+            
+            verts_np = np.empty(vert_count * 3, dtype=np.float32)
+            mesh.vertices.foreach_get("co", verts_np)
+            verts_np.shape = (vert_count, 3)
+            all_verts.append(verts_np)
+            
+            edge_count = len(mesh.edges)
+            edges_np = np.empty(edge_count * 2, dtype=np.uint32)
+            mesh.edges.foreach_get("vertices", edges_np)
+            edges_np.shape = (edge_count, 2)
+            all_edges.append(edges_np)
+            
+            all_vert_counts.append(vert_count)
+            all_edge_counts.append(edge_count)
+            valid_objects.append(obj)
+        
+        if not valid_objects:
+            self.report({ERROR}, "No valid mesh objects selected")
             return {CANCELLED}
-
-        mesh = obj.data
-
-        vert_count = len(mesh.vertices)
-        verts_np = np.empty(vert_count * 3, dtype=np.float32)
-        mesh.vertices.foreach_get("co", verts_np)
-        verts_np.shape = (vert_count, 3)
-
-        # start_normals = time.perf_counter()
-        # verts_norm_np = np.empty(vert_count * 3, dtype=np.float32)
-        # mesh.vertices.foreach_get("normal", verts_norm_np)
-        # verts_norm_np.shape = (vert_count, 3)
-        # end_normals = time.perf_counter()
-        # elapsed_normals = end_normals - start_normals
-
-        edge_count = len(mesh.edges)
-        edges_np = np.empty(edge_count * 2, dtype=np.uint32)
-        mesh.edges.foreach_get("vertices", edges_np)
-        edges_np.shape = (edge_count, 2)
-
+        
+        # Flatten verts and edges into single contiguous arrays
+        total_verts = sum(all_vert_counts)
+        total_edges = sum(all_edge_counts)
+        verts_flat = np.empty((total_verts, 3), dtype=np.float32)
+        edges_flat = np.empty((total_edges, 2), dtype=np.uint32)
+        
+        vert_offset = 0
+        edge_offset = 0
+        for verts_np, edges_np, v_count, e_count in zip(all_verts, all_edges, all_vert_counts, all_edge_counts):
+            verts_flat[vert_offset:vert_offset + v_count] = verts_np
+            edges_flat[edge_offset:edge_offset + e_count] = edges_np
+            vert_offset += v_count
+            edge_offset += e_count
+        
+        # Call batched C++ function with flattened arrays
         startCPP = time.perf_counter()
-        rot, trans = bridge.align_min_bounds(verts_np, edges_np)
+        rots, trans = bridge.align_min_bounds(verts_flat, edges_flat, all_vert_counts, all_edge_counts)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
-
-        obj.rotation_euler = rot
-        bpy.context.scene.cursor.location = Vector(trans) + obj.location
-        # bpy.ops.transform.translate(value=trans)
-
+        
+        # Apply results in order
+        for i, obj in enumerate(valid_objects):
+            obj.rotation_euler = rots[i]
+            bpy.context.scene.cursor.location = Vector(trans[i]) + obj.location
+        
         end = time.perf_counter()
         elapsedPython = end - startPython
         print(f"C++ time elapsed: {elapsedCPP * 1000:.2f}ms")
         print(f"Python time elapsed: {elapsedPython * 1000:.2f}ms")
-        # print(f"Normals time elapsed: {elapsed_normals * 1000:.2f}ms")
         return {FINISHED}
