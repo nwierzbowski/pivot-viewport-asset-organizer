@@ -7,7 +7,6 @@ import time
 import numpy as np
 
 
-from .logic.context import edit_bmesh, object_bmesh, object_mode
 from .utils import link_node_group
 from mathutils import Vector
 from .constants import (
