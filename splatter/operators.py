@@ -275,16 +275,90 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
     def execute(self, context):
         startPython = time.perf_counter()
         
-        # Collect data for all selected mesh objects
+        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        if not selected_objects:
+            self.report({ERROR}, "No valid mesh objects selected")
+            return {CANCELLED}
+        
+        # First pass: Collect unique collections from selected objects
+        collections_in_selection = set()
+        for obj in selected_objects:
+            if obj.users_collection:
+                collections_in_selection.add(obj.users_collection[0])
+        
+        # Remove individual objects that are in the collected collections
+        filtered_objects = []
+        for obj in selected_objects:
+            if obj.users_collection and obj.users_collection[0] in collections_in_selection:
+                continue  # Skip, will be handled as collection
+            filtered_objects.append(obj)
+        
+        # Second pass: Process collections and individual objects
         all_verts = []
         all_edges = []
         all_vert_counts = []
         all_edge_counts = []
         valid_objects = []
         
-        for obj in context.selected_objects:
-            if obj.type != 'MESH':
+        # Process collections
+        for coll in collections_in_selection:
+            coll_objects = [obj for obj in coll.objects if obj.type == 'MESH' and len(obj.data.vertices) > 0]
+            if not coll_objects:
                 continue
+            
+            # Collect data for all meshes in collection
+            coll_verts = []
+            coll_edges = []
+            coll_vert_counts = []
+            coll_edge_counts = []
+            for obj in coll_objects:
+                mesh = obj.data
+                vert_count = len(mesh.vertices)
+                verts_np = np.empty(vert_count * 3, dtype=np.float32)
+                mesh.vertices.foreach_get("co", verts_np)
+                verts_np.shape = (vert_count, 3)
+                coll_verts.append(verts_np)
+                
+                edge_count = len(mesh.edges)
+                edges_np = np.empty(edge_count * 2, dtype=np.uint32)
+                mesh.edges.foreach_get("vertices", edges_np)
+                edges_np.shape = (edge_count, 2)
+                coll_edges.append(edges_np)
+                
+                coll_vert_counts.append(vert_count)
+                coll_edge_counts.append(edge_count)
+            
+            # Flatten for collection
+            total_coll_verts = sum(coll_vert_counts)
+            total_coll_edges = sum(coll_edge_counts)
+            verts_coll_flat = np.empty((total_coll_verts, 3), dtype=np.float32)
+            edges_coll_flat = np.empty((total_coll_edges, 2), dtype=np.uint32)
+            
+            vert_offset = 0
+            edge_offset = 0
+            for verts_np, edges_np, v_count, e_count in zip(coll_verts, coll_edges, coll_vert_counts, coll_edge_counts):
+                verts_coll_flat[vert_offset:vert_offset + v_count] = verts_np
+                edges_coll_flat[edge_offset:edge_offset + e_count] = edges_np
+                vert_offset += v_count
+                edge_offset += e_count
+            
+            # Compute offsets and rotations for collection
+            first_obj = coll_objects[0]
+            offsets = [(obj.location - first_obj.location).to_tuple() for obj in coll_objects]
+            rotations = [(obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z) for obj in coll_objects]
+
+            # Call grouped alignment for collection
+            verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts = bridge.align_grouped_min_bounds(verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts, offsets, rotations)
+            
+            # Add to overall buffers
+            all_verts.append(verts_coll_flat)
+            all_edges.append(edges_coll_flat)
+            all_vert_counts.extend(coll_vert_counts)
+            all_edge_counts.extend(coll_edge_counts)
+            # Note: valid_objects already added in collection processing
+        
+        # Process individual objects
+        for obj in filtered_objects:
             mesh = obj.data
             vert_count = len(mesh.vertices)
             if vert_count == 0:
@@ -305,34 +379,32 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             all_edge_counts.append(edge_count)
             valid_objects.append(obj)
         
-        if not valid_objects:
-            self.report({ERROR}, "No valid mesh objects selected")
-            return {CANCELLED}
-        
-        # Flatten verts and edges into single contiguous arrays
-        total_verts = sum(all_vert_counts)
-        total_edges = sum(all_edge_counts)
-        verts_flat = np.empty((total_verts, 3), dtype=np.float32)
-        edges_flat = np.empty((total_edges, 2), dtype=np.uint32)
-        
-        vert_offset = 0
-        edge_offset = 0
-        for verts_np, edges_np, v_count, e_count in zip(all_verts, all_edges, all_vert_counts, all_edge_counts):
-            verts_flat[vert_offset:vert_offset + v_count] = verts_np
-            edges_flat[edge_offset:edge_offset + e_count] = edges_np
-            vert_offset += v_count
-            edge_offset += e_count
-        
-        # Call batched C++ function with flattened arrays
-        startCPP = time.perf_counter()
-        rots, trans = bridge.align_min_bounds(verts_flat, edges_flat, all_vert_counts, all_edge_counts)
-        endCPP = time.perf_counter()
-        elapsedCPP = endCPP - startCPP
-        
-        # Apply results in order
-        for i, obj in enumerate(valid_objects):
-            obj.rotation_euler = rots[i]
-            bpy.context.scene.cursor.location = Vector(trans[i]) + obj.location
+        if all_verts:
+            # Flatten all data (collections + individuals)
+            total_verts = sum(all_vert_counts)
+            total_edges = sum(all_edge_counts)
+            verts_flat = np.empty((total_verts, 3), dtype=np.float32)
+            edges_flat = np.empty((total_edges, 2), dtype=np.uint32)
+            
+            vert_offset = 0
+            edge_offset = 0
+            for verts_np, edges_np, v_count, e_count in zip(all_verts, all_edges, all_vert_counts, all_edge_counts):
+                verts_flat[vert_offset:vert_offset + v_count] = verts_np
+                edges_flat[edge_offset:edge_offset + e_count] = edges_np
+                vert_offset += v_count
+                edge_offset += e_count
+            
+            # Call batched C++ function for all
+            startCPP = time.perf_counter()
+            rots, trans = bridge.align_min_bounds(verts_flat, edges_flat, all_vert_counts, all_edge_counts)
+            print(f"rots: {rots}")
+            endCPP = time.perf_counter()
+            elapsedCPP = endCPP - startCPP
+            
+            # Apply results
+            for i, obj in enumerate(valid_objects):
+                obj.rotation_euler = rots[i]
+                bpy.context.scene.cursor.location = Vector(trans[i]) + obj.location
         
         end = time.perf_counter()
         elapsedPython = end - startPython
