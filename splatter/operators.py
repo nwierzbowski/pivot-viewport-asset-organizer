@@ -303,7 +303,7 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         all_vert_counts = []
         all_edge_counts = []
         batch_items = []
-        all_original_rots = []
+        all_original_rots = []  # flat list of tuples
         is_grouped = []
         
         # Process collections
@@ -363,7 +363,8 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             all_vert_counts.append(total_coll_verts)
             all_edge_counts.append(total_coll_edges)
             batch_items.append(coll_objects)
-            all_original_rots.append(rotations)
+            for obj in coll_objects:
+                all_original_rots.append((obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z))
             is_grouped.append(True)
         
         # Process individual objects
@@ -388,7 +389,7 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             all_vert_counts.append(vert_count)
             all_edge_counts.append(edge_count)
             batch_items.append([obj])
-            all_original_rots.append([(obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z)])
+            all_original_rots.append((obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z))
             is_grouped.append(False)
         
         if all_verts:
@@ -415,19 +416,18 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             elapsedCPP = endCPP - startCPP
             # print("batch items: ", len(batch_items))
             # Apply results
+            rot_idx = 0
             for i, item in enumerate(batch_items):
                 rot = rots[i]
                 trans_val = trans[i]
-                original_rots = all_original_rots[i]
-                print ("rot: ", rot)
-                print("original rot: ", original_rots)
                 grouped = is_grouped[i]
                 delta_euler = Euler(rot, 'XYZ')
                 delta_q = delta_euler.to_quaternion()
                 for j, obj in enumerate(item):
+                    orig_tuple = all_original_rots[rot_idx]
+                    orig_euler = Euler(orig_tuple, 'XYZ')
+                    orig_q = orig_euler.to_quaternion()
                     if grouped:
-                        orig_euler = Euler(original_rots[j], 'XYZ')
-                        orig_q = orig_euler.to_quaternion()
                         if obj.parent:
                             parent_world = obj.parent.matrix_world.to_quaternion()
                             transformed_delta = parent_world.inverted() @ delta_q @ parent_world
@@ -436,8 +436,11 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
                         final_q = orig_q @ transformed_delta
                         obj.rotation_euler = final_q.to_euler('XYZ')
                     else:
-                        obj.rotation_euler = delta_euler
+                        transformed_delta = orig_q.inverted() @ delta_q @ orig_q
+                        final_q = transformed_delta
+                        obj.rotation_euler = final_q.to_euler('XYZ')
                     bpy.context.scene.cursor.location = Vector(trans_val) + obj.location
+                    rot_idx += 1
         
         end = time.perf_counter()
         elapsedPython = end - startPython
