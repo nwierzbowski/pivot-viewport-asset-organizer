@@ -34,10 +34,14 @@ inline Vec3 rotate_vertex_3D(const Vec3 &v, const Vec3 &euler) {
     float cx = std::cos(euler.x), sx = std::sin(euler.x);
     float cy = std::cos(euler.y), sy = std::sin(euler.y);
     float cz = std::cos(euler.z), sz = std::sin(euler.z);
+
     return {
-        v.x * (cy * cz) + v.y * (cx * sz + sx * sy * cz) + v.z * (sx * sz - cx * sy * cz),
-        v.x * (-cy * sz) + v.y * (cx * cz - sx * sy * sz) + v.z * (sx * cz + cx * sy * sz),
-        v.x * sy + v.y * (-sx * cy) + v.z * (cx * cy)
+        // New X
+        v.x * (cy * cz) + v.y * (sx * sy * cz - cx * sz) + v.z * (cx * sy * cz + sx * sz),
+        // New Y
+        v.x * (cy * sz) + v.y * (sx * sy * sz + cx * cz) + v.z * (cx * sy * sz - sx * cz),
+        // New Z
+        v.x * (-sy) + v.y * (sx * cy) + v.z * (cx * cy)
     };
 }
 

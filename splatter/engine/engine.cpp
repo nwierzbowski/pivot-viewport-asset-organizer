@@ -224,6 +224,12 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
         total_edges += edge_counts[i];
     }
 
+    //Print object offsets and rotations
+    for (uint32_t i = 0; i < num_objects; ++i) {
+        std::cout << "Object " << i << " Offset: (" << offsets[i].x << ", " << offsets[i].y << ", " << offsets[i].z << ") ";
+        std::cout << "Rotation: (" << rotations[i].x << ", " << rotations[i].y << ", " << rotations[i].z << ")" << std::endl;
+    }
+
     // Transform vertices and edges in place
     uint32_t vert_offset = 0, edge_offset = 0;
     for (uint32_t i = 0; i < num_objects; ++i) {
