@@ -273,159 +273,40 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         return any(obj for obj in context.selected_objects if obj.type == 'MESH')
 
     def execute(self, context):
-        startPython = time.perf_counter()
+        startPython1 = time.perf_counter()
         
         selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
         if not selected_objects:
             self.report({ERROR}, "No valid mesh objects selected")
             return {CANCELLED}
         
-        # First pass: Collect unique collections from selected objects
-        collections_in_selection = set()
-        for obj in selected_objects:
-            if obj.users_collection:
-                coll = obj.users_collection[0]
-                if coll != context.scene.collection:
-                    collections_in_selection.add(coll)
+        # Call the Cython function to handle data preparation and alignment
+        endPython1 = time.perf_counter()
+        startCPP = time.perf_counter()
+        rots, trans, batch_items, all_local_quats = bridge.align_to_axes_batch(selected_objects)
+        endCPP = time.perf_counter()
+        elapsedCPP = endCPP - startCPP
+        startPython2 = time.perf_counter()
         
-        # Remove individual objects that are in the collected collections
-        filtered_objects = []
-        for obj in selected_objects:
-            if obj.users_collection and obj.users_collection[0] in collections_in_selection:
-                continue
-            filtered_objects.append(obj)
+        # Apply results
+        obj_idx = 0
+        for i, item in enumerate(batch_items):
+            delta_quat = rots[i]
+            trans_val = trans[i]
+            for j, obj in enumerate(item):
+                local_quat = all_local_quats[obj_idx]
+                if obj.parent:
+                    parent_world = obj.parent.matrix_world.to_quaternion()
+                    transformed_delta = parent_world.inverted() @ delta_quat @ parent_world
+                else:
+                    transformed_delta = delta_quat
+                obj.rotation_mode = 'QUATERNION'
+                obj.rotation_quaternion = (transformed_delta @ local_quat).normalized()
+                bpy.context.scene.cursor.location = Vector(trans_val) + obj.location
+                obj_idx += 1
         
-        # Second pass: Process collections and individual objects
-        all_verts = []
-        all_edges = []
-        all_vert_counts = []
-        all_edge_counts = []
-        batch_items = []
-        all_original_rots = []  # flat list of tuples
-        
-        # Process collections
-        for coll in collections_in_selection:
-            coll_objects = [obj for obj in coll.objects if obj.type == 'MESH' and len(obj.data.vertices) > 0]
-            if not coll_objects:
-                continue
-            
-            # Collect data for all meshes in collection
-            coll_verts = []
-            coll_edges = []
-            coll_vert_counts = []
-            coll_edge_counts = []
-            for obj in coll_objects:
-                mesh = obj.data
-                vert_count = len(mesh.vertices)
-                verts_np = np.empty(vert_count * 3, dtype=np.float32)
-                mesh.vertices.foreach_get("co", verts_np)
-                verts_np.shape = (vert_count, 3)
-                coll_verts.append(verts_np)
-                
-                edge_count = len(mesh.edges)
-                edges_np = np.empty(edge_count * 2, dtype=np.uint32)
-                mesh.edges.foreach_get("vertices", edges_np)
-                edges_np.shape = (edge_count, 2)
-                coll_edges.append(edges_np)
-                
-                coll_vert_counts.append(vert_count)
-                coll_edge_counts.append(edge_count)
-            
-            # Flatten for collection
-            total_coll_verts = sum(coll_vert_counts)
-            total_coll_edges = sum(coll_edge_counts)
-            verts_coll_flat = np.empty((total_coll_verts, 3), dtype=np.float32)
-            edges_coll_flat = np.empty((total_coll_edges, 2), dtype=np.uint32)
-            
-            vert_offset = 0
-            edge_offset = 0
-            for verts_np, edges_np, v_count, e_count in zip(coll_verts, coll_edges, coll_vert_counts, coll_edge_counts):
-                verts_coll_flat[vert_offset:vert_offset + v_count] = verts_np
-                edges_coll_flat[edge_offset:edge_offset + e_count] = edges_np
-                vert_offset += v_count
-                edge_offset += e_count
-            
-            # Compute offsets and rotations for collection
-            first_obj = coll_objects[0]
-            offsets = [(obj.location - first_obj.location).to_tuple() for obj in coll_objects]
-            rotations = [obj.rotation_quaternion for obj in coll_objects]
-
-            # Group objects in collection
-            verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts = bridge.group_objects(verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts, offsets, rotations)
-            
-            # Add to overall buffers
-            all_verts.append(verts_coll_flat)
-            all_edges.append(edges_coll_flat)
-            all_vert_counts.append(total_coll_verts)
-            all_edge_counts.append(total_coll_edges)
-            batch_items.append(coll_objects)
-            for obj in coll_objects:
-                all_original_rots.extend(rotations)
-
-        # Process individual objects
-        for obj in filtered_objects:
-            mesh = obj.data
-            vert_count = len(mesh.vertices)
-            if vert_count == 0:
-                continue
-            
-            verts_np = np.empty(vert_count * 3, dtype=np.float32)
-            mesh.vertices.foreach_get("co", verts_np)
-            verts_np.shape = (vert_count, 3)
-            all_verts.append(verts_np)
-            
-            edge_count = len(mesh.edges)
-            edges_np = np.empty(edge_count * 2, dtype=np.uint32)
-            mesh.edges.foreach_get("vertices", edges_np)
-            edges_np.shape = (edge_count, 2)
-            all_edges.append(edges_np)
-            
-            all_vert_counts.append(vert_count)
-            all_edge_counts.append(edge_count)
-            batch_items.append([obj])
-            all_original_rots.append(obj.rotation_quaternion)
-
-            bridge.apply_rotation(verts_np, vert_count, obj.rotation_quaternion)
-        
-        if all_verts:
-            # Flatten all data (collections + individuals)
-            total_verts = sum(all_vert_counts)
-            total_edges = sum(all_edge_counts)
-            verts_flat = np.empty((total_verts, 3), dtype=np.float32)
-            edges_flat = np.empty((total_edges, 2), dtype=np.uint32)
-            
-            vert_offset = 0
-            edge_offset = 0
-            for verts_np, edges_np, v_count, e_count in zip(all_verts, all_edges, all_vert_counts, all_edge_counts):
-                verts_flat[vert_offset:vert_offset + v_count] = verts_np
-                edges_flat[edge_offset:edge_offset + e_count] = edges_np
-                vert_offset += v_count
-                edge_offset += e_count
-            
-            # Call batched C++ function for all
-            startCPP = time.perf_counter()
-            rots, trans = bridge.align_min_bounds(verts_flat, edges_flat, all_vert_counts, all_edge_counts)
-            endCPP = time.perf_counter()
-            elapsedCPP = endCPP - startCPP
-            # Apply results
-            rot_idx = 0
-            for i, item in enumerate(batch_items):
-                delta_quat = rots[i]
-                trans_val = trans[i]
-                for j, obj in enumerate(item):
-                    local_quat = all_original_rots[rot_idx]
-                    if obj.parent:
-                        parent_world = obj.parent.matrix_world.to_quaternion()
-                        transformed_delta = parent_world.inverted() @ delta_quat @ parent_world
-                    else:
-                        transformed_delta = delta_quat
-                    obj.rotation_mode = 'QUATERNION'
-                    obj.rotation_quaternion = (transformed_delta @ local_quat).normalized()
-                    bpy.context.scene.cursor.location = Vector(trans_val) + obj.location
-                    rot_idx += 1
-        
-        end = time.perf_counter()
-        elapsedPython = end - startPython
-        print(f"C++ time elapsed: {elapsedCPP * 1000:.2f}ms")
+        endPython2 = time.perf_counter()
+        elapsedPython = endPython2 - startPython2 + endPython1 - startPython1
         print(f"Python time elapsed: {elapsedPython * 1000:.2f}ms")
+        print(f"Total time elapsed: {(elapsedCPP + elapsedPython) * 1000:.2f}ms")
         return {FINISHED}

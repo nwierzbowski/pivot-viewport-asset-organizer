@@ -3,6 +3,10 @@ from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 from mathutils import Quaternion as MathutilsQuaternion
 
+import bpy
+import numpy as np
+import time
+
 from splatter.cython_api.engine_api cimport prepare_object_batch as prepare_object_batch_cpp
 from splatter.cython_api.engine_api cimport group_objects as group_objects_cpp
 from splatter.cython_api.engine_api cimport apply_rotation as apply_rotation_cpp
@@ -94,3 +98,177 @@ def apply_rotation(float[:, ::1] verts, uint32_t vert_count, rotation):
     cdef Quaternion rot = Quaternion(rotation.w, rotation.x, rotation.y, rotation.z)
     with nogil:
         apply_rotation_cpp(verts_ptr, vert_count, rot) 
+
+def align_to_axes_batch(list selected_objects):
+    start_prep = time.perf_counter()
+    cdef list all_verts = []
+    cdef list all_edges = []
+    cdef list all_vert_counts = []
+    cdef list all_edge_counts = []
+    cdef list batch_items = []
+    cdef list all_original_rots = []  # flat list of tuples
+    
+    cdef int total_verts
+    cdef int total_edges
+    cdef int vert_offset
+    cdef int edge_offset
+    cdef list rots
+    cdef list trans
+    
+    cdef float[:, ::1] verts_view
+    
+    # First pass: Collect unique collections from selected objects
+    cdef set collections_in_selection = set()
+    cdef object obj
+    cdef object coll
+    for obj in selected_objects:
+        if obj.users_collection:
+            coll = obj.users_collection[0]
+            if coll != bpy.context.scene.collection:
+                collections_in_selection.add(coll)
+    
+    # Remove individual objects that are in the collected collections
+    cdef list filtered_objects = []
+    for obj in selected_objects:
+        if obj.users_collection and obj.users_collection[0] in collections_in_selection:
+            continue
+        filtered_objects.append(obj)
+    
+    end_prep = time.perf_counter()
+    print(f"Preparation time elapsed: {(end_prep - start_prep) * 1000:.2f}ms")
+
+    start_collections = time.perf_counter()
+    # Process collections
+    cdef list coll_objects
+    cdef list coll_verts
+    cdef list coll_edges
+    cdef list coll_vert_counts
+    cdef list coll_edge_counts
+    cdef object mesh
+    cdef int vert_count
+    cdef int edge_count
+    cdef int total_coll_verts
+    cdef int total_coll_edges
+    cdef list offsets
+    cdef list rotations
+    cdef object first_obj
+    for coll in collections_in_selection:
+        coll_objects = [obj for obj in coll.objects if obj.type == 'MESH' and len(obj.data.vertices) > 0]
+        if not coll_objects:
+            continue
+        
+        # Collect data for all meshes in collection
+        coll_verts = []
+        coll_edges = []
+        coll_vert_counts = []
+        coll_edge_counts = []
+        for obj in coll_objects:
+            mesh = obj.data
+            vert_count = len(mesh.vertices)
+            verts_np = np.empty(vert_count * 3, dtype=np.float32)
+            mesh.vertices.foreach_get("co", verts_np)
+            verts_np.shape = (vert_count, 3)
+            verts_view = verts_np
+            coll_verts.append(verts_np)
+            
+            edge_count = len(mesh.edges)
+            edges_np = np.empty(edge_count * 2, dtype=np.uint32)
+            mesh.edges.foreach_get("vertices", edges_np)
+            edges_np.shape = (edge_count, 2)
+            coll_edges.append(edges_np)
+            
+            coll_vert_counts.append(vert_count)
+            coll_edge_counts.append(edge_count)
+        
+        # Flatten for collection
+        total_coll_verts = sum(coll_vert_counts)
+        total_coll_edges = sum(coll_edge_counts)
+        verts_coll_flat = np.empty((total_coll_verts, 3), dtype=np.float32)
+        edges_coll_flat = np.empty((total_coll_edges, 2), dtype=np.uint32)
+        
+        vert_offset = 0
+        edge_offset = 0
+        for verts_np, edges_np, v_count, e_count in zip(coll_verts, coll_edges, coll_vert_counts, coll_edge_counts):
+            verts_coll_flat[vert_offset:vert_offset + v_count] = verts_np
+            edges_coll_flat[edge_offset:edge_offset + e_count] = edges_np
+            vert_offset += v_count
+            edge_offset += e_count
+        
+        # Compute offsets and rotations for collection
+        first_obj = coll_objects[0]
+        offsets = [(obj.location - first_obj.location).to_tuple() for obj in coll_objects]
+        rotations = [obj.rotation_quaternion for obj in coll_objects]
+
+        # Group objects in collection
+        verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts = group_objects(verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts, offsets, rotations)
+        
+        # Add to overall buffers
+        all_verts.append(verts_coll_flat)
+        all_edges.append(edges_coll_flat)
+        all_vert_counts.append(total_coll_verts)
+        all_edge_counts.append(total_coll_edges)
+        batch_items.append(coll_objects)
+        for obj in coll_objects:
+            all_original_rots.extend(rotations)
+
+    end_collections = time.perf_counter()
+    print(f"Collection processing time elapsed: {(end_collections - start_collections) * 1000:.2f}ms")
+
+    start_individual = time.perf_counter()
+    # Process individual objects
+    for obj in filtered_objects:
+        mesh = obj.data
+        vert_count = len(mesh.vertices)
+        if vert_count == 0:
+            continue
+        
+        verts_np = np.empty(vert_count * 3, dtype=np.float32)
+        mesh.vertices.foreach_get("co", verts_np)
+        verts_np.shape = (vert_count, 3)
+        verts_view = verts_np
+        all_verts.append(verts_np)
+        
+        edge_count = len(mesh.edges)
+        edges_np = np.empty(edge_count * 2, dtype=np.uint32)
+        mesh.edges.foreach_get("vertices", edges_np)
+        edges_np.shape = (edge_count, 2)
+        all_edges.append(edges_np)
+        
+        all_vert_counts.append(vert_count)
+        all_edge_counts.append(edge_count)
+        batch_items.append([obj])
+        all_original_rots.append(obj.rotation_quaternion)
+
+        apply_rotation(verts_view, vert_count, obj.rotation_quaternion)
+    
+    end_individual = time.perf_counter()
+    print(f"Individual processing time elapsed: {(end_individual - start_individual) * 1000:.2f}ms")
+
+    start_alignment = time.perf_counter()
+
+    if all_verts:
+        # Flatten all data (collections + individuals)
+        total_verts = sum(all_vert_counts)
+        total_edges = sum(all_edge_counts)
+        verts_flat = np.empty((total_verts, 3), dtype=np.float32)
+        edges_flat = np.empty((total_edges, 2), dtype=np.uint32)
+        
+        vert_offset = 0
+        edge_offset = 0
+        for verts_np, edges_np, v_count, e_count in zip(all_verts, all_edges, all_vert_counts, all_edge_counts):
+            verts_flat[vert_offset:vert_offset + v_count] = verts_np
+            edges_flat[edge_offset:edge_offset + e_count] = edges_np
+            vert_offset += v_count
+            edge_offset += e_count
+        
+        # Call batched C++ function for all
+        rots, trans = align_min_bounds(verts_flat, edges_flat, all_vert_counts, all_edge_counts)
+
+        end_alignment = time.perf_counter()
+        print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
+        
+        return rots, trans, batch_items, all_original_rots
+    else:
+        end_alignment = time.perf_counter()
+        print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
+        return [], [], [], []
