@@ -15,38 +15,34 @@ from splatter.cython_api.engine_api cimport apply_rotation as apply_rotation_cpp
 from splatter.cython_api.vec_api cimport Vec3, uVec2i
 from splatter.cython_api.quaternion_api cimport Quaternion
 
-def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, list vert_counts, list edge_counts):
-    cdef uint32_t num_objects = len(vert_counts)
+
+def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, uint32_t[::1] vert_counts, uint32_t[::1] edge_counts):
+    cdef uint32_t num_objects = vert_counts.shape[0]
     if num_objects == 0:
         return [], []
-    
-    # Pre-copy Python lists to C arrays for nogil access
-    cdef uint32_t *vert_counts_ptr = <uint32_t *>malloc(num_objects * sizeof(uint32_t))
-    cdef uint32_t *edge_counts_ptr = <uint32_t *>malloc(num_objects * sizeof(uint32_t))
-    for i in range(num_objects):
-        vert_counts_ptr[i] = vert_counts[i]
-        edge_counts_ptr[i] = edge_counts[i]
+
+    # Get direct pointers from memoryviews (no copy)
+    cdef uint32_t *vert_counts_ptr = &vert_counts[0]
+    cdef uint32_t *edge_counts_ptr = &edge_counts[0]
 
     cdef Vec3 *verts_ptr = <Vec3 *> &verts_flat[0]
     cdef uVec2i *edges_ptr = <uVec2i *> &edges_flat[0]
 
     cdef Quaternion *out_rots = <Quaternion *> malloc(num_objects * sizeof(Quaternion))
     cdef Vec3 *out_trans = <Vec3 *> malloc(num_objects * sizeof(Vec3))
-    
-    with nogil:
 
+    with nogil:
         prepare_object_batch_cpp(verts_ptr, edges_ptr, vert_counts_ptr, edge_counts_ptr, num_objects, out_rots, out_trans)
-    
+
     # Convert results to Python lists
     rots = [MathutilsQuaternion((out_rots[i].w, out_rots[i].x, out_rots[i].y, out_rots[i].z)) for i in range(num_objects)]
     trans = [(out_trans[i].x, out_trans[i].y, out_trans[i].z) for i in range(num_objects)]
-    
-    free(vert_counts_ptr)
-    free(edge_counts_ptr)
+
     free(out_rots)
     free(out_trans)
-    
+
     return rots, trans
+
 
 # -----------------------------
 # Helpers for selection grouping
@@ -63,6 +59,7 @@ cdef list _get_all_mesh_objects(object coll):
         objects.extend(_get_all_mesh_objects(child))
     return objects
 
+
 def _build_coll_to_top_map(object scene_root):
     cdef dict coll_to_top = {}
     cdef object top_coll
@@ -77,9 +74,10 @@ def _build_coll_to_top_map(object scene_root):
         build_top_map(top_coll, top_coll)
     return coll_to_top
 
+
 def _collect_groups_and_individuals(list selected_objects):
     """Return (obj_groups, individual_objects, total_verts, total_edges).
-    obj_groups maps top collection -> list of all mesh objects in that top collection.
+    obj_groups maps top collection -> list of all mesh objs in that top collection.
     """
     cdef object scene_coll = bpy.context.scene.collection
     cdef dict coll_to_top = _build_coll_to_top_map(scene_coll)
@@ -120,6 +118,7 @@ def _collect_groups_and_individuals(list selected_objects):
 
     return obj_groups, individual_objects, total_verts, total_edges
 
+
 def _make_blocks(dict obj_groups, list individual_objects):
     cdef list blocks = []
     cdef list group
@@ -129,6 +128,7 @@ def _make_blocks(dict obj_groups, list individual_objects):
     for obj in individual_objects:
         blocks.append([obj])
     return blocks
+
 
 # -----------------------------
 # Helpers for block processing
@@ -146,7 +146,8 @@ cdef tuple _prepare_block_counts(list group):
     cdef uint32_t group_edge_count = int(group_edge_counts.sum())
     return group_vert_counts, group_edge_counts, group_vert_count, group_edge_count, num_objects
 
-cdef void _fill_block_geometry(list group, object group_verts_slice, object group_edges_slice):
+
+cdef void _fill_block_geometry(list group, float[::1] group_verts_slice, uint32_t[::1] group_edges_slice):
     cdef uint32_t curr_group_vert_offset = 0
     cdef uint32_t curr_group_edge_offset = 0
     cdef object mesh
@@ -169,6 +170,7 @@ cdef void _fill_block_geometry(list group, object group_verts_slice, object grou
             mesh.edges.foreach_get("vertices", edges_slice)
             curr_group_edge_offset += obj_edge_count * 2
 
+
 cdef tuple _compute_transforms(list group, uint32_t num_objects):
     cdef object first_obj = group[0]
     cdef cnp.ndarray rotations_array = np.fromiter(
@@ -188,23 +190,23 @@ cdef tuple _compute_transforms(list group, uint32_t num_objects):
     # Return memoryviews to keep arrays alive via references
     return rotations_view, offsets_view
 
-cdef tuple _as_typed_views(object group_verts_slice, object group_edges_slice):
-    cdef float[::1] group_verts_view = group_verts_slice
-    cdef uint32_t[::1] group_edges_view = group_edges_slice
-    return group_verts_view, group_edges_view
+
+# -----------------------------
+# Main
+# -----------------------------
 
 def align_to_axes_batch(list selected_objects):
     start_prep = time.perf_counter()
     cdef cnp.ndarray all_verts
     cdef cnp.ndarray all_edges
 
-    cdef list all_vert_counts = []
-    cdef list all_edge_counts = []
     cdef list batch_items = []
-    cdef list all_original_rots = []  # flat list of tuples
-    
-    cdef list rots
-    cdef list trans
+    cdef list all_original_rots = []
+
+    cdef cnp.ndarray vert_counts_arr
+    cdef cnp.ndarray edge_counts_arr
+    cdef Py_ssize_t blocks_len
+    cdef Py_ssize_t out_len
 
     # Collect selection into groups and individuals and precompute totals
     cdef dict obj_groups
@@ -219,8 +221,6 @@ def align_to_axes_batch(list selected_objects):
 
     cdef uint32_t curr_all_verts_offset = 0
     cdef uint32_t curr_all_edges_offset = 0
-    all_vert_counts = []
-    all_edge_counts = []
 
     end_prep = time.perf_counter()
     print(f"Preparation time elapsed: {(end_prep - start_prep) * 1000:.2f}ms")
@@ -228,6 +228,11 @@ def align_to_axes_batch(list selected_objects):
     start_processing = time.perf_counter()
     # Build blocks: each block is a list of mesh objects (group or individual)
     cdef list blocks = _make_blocks(obj_groups, individual_objects)
+    blocks_len = len(blocks)
+    # Preallocate per-block counts (uint32)
+    vert_counts_arr = np.empty(blocks_len, dtype=np.uint32)
+    edge_counts_arr = np.empty(blocks_len, dtype=np.uint32)
+    out_len = 0
 
     # Process each block
     cdef list group
@@ -240,10 +245,8 @@ def align_to_axes_batch(list selected_objects):
     cdef uint32_t[::1] edge_counts_view
     cdef uint32_t *vert_counts_ptr
     cdef uint32_t *edge_counts_ptr
-    cdef object group_verts_slice
-    cdef object group_edges_slice
-    cdef float[::1] group_verts_view
-    cdef uint32_t[::1] group_edges_view
+    cdef float[::1] group_verts_slice
+    cdef uint32_t[::1] group_edges_slice
     cdef float[::1] rotations_view
     cdef float[::1] offsets_view
     cdef Vec3* group_verts_slice_ptr
@@ -277,10 +280,9 @@ def align_to_axes_batch(list selected_objects):
         vert_counts_ptr = &vert_counts_view[0]
         edge_counts_ptr = &edge_counts_view[0]
 
-        # Convert slices to typed views/pointers for C++ call
-        group_verts_view, group_edges_view = _as_typed_views(group_verts_slice, group_edges_slice)
-        group_verts_slice_ptr = <Vec3*> &group_verts_view[0]
-        group_edges_slice_ptr = <uVec2i*> &group_edges_view[0]
+        # Convert slices to C pointers for C++ call
+        group_verts_slice_ptr = <Vec3*> &group_verts_slice[0]
+        group_edges_slice_ptr = <uVec2i*> &group_edges_slice[0]
 
         # Derive transform pointers
         rotations_ptr = <Quaternion*> &rotations_view[0]
@@ -290,21 +292,21 @@ def align_to_axes_batch(list selected_objects):
         group_objects_cpp(group_verts_slice_ptr, group_edges_slice_ptr, vert_counts_ptr, edge_counts_ptr, offsets_ptr, rotations_ptr, num_objects)
 
         # Record counts and mapping
-        all_vert_counts.append(group_vert_count)
-        all_edge_counts.append(group_edge_count)
+        vert_counts_arr[out_len] = group_vert_count
+        edge_counts_arr[out_len] = group_edge_count
         batch_items.append(group)
         for obj in group:
             all_original_rots.append(obj.rotation_quaternion)
+        out_len += 1
 
     end_processing = time.perf_counter()
     print(f"Block processing time elapsed: {(end_processing - start_processing) * 1000:.2f}ms")
 
     start_alignment = time.perf_counter()
 
-    if all_verts.size > 0:
-        
-        # Call batched C++ function for all
-        rots, trans = align_min_bounds(all_verts, all_edges, all_vert_counts, all_edge_counts)
+    if all_verts.size > 0 and out_len > 0:
+        # Call batched C++ function for all (NumPy arrays auto-convert to typed memoryviews)
+        rots, trans = align_min_bounds(all_verts, all_edges, vert_counts_arr[:out_len], edge_counts_arr[:out_len])
 
         end_alignment = time.perf_counter()
         print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
