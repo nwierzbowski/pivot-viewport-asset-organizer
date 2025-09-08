@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cmath>
+#include <share/quaternion.h>
 
 template <HasXY V>
 void rotate_points_2D(const std::vector<V> &points, float angle, std::vector<V> &out)
@@ -43,6 +44,34 @@ inline Vec3 rotate_vertex_3D(const Vec3 &v, const Vec3 &euler) {
         // New Z
         v.x * (-sy) + v.y * (sx * cy) + v.z * (cx * cy)
     };
+}
+
+inline Vec3 rotate_vertex_3D_quat(const Vec3 &v, const Quaternion &q) {
+    
+    float x2 = q.x * q.x;
+    float y2 = q.y * q.y;
+    float z2 = q.z * q.z;
+
+    float xy = q.x * q.y;
+    float xz = q.x * q.z;
+    float yz = q.y * q.z;
+    float wx = q.w * q.x;
+    float wy = q.w * q.y;
+    float wz = q.w * q.z;
+
+    float new_x = v.x * (1.0f - 2.0f * (y2 + z2)) +
+                  v.y * (2.0f * (xy - wz)) +
+                  v.z * (2.0f * (xz + wy));
+
+    float new_y = v.x * (2.0f * (xy + wz)) +
+                  v.y * (1.0f - 2.0f * (x2 + z2)) +
+                  v.z * (2.0f * (yz - wx));
+
+    float new_z = v.x * (2.0f * (xz - wy)) +
+                  v.y * (2.0f * (yz + wx)) +
+                  v.z * (1.0f - 2.0f * (x2 + y2));
+
+    return {new_x, new_y, new_z};
 }
 
 template <HasXY V>

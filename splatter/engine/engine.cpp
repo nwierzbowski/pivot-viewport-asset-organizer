@@ -91,14 +91,14 @@ void rotate_vector(V &v, float angle)
     v.y = y_new;
 }
 
-void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const uVec2i *edges, uint32_t edgeCount, Vec3 *out_rot, Vec3 *out_trans)
+void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const uVec2i *edges, uint32_t edgeCount, Quaternion *out_rot, Vec3 *out_trans)
 {
     if (!verts || vertCount == 0 || vertCount == 0 || !edges || edgeCount == 0 || !out_rot || !out_trans)
         return;
 
     if (vertCount == 1)
     {
-        *out_rot = {0, 0, 0};
+        *out_rot = {};
         *out_trans = {verts[0].x, verts[0].y, verts[0].z};
         return;
     }
@@ -188,14 +188,14 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
 
     angle_to_forward += static_cast<float>(curr_front_axis) * M_PI_2;
 
-    *out_rot = {0, 0, angle_to_forward}; // Rotation to align object front with +Y axis
+    *out_rot = Quaternion({0, 0, 1}, angle_to_forward); // Rotation to align object front with +Y axis
     // *out_trans = {base_center.x, base_center.y, 0.0f};               // Vector from object origin to calculated point of contact
     Vec3 final_cog = cog_result.overall_cog;
     rotate_vector(final_cog, angle_to_forward);
     *out_trans = final_cog;
 }
 
-void prepare_object_batch(const Vec3 *verts_flat, const uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, uint32_t num_objects, Vec3 *out_rots, Vec3 *out_trans)
+void prepare_object_batch(const Vec3 *verts_flat, const uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, uint32_t num_objects, Quaternion *out_rots, Vec3 *out_trans)
 {
     if (!verts_flat || !edges_flat || !vert_counts || !edge_counts || num_objects == 0 || !out_rots || !out_trans)
         return;
@@ -212,7 +212,7 @@ void prepare_object_batch(const Vec3 *verts_flat, const uVec2i *edges_flat, cons
     }
 }
 
-void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, const Vec3 *offsets, const Vec3 *rotations, uint32_t num_objects)
+void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, const Vec3 *offsets, const Quaternion *rotations, uint32_t num_objects)
 {
     if (!verts_flat || !edges_flat || !vert_counts || !edge_counts || !offsets || !rotations || num_objects == 0)
         return;
@@ -224,11 +224,11 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
         total_edges += edge_counts[i];
     }
 
-    //Print object offsets and rotations
-    for (uint32_t i = 0; i < num_objects; ++i) {
-        std::cout << "Object " << i << " Offset: (" << offsets[i].x << ", " << offsets[i].y << ", " << offsets[i].z << ") ";
-        std::cout << "Rotation: (" << rotations[i].x << ", " << rotations[i].y << ", " << rotations[i].z << ")" << std::endl;
-    }
+    // //Print object offsets and rotations
+    // for (uint32_t i = 0; i < num_objects; ++i) {
+    //     std::cout << "Object " << i << " Offset: (" << offsets[i].x << ", " << offsets[i].y << ", " << offsets[i].z << ") ";
+    //     std::cout << "Rotation: (" << rotations[i].x << ", " << rotations[i].y << ", " << rotations[i].z << ")" << std::endl;
+    // }
 
     // Transform vertices and edges in place
     uint32_t vert_offset = 0, edge_offset = 0;
@@ -238,7 +238,7 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
         
         // Rotate and offset vertices
         for (uint32_t j = 0; j < v_count; ++j) {
-            Vec3 rotated = rotate_vertex_3D(verts_flat[vert_offset + j], rotations[i]);
+            Vec3 rotated = rotate_vertex_3D_quat(verts_flat[vert_offset + j], rotations[i]);
             rotated += offsets[i];
             verts_flat[vert_offset + j] = rotated;
         }
@@ -254,11 +254,11 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
     }
 }
 
-void apply_rotation(Vec3* verts, uint32_t vertCount, const Vec3 &rotation) {
+void apply_rotation(Vec3* verts, uint32_t vertCount, const Quaternion &rotation) {
     if (!verts || vertCount == 0)
         return;
 
     for (uint32_t i = 0; i < vertCount; ++i) {
-        verts[i] = rotate_vertex_3D(verts[i], rotation);
+        verts[i] = rotate_vertex_3D_quat(verts[i], rotation);
     }
 }

@@ -290,11 +290,9 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         
         # Remove individual objects that are in the collected collections
         filtered_objects = []
-        # print("Selected objects: ", len(selected_objects))
         for obj in selected_objects:
-            # print("Collection 0: ", obj.users_collection)
             if obj.users_collection and obj.users_collection[0] in collections_in_selection:
-                continue  # Skip, will be handled as collection
+                continue
             filtered_objects.append(obj)
         
         # Second pass: Process collections and individual objects
@@ -304,7 +302,6 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         all_edge_counts = []
         batch_items = []
         all_original_rots = []  # flat list of tuples
-        # is_grouped = []
         
         # Process collections
         for coll in collections_in_selection:
@@ -351,9 +348,9 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             # Compute offsets and rotations for collection
             first_obj = coll_objects[0]
             offsets = [(obj.location - first_obj.location).to_tuple() for obj in coll_objects]
-            rotations = [(obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z) for obj in coll_objects]
+            rotations = [obj.rotation_quaternion for obj in coll_objects]
 
-            # Call grouped alignment for collection
+            # Group objects in collection
             verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts = bridge.group_objects(verts_coll_flat, edges_coll_flat, coll_vert_counts, coll_edge_counts, offsets, rotations)
             
             # Add to overall buffers
@@ -363,11 +360,9 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             all_edge_counts.append(total_coll_edges)
             batch_items.append(coll_objects)
             for obj in coll_objects:
-                all_original_rots.append((obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z))
-            # is_grouped.append(True)
-        
+                all_original_rots.extend(rotations)
+
         # Process individual objects
-        # print("Filtered objects: ", len(filtered_objects))
         for obj in filtered_objects:
             mesh = obj.data
             vert_count = len(mesh.vertices)
@@ -388,10 +383,9 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             all_vert_counts.append(vert_count)
             all_edge_counts.append(edge_count)
             batch_items.append([obj])
-            all_original_rots.append((obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z))
+            all_original_rots.append(obj.rotation_quaternion)
 
-            bridge.apply_rotation(verts_np, vert_count, (obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z))
-            # is_grouped.append(False)
+            bridge.apply_rotation(verts_np, vert_count, obj.rotation_quaternion)
         
         if all_verts:
             # Flatten all data (collections + individuals)
@@ -411,35 +405,22 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             # Call batched C++ function for all
             startCPP = time.perf_counter()
             rots, trans = bridge.align_min_bounds(verts_flat, edges_flat, all_vert_counts, all_edge_counts)
-            print(f"rots: {rots}")
-            print("original rots: ", all_original_rots)
             endCPP = time.perf_counter()
             elapsedCPP = endCPP - startCPP
-            # print("batch items: ", len(batch_items))
             # Apply results
             rot_idx = 0
             for i, item in enumerate(batch_items):
-                rot = rots[i]
+                delta_quat = rots[i]
                 trans_val = trans[i]
-                # grouped = is_grouped[i]
-                delta_euler = Euler(rot, 'XYZ')
-                delta_q = delta_euler.to_quaternion()
                 for j, obj in enumerate(item):
-                    orig_tuple = all_original_rots[rot_idx]
-                    orig_euler = Euler(orig_tuple, 'XYZ')
-                    orig_q = orig_euler.to_quaternion()
-                    # if grouped:
+                    local_quat = all_original_rots[rot_idx]
                     if obj.parent:
                         parent_world = obj.parent.matrix_world.to_quaternion()
-                        transformed_delta = parent_world.inverted() @ delta_q @ parent_world
+                        transformed_delta = parent_world.inverted() @ delta_quat @ parent_world
                     else:
-                        transformed_delta = orig_q.inverted() @ delta_q @ orig_q
-                    final_q = orig_q @ transformed_delta
-                    obj.rotation_euler = final_q.to_euler('XYZ')
-                    # else:
-                    #     transformed_delta = orig_q.inverted() @ delta_q @ orig_q
-                    #     final_q = transformed_delta
-                    #     obj.rotation_euler = final_q.to_euler('XYZ')
+                        transformed_delta = delta_quat
+                    obj.rotation_mode = 'QUATERNION'
+                    obj.rotation_quaternion = (transformed_delta @ local_quat).normalized()
                     bpy.context.scene.cursor.location = Vector(trans_val) + obj.location
                     rot_idx += 1
         
