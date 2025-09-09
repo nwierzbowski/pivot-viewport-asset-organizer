@@ -1,6 +1,6 @@
 from libc.stdint cimport uint32_t
 from libc.stdlib cimport malloc, free
-from mathutils import Quaternion as MathutilsQuaternion
+from mathutils import Quaternion as MathutilsQuaternion, Vector
 
 cimport numpy as cnp
 
@@ -188,7 +188,7 @@ cdef tuple _compute_transforms(list group, uint32_t num_objects):
     cdef float[::1] offsets_view = offsets_array
 
     # Return memoryviews to keep arrays alive via references
-    return rotations_view, offsets_view
+    return rotations_view, offsets_view, first_obj.location
 
 
 # -----------------------------
@@ -202,6 +202,8 @@ def align_to_axes_batch(list selected_objects):
 
     cdef list batch_items = []
     cdef list all_original_rots = []
+    cdef list all_ref_locations = []
+    cdef list all_offsets = []
 
     cdef cnp.ndarray vert_counts_arr
     cdef cnp.ndarray edge_counts_arr
@@ -253,7 +255,11 @@ def align_to_axes_batch(list selected_objects):
     cdef uVec2i* group_edges_slice_ptr
     cdef Quaternion* rotations_ptr
     cdef Vec3* offsets_ptr
+    cdef Vec3* offsets_group_ptr
+    cdef Quaternion rot_cpp
+    cdef uint32_t group_size
     cdef object obj
+    cdef float[::1] offsets_mv
 
     for group in blocks:
         group_vert_counts, group_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
@@ -272,7 +278,7 @@ def align_to_axes_batch(list selected_objects):
         _fill_block_geometry(group, group_verts_slice, group_edges_slice)
 
         # Compute per-object transforms
-        rotations_view, offsets_view = _compute_transforms(group, num_objects)
+        rotations_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
 
         # Convert counts to typed pointers
         vert_counts_view = group_vert_counts
@@ -297,6 +303,9 @@ def align_to_axes_batch(list selected_objects):
         batch_items.append(group)
         for obj in group:
             all_original_rots.append(obj.rotation_quaternion)
+        # Store reference location as a plain tuple for fast numeric ops later
+        all_ref_locations.append((ref_location.x, ref_location.y, ref_location.z))
+        all_offsets.append(offsets_view)
         out_len += 1
 
     end_processing = time.perf_counter()
@@ -304,15 +313,32 @@ def align_to_axes_batch(list selected_objects):
 
     start_alignment = time.perf_counter()
 
-    if all_verts.size > 0 and out_len > 0:
-        # Call batched C++ function for all (NumPy arrays auto-convert to typed memoryviews)
-        rots, trans = align_min_bounds(all_verts, all_edges, vert_counts_arr[:out_len], edge_counts_arr[:out_len])
+    # Call batched C++ function to compute group rotations
+    rots, _ = align_min_bounds(all_verts, all_edges, vert_counts_arr, edge_counts_arr)
 
-        end_alignment = time.perf_counter()
-        print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
-        
-        return rots, trans, batch_items, all_original_rots
-    else:
-        end_alignment = time.perf_counter()
-        print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
-        return [], [], [], []
+    # Compute new locations for each object using C++ rotation of offsets, then add ref location
+    locs = []
+    cdef Py_ssize_t i, j
+    cdef float rx, ry, rz
+    cdef tuple ref_loc_tup
+    for i in range(len(batch_items)):
+        # Rotate this group's offsets in-place using C++ for speed
+        group = batch_items[i]
+        group_size = <uint32_t> len(group)
+        offsets_mv = all_offsets[i]
+        offsets_group_ptr = <Vec3*> &offsets_mv[0]
+        rot_cpp.w = rots[i].w; rot_cpp.x = rots[i].x; rot_cpp.y = rots[i].y; rot_cpp.z = rots[i].z
+        apply_rotation_cpp(offsets_group_ptr, group_size, rot_cpp)
+
+        # Add the reference location to each rotated offset and collect as tuples
+        ref_loc_tup = all_ref_locations[i]
+        rx = <float> ref_loc_tup[0]
+        ry = <float> ref_loc_tup[1]
+        rz = <float> ref_loc_tup[2]
+        for j in range(len(group)):
+            locs.append((rx + offsets_mv[j * 3], ry + offsets_mv[j * 3 + 1], rz + offsets_mv[j * 3 + 2]))
+
+    end_alignment = time.perf_counter()
+    print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
+    
+    return rots, locs, batch_items, all_original_rots, all_ref_locations
