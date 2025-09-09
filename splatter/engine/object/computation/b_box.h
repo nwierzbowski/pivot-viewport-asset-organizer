@@ -122,3 +122,4 @@ BoundingBox3D compute_aabb_3D(const std::vector<V> &points)
 
 Vec3 factor_to_coord(float factor, BoundingBox3D box);
 Vec2 factor_to_coord(float factor, BoundingBox2D box);
+Vec2 get_bounding_box_origin(BoundingBox2D box);

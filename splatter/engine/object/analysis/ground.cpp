@@ -45,7 +45,7 @@ bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBo
     auto base_chull = calc_base_convex_hull(verts, full_box);
     float ratio = calc_ratio_full_to_base(full_box, compute_aabb_2D(base_chull));
 
-    bool base_large_enough = ratio < 6.0f;
+    bool base_large_enough = ratio < 4.0f;
     bool is_thick_enough = min_cross_section > 15e-5f;
     bool cog_over_base = is_point_inside_polygon_2D(cog_result.overall_cog, base_chull);
 
@@ -65,7 +65,7 @@ bool snapStandToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front
     Vec2 avg_cog = {0, 0};
 
     // Exclude top and bottom slices
-    for (size_t i = 1; i < cog_result.slices.size() - 1; ++i)
+    for (size_t i = 1; i < cog_result.slices.size() / 2; ++i)
     {
         const auto &slice = cog_result.slices[i];
         if (full_box.area / slice.box.area > 5)
@@ -95,7 +95,7 @@ bool snapHighToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_
 
     Vec2 top_cog = cog_result.slices.back().centroid;
 
-    Vec2 relative_cog = top_cog - Vec2{(full_box.min_corner.x + full_box.max_corner.x) * 0.5f, (full_box.min_corner.y + full_box.max_corner.y) * 0.5f};
+    Vec2 relative_cog = top_cog - get_bounding_box_origin(full_box);
     float fac = 0.05f;
 
     float x_fac = factor_to_coord(fac, full_box).x - factor_to_coord(0.0f, full_box).x;
@@ -112,14 +112,45 @@ bool snapHighToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_
     }
 }
 
-bool snapDenseToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis)
+
+bool snapDenseToYN(COGResult &cog_result, BoundingBox2D full_box, uint8_t &front_axis, const std::vector<uint8_t> &axis_options)
 {
     if (cog_result.slices.empty())
         return false;
 
     Vec3 relative_cog = cog_result.overall_cog - Vec2{(full_box.min_corner.x + full_box.max_corner.x) * 0.5f, (full_box.min_corner.y + full_box.max_corner.y) * 0.5f};
 
-    front_axis += get_most_similar_axis(relative_cog) + 2;
+    front_axis += get_most_similar_axis(relative_cog, axis_options) + 2;
 
     return true;
+}
+
+bool isSmall(BoundingBox3D full_box)
+{
+    return full_box.volume < 0.05f;
+}
+
+bool isSquarish(BoundingBox3D full_box)
+{
+    float len_x = full_box.max_corner.x - full_box.min_corner.x;
+    float len_y = full_box.max_corner.y - full_box.min_corner.y;
+
+    float min_len = std::min({len_x, len_y});
+    float max_len = std::max({len_x, len_y});
+
+    if (min_len == 0)
+        return false;
+
+    return (max_len / min_len) < 2.0f;
+}
+
+void alignLongAxisToX(BoundingBox3D &full_box,  uint8_t &front_axis)
+{
+    float len_x = full_box.max_corner.x - full_box.min_corner.x;
+    float len_y = full_box.max_corner.y - full_box.min_corner.y;
+
+    if (len_y > len_x)
+    {
+        front_axis += 1; // Rotate 90 degrees to align long axis with X
+    }
 }

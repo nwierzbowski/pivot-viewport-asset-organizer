@@ -129,33 +129,32 @@ bool is_point_inside_polygon_2D(const V &point, const std::vector<U> &verts)
 }
 
 template <HasXY V>
-uint8_t get_most_similar_axis(const V &v)
+uint8_t get_most_similar_axis(const V &v, const std::vector<uint8_t>& allowed_axes = {})
 {
     float posX = v.x;
     float negX = -v.x;
     float posY = v.y;
     float negY = -v.y;
 
-    // Find the maximum value among the four
-    float maxVal = std::max({posX, negX, posY, negY});
+    float max_val = -1e10f;
+    uint8_t best_axis = 0;
 
-    // Determine which one(s) have the max value; in case of tie, prioritize in order: posX, negX, posY, negY
-    if (maxVal == posX)
-    {
-        // std::cout << "Axis: +X" << std::endl;
-        return 1;
+    std::vector<std::pair<float, uint8_t>> candidates = {
+        {posX, 1},
+        {negX, 3},
+        {posY, 0},
+        {negY, 2}
+    };
+
+    for (auto& cand : candidates) {
+        if (allowed_axes.empty() || std::find(allowed_axes.begin(), allowed_axes.end(), cand.second) != allowed_axes.end()) {
+            if (cand.first > max_val) {
+                max_val = cand.first;
+                best_axis = cand.second;
+            }
+        }
     }
-    if (maxVal == negX)
-    {
-        // std::cout << "Axis: -X" << std::endl;
-        return 3;
-    }
-    if (maxVal == posY)
-    {
-        // std::cout << "Axis: +Y" << std::endl;
-        return 0;
-    }
-    // std::cout << "Axis: -Y" << std::endl;
-    return 2; // Only if all others are less
+
+    return best_axis;
 }
 

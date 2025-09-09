@@ -93,7 +93,7 @@ float calc_forward_angle(std::vector<Vec2> &hull)
             // }
             // else
             // {
-                best_box = box;
+            best_box = box;
             // }
         }
     }
@@ -169,9 +169,6 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
         rotate_vector(slice.centroid, angle_to_forward);
     }
 
-    // Compute the center of the base 2D bounding box
-    // auto base_center = (base_2DBB.max_corner + base_2DBB.min_corner) * 0.5f;
-
     uint8_t curr_front_axis = 0;
 
     if (is_ground(working_verts, working_cog_result, full_3DBB))
@@ -186,16 +183,30 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
         {
             std::cout << "Snapped to High Axis" << std::endl;
         }
-        else if (full_3DBB.volume > 0.05f)
-        {
-            snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
-            std::cout << "Large, snapped dense to -Y" << std::endl;
-        }
         else
         {
-            snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
-            std::cout << "Small, snapped dense to +Y" << std::endl;
-            curr_front_axis -= 2;
+
+            
+            if (isSmall(full_3DBB))
+            {
+                snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
+                std::cout << "Small, snapped dense to +Y" << std::endl;
+                curr_front_axis -= 2;
+            }
+            else
+            {
+                if (isSquarish(full_3DBB))
+                {
+                    snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
+                    std::cout << "Large, snapped dense to -Y" << std::endl;
+                }
+                else
+                {
+                    alignLongAxisToX(full_3DBB, curr_front_axis);
+                    std::cout << "Aligned long axis to +X" << std::endl;
+                    snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis, {0, 2});
+                }
+            }
         }
     }
     else if (is_wall(working_verts, full_3DBB, curr_front_axis))
@@ -210,7 +221,7 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
     angle_to_forward += static_cast<float>(curr_front_axis) * M_PI_2;
 
     *out_rot = Quaternion({0, 0, 1}, angle_to_forward); // Rotation to align object front with +Y axis
-    // *out_trans = {base_center.x, base_center.y, 0.0f};               // Vector from object origin to calculated point of contact
+
     Vec3 final_cog = cog_result.overall_cog;
     rotate_vector(final_cog, angle_to_forward);
     *out_trans = final_cog;
