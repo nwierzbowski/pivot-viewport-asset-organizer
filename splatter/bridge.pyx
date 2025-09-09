@@ -75,51 +75,99 @@ def _build_coll_to_top_map(object scene_root):
     return coll_to_top
 
 
+cdef object get_root_parent(object obj):
+    while obj.parent is not None:
+        obj = obj.parent
+    return obj
+
+
+cdef list get_all_mesh_descendants(object root):
+    cdef list meshes = []
+    if root.type == 'MESH':
+        meshes.append(root)
+    for child in root.children:
+        meshes.extend(get_all_mesh_descendants(child))
+    return meshes
+
+
+cdef list get_all_root_objects(object coll):
+    cdef list roots = []
+    cdef object obj
+    for obj in coll.objects:
+        if obj.parent is None:
+            roots.append(obj)
+    for child in coll.children:
+        roots.extend(get_all_root_objects(child))
+    return roots
+
+
 def aggregate_object_groups(list selected_objects):
-    """Return (mesh_groups, total_verts, total_edges).
+    """Return (mesh_groups, parent_groups, total_verts, total_edges).
     mesh_groups is a list of lists, each sublist is a group of mesh objects.
+    parent_groups is a list of lists, each sublist contains objects without a parent from the corresponding group.
     """
     cdef object scene_coll = bpy.context.scene.collection
     cdef dict coll_to_top = _build_coll_to_top_map(scene_coll)
-    cdef dict mesh_cache = {}
-    cdef set added_groups = set()
+    cdef set root_parents = set()
+    cdef dict group_map = {}  # top_coll -> list of root_parents
+    cdef list scene_roots = []
     cdef list mesh_groups = []
+    cdef list parent_groups = []
     cdef int total_verts = 0
     cdef int total_edges = 0
     cdef object obj
+    cdef object root
     cdef object coll
     cdef object top_coll
-    cdef object group_coll
-    cdef object o
-    cdef list group_list
+    cdef list roots
+    cdef list all_meshes
+    cdef object r
 
+    # Collect unique root parents
     for obj in selected_objects:
-        group_coll = None
-        if obj.users_collection:
-            coll = obj.users_collection[0]
+        root = get_root_parent(obj)
+        root_parents.add(root)
+
+    # Group root parents by top-level collection, but treat scene collection roots individually
+    for root in root_parents:
+        top_coll = scene_coll
+        if root.users_collection:
+            coll = root.users_collection[0]
             if coll != scene_coll:
-                top_coll = coll_to_top.get(coll, None)
-                if top_coll is not None:
-                    if top_coll not in mesh_cache:
-                        mesh_cache[top_coll] = _get_all_mesh_objects(top_coll)
-                    if len(mesh_cache[top_coll]) > 1:
-                        group_coll = top_coll
-
-        if group_coll is None:
-            mesh_groups.append([obj])
-            if obj.type == 'MESH':
-                total_verts += len(obj.data.vertices)
-                total_edges += len(obj.data.edges)
+                top_coll = coll_to_top.get(coll, scene_coll)
+        if top_coll == scene_coll:
+            scene_roots.append(root)
         else:
-            if group_coll not in added_groups:
-                added_groups.add(group_coll)
-                group_list = mesh_cache[group_coll]
-                mesh_groups.append(group_list)
-                for o in group_list:
-                    total_verts += len(o.data.vertices)
-                    total_edges += len(o.data.edges)
+            if top_coll not in group_map:
+                group_map[top_coll] = []
+            group_map[top_coll].append(root)
 
-    return mesh_groups, total_verts, total_edges
+    # For each top_coll with selected roots, include all root objects in it
+    for top_coll in list(group_map.keys()):
+        roots = get_all_root_objects(top_coll)
+        group_map[top_coll] = roots
+
+    # Handle scene roots individually
+    for root in scene_roots:
+        all_meshes = get_all_mesh_descendants(root)
+        mesh_groups.append(all_meshes)
+        parent_groups.append([root])
+        for m in all_meshes:
+            total_verts += len(m.data.vertices)
+            total_edges += len(m.data.edges)
+
+    # For each group, collect mesh descendants and build groups
+    for roots in group_map.values():
+        all_meshes = []
+        for r in roots:
+            all_meshes.extend(get_all_mesh_descendants(r))
+        mesh_groups.append(all_meshes)
+        parent_groups.append(roots)
+        for m in all_meshes:
+            total_verts += len(m.data.vertices)
+            total_edges += len(m.data.edges)
+
+    return mesh_groups, parent_groups, total_verts, total_edges
 
 # -----------------------------
 # Helpers for block processing
