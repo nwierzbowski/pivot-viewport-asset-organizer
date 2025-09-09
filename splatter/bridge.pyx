@@ -18,7 +18,7 @@ from splatter.cython_api.quaternion_api cimport Quaternion
 
 def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, uint32_t[::1] vert_counts, uint32_t[::1] edge_counts):
     cdef uint32_t num_objects = vert_counts.shape[0]
-    if num_objects == 0:
+    if num_objects == 0 or verts_flat.shape[0] == 0:
         return [], []
 
     # Get direct pointers from memoryviews (no copy)
@@ -48,18 +48,6 @@ def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, uint32_t[:
 # Helpers for selection grouping
 # -----------------------------
 
-cdef list _get_all_mesh_objects(object coll):
-    cdef list objects = []
-    cdef object obj
-    cdef object child
-    for obj in coll.objects:
-        if obj.type == 'MESH':
-            objects.append(obj)
-    for child in coll.children:
-        objects.extend(_get_all_mesh_objects(child))
-    return objects
-
-
 def _build_coll_to_top_map(object scene_root):
     cdef dict coll_to_top = {}
     cdef object top_coll
@@ -83,7 +71,7 @@ cdef object get_root_parent(object obj):
 
 cdef list get_all_mesh_descendants(object root):
     cdef list meshes = []
-    if root.type == 'MESH':
+    if root.type == 'MESH' and len(root.data.vertices) != 0:
         meshes.append(root)
     for child in root.children:
         meshes.extend(get_all_mesh_descendants(child))
@@ -257,6 +245,7 @@ def align_to_axes_batch(list selected_objects):
     cdef cnp.ndarray edge_counts_arr
     cdef Py_ssize_t blocks_len
     cdef Py_ssize_t out_len
+    cdef list valid_parent_groups = []
 
     # Collect selection into groups and individuals and precompute totals
     cdef list mesh_groups
@@ -310,7 +299,7 @@ def align_to_axes_batch(list selected_objects):
     cdef object obj
     cdef float[::1] offsets_mv
 
-    for group in mesh_groups:
+    for idx, group in enumerate(mesh_groups):
         obj_vert_counts, obj_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
 
         # Skip empty blocks (e.g., single object with 0 verts)
@@ -351,8 +340,13 @@ def align_to_axes_batch(list selected_objects):
         vert_counts_arr[out_len] = group_vert_count
         edge_counts_arr[out_len] = group_edge_count
         
+        valid_parent_groups.append(parent_groups[idx])
         
         out_len += 1
+
+    # Resize arrays to actual number of non-empty blocks
+    vert_counts_arr = vert_counts_arr[:out_len]
+    edge_counts_arr = edge_counts_arr[:out_len]
 
     cdef float[::1] parent_rotations_view
     cdef float[::1] parent_scales_view
@@ -360,7 +354,7 @@ def align_to_axes_batch(list selected_objects):
     cdef Vec3 parent_ref_location
     cdef list all_ref_locations = []
 
-    for group in parent_groups:
+    for group in valid_parent_groups:
         parent_rotations_view, parent_scales_view, parent_offsets_view, parent_ref_location = _compute_transforms(group, len(group))
 
         # Store reference location as a plain tuple for fast numeric ops later
