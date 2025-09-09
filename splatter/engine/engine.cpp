@@ -73,8 +73,29 @@ float calc_forward_angle(std::vector<Vec2> &hull)
         rotate_points_2D(hull, -angle, rot_hull);
         BoundingBox2D box = compute_aabb_2D(rot_hull);
         box.rotation_angle = -angle;
+
+        // Check if box.area is within epsilon of best_box.area
+        // if (std::abs(box.area - best_box.area) < 1e-3)
+        // {
+        //     std::cout << "Found equivalent area at angle: " << -angle << std::endl;
+        // }
+
         if (box.area < best_box.area)
-            best_box = box;
+        {
+            // // Choose the box with the larger perimeter if areas are equivalent
+            // if (std::abs(box.area - best_box.area) < 1e-3)
+            // {
+            //     if ((box.max_corner - box.min_corner).length_squared() >
+            //         (best_box.max_corner - best_box.min_corner).length_squared())
+            //     {
+            //         best_box = box;
+            //     }
+            // }
+            // else
+            // {
+                best_box = box;
+            // }
+        }
     }
 
     return best_box.rotation_angle;
@@ -219,20 +240,28 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
 
     // Calculate total sizes
     uint32_t total_verts = 0, total_edges = 0;
-    for (uint32_t i = 0; i < num_objects; ++i) {
+    for (uint32_t i = 0; i < num_objects; ++i)
+    {
         total_verts += vert_counts[i];
         total_edges += edge_counts[i];
     }
 
     // Transform vertices and edges in place
     uint32_t vert_offset = 0, edge_offset = 0;
-    for (uint32_t i = 0; i < num_objects; ++i) {
+    for (uint32_t i = 0; i < num_objects; ++i)
+    {
         uint32_t v_count = vert_counts[i];
         uint32_t e_count = edge_counts[i];
-        
+
+        // Print scale, offset, rotation
+        std::cout << "Object " << i << " Scale: (" << scales[i].x << ", " << scales[i].y << ", " << scales[i].z << ")" << std::endl;
+        std::cout << "Object " << i << " Offset: (" << offsets[i].x << ", " << offsets[i].y << ", " << offsets[i].z << ")" << std::endl;
+        std::cout << "Object " << i << " Rotation: (" << rotations[i].w << ", " << rotations[i].x << ", " << rotations[i].y << ", " << rotations[i].z << ")" << std::endl;
+
         // Rotate and offset vertices
-        for (uint32_t j = 0; j < v_count; ++j) {
-            Vec3& v = verts_flat[vert_offset + j];
+        for (uint32_t j = 0; j < v_count; ++j)
+        {
+            Vec3 &v = verts_flat[vert_offset + j];
             v.x *= scales[i].x;
             v.y *= scales[i].y;
             v.z *= scales[i].z;
@@ -240,23 +269,26 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
             rotated += offsets[i];
             verts_flat[vert_offset + j] = rotated;
         }
-        
+
         // Adjust edge indices
-        for (uint32_t j = 0; j < e_count; ++j) {
+        for (uint32_t j = 0; j < e_count; ++j)
+        {
             edges_flat[edge_offset + j].x += vert_offset;
             edges_flat[edge_offset + j].y += vert_offset;
         }
-        
+
         vert_offset += v_count;
         edge_offset += e_count;
     }
 }
 
-void apply_rotation(Vec3* verts, uint32_t vertCount, const Quaternion &rotation) {
+void apply_rotation(Vec3 *verts, uint32_t vertCount, const Quaternion &rotation)
+{
     if (!verts || vertCount == 0)
         return;
 
-    for (uint32_t i = 0; i < vertCount; ++i) {
+    for (uint32_t i = 0; i < vertCount; ++i)
+    {
         verts[i] = rotate_vertex_3D_quat(verts[i], rotation);
     }
 }
