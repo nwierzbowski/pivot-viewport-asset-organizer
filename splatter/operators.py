@@ -321,15 +321,10 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
     def execute(self, context):
         startPython1 = time.perf_counter()
         
-        selected_objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
-        if not selected_objects:
-            self.report({ERROR}, "No valid mesh objects selected")
-            return {CANCELLED}
-        
         # Call the Cython function to handle data preparation and alignment
         endPython1 = time.perf_counter()
         startCPP = time.perf_counter()
-        rots, locs, batch_items, all_local_quats, all_ref_locations = bridge.align_to_axes_batch(selected_objects)
+        rots, locs, batch_items, all_local_quats, all_ref_locations = bridge.align_to_axes_batch(context.selected_objects)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
         startPython2 = time.perf_counter()

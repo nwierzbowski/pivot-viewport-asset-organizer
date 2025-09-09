@@ -238,15 +238,15 @@ def align_to_axes_batch(list selected_objects):
 
     # Process each block
     cdef list group
-    cdef cnp.ndarray group_vert_counts
-    cdef cnp.ndarray group_edge_counts
+    cdef cnp.ndarray obj_vert_counts
+    cdef cnp.ndarray obj_edge_counts
     cdef uint32_t group_vert_count
     cdef uint32_t group_edge_count
     cdef uint32_t num_objects
-    cdef uint32_t[::1] vert_counts_view
-    cdef uint32_t[::1] edge_counts_view
-    cdef uint32_t *vert_counts_ptr
-    cdef uint32_t *edge_counts_ptr
+    cdef uint32_t[::1] obj_vert_counts_view
+    cdef uint32_t[::1] obj_edge_counts_view
+    cdef uint32_t *obj_vert_counts_ptr
+    cdef uint32_t *obj_edge_counts_ptr
     cdef float[::1] group_verts_slice
     cdef uint32_t[::1] group_edges_slice
     cdef float[::1] rotations_view
@@ -262,7 +262,7 @@ def align_to_axes_batch(list selected_objects):
     cdef float[::1] offsets_mv
 
     for group in blocks:
-        group_vert_counts, group_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
+        obj_vert_counts, obj_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
 
         # Skip empty blocks (e.g., single object with 0 verts)
         if group_vert_count == 0:
@@ -281,10 +281,10 @@ def align_to_axes_batch(list selected_objects):
         rotations_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
 
         # Convert counts to typed pointers
-        vert_counts_view = group_vert_counts
-        edge_counts_view = group_edge_counts
-        vert_counts_ptr = &vert_counts_view[0]
-        edge_counts_ptr = &edge_counts_view[0]
+        obj_vert_counts_view = obj_vert_counts
+        obj_edge_counts_view = obj_edge_counts
+        obj_vert_counts_ptr = &obj_vert_counts_view[0]
+        obj_edge_counts_ptr = &obj_edge_counts_view[0]
 
         # Convert slices to C pointers for C++ call
         group_verts_slice_ptr = <Vec3*> &group_verts_slice[0]
@@ -295,7 +295,7 @@ def align_to_axes_batch(list selected_objects):
         offsets_ptr = <Vec3*> &offsets_view[0]
 
         # Apply transform/indexing in C++ for both groups and singletons
-        group_objects_cpp(group_verts_slice_ptr, group_edges_slice_ptr, vert_counts_ptr, edge_counts_ptr, offsets_ptr, rotations_ptr, num_objects)
+        group_objects_cpp(group_verts_slice_ptr, group_edges_slice_ptr, obj_vert_counts_ptr, obj_edge_counts_ptr, offsets_ptr, rotations_ptr, num_objects)
 
         # Record counts and mapping
         vert_counts_arr[out_len] = group_vert_count
