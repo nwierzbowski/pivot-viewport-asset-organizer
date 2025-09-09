@@ -213,21 +213,28 @@ cdef void _fill_block_geometry(list group, float[::1] group_verts_slice, uint32_
 cdef tuple _compute_transforms(list group, uint32_t num_objects):
     cdef object first_obj = group[0]
     cdef cnp.ndarray rotations_array = np.fromiter(
-        (component for obj in group for component in (obj.rotation_quaternion.w, obj.rotation_quaternion.x, obj.rotation_quaternion.y, obj.rotation_quaternion.z)),
+        (component for obj in group for component in obj.matrix_world.to_3x3().to_quaternion()),
         dtype=np.float32,
         count=num_objects * 4,
     )
     cdef float[::1] rotations_view = rotations_array
 
+    cdef cnp.ndarray scales_array = np.fromiter(
+        (component for obj in group for component in obj.matrix_world.to_3x3().to_scale()),
+        dtype=np.float32,
+        count=num_objects * 3,
+    )
+    cdef float[::1] scales_view = scales_array
+
     cdef cnp.ndarray offsets_array = np.fromiter(
-        (component for obj in group for component in (obj.location - first_obj.location).to_tuple()),
+        (component for obj in group for component in (obj.matrix_world.translation - first_obj.matrix_world.translation).to_tuple()),
         dtype=np.float32,
         count=num_objects * 3,
     )
     cdef float[::1] offsets_view = offsets_array
 
     # Return memoryviews to keep arrays alive via references
-    return rotations_view, offsets_view, first_obj.location
+    return rotations_view, scales_view, offsets_view, Vec3(first_obj.matrix_world.translation.x, first_obj.matrix_world.translation.y, first_obj.matrix_world.translation.z)
 
 
 # -----------------------------
@@ -241,8 +248,10 @@ def align_to_axes_batch(list selected_objects):
 
     cdef list batch_items = []
     cdef list all_original_rots = []
-    cdef list all_ref_locations = []
+    
     cdef list all_offsets = []
+
+    cdef list all_scales = []
 
     cdef cnp.ndarray vert_counts_arr
     cdef cnp.ndarray edge_counts_arr
@@ -251,9 +260,10 @@ def align_to_axes_batch(list selected_objects):
 
     # Collect selection into groups and individuals and precompute totals
     cdef list mesh_groups
+    cdef list parent_groups
     cdef int total_verts
     cdef int total_edges
-    mesh_groups, total_verts, total_edges = aggregate_object_groups(selected_objects)
+    mesh_groups, parent_groups, total_verts, total_edges = aggregate_object_groups(selected_objects)
 
     # Allocate flat buffers
     all_verts = np.empty((total_verts * 3), dtype=np.float32)
@@ -287,6 +297,7 @@ def align_to_axes_batch(list selected_objects):
     cdef float[::1] group_verts_slice
     cdef uint32_t[::1] group_edges_slice
     cdef float[::1] rotations_view
+    cdef float[::1] scales_view
     cdef float[::1] offsets_view
     cdef Vec3* group_verts_slice_ptr
     cdef uVec2i* group_edges_slice_ptr
@@ -315,7 +326,7 @@ def align_to_axes_batch(list selected_objects):
         _fill_block_geometry(group, group_verts_slice, group_edges_slice)
 
         # Compute per-object transforms
-        rotations_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
+        rotations_view, scales_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
 
         # Convert counts to typed pointers
         obj_vert_counts_view = obj_vert_counts
@@ -337,13 +348,28 @@ def align_to_axes_batch(list selected_objects):
         # Record counts and mapping
         vert_counts_arr[out_len] = group_vert_count
         edge_counts_arr[out_len] = group_edge_count
+        
+        
+        out_len += 1
+
+    cdef float[::1] parent_rotations_view
+    cdef float[::1] parent_scales_view
+    cdef float[::1] parent_offsets_view
+    cdef Vec3 parent_ref_location
+    cdef list all_ref_locations = []
+
+    for group in parent_groups:
+        parent_rotations_view, parent_scales_view, parent_offsets_view, parent_ref_location = _compute_transforms(group, len(group))
+
+        # Store reference location as a plain tuple for fast numeric ops later
+        all_ref_locations.append((parent_ref_location.x, parent_ref_location.y, parent_ref_location.z))
+        all_offsets.append(parent_offsets_view)
+        all_scales.append(parent_scales_view)
+
         batch_items.append(group)
         for obj in group:
+            obj.rotation_mode = 'QUATERNION'
             all_original_rots.append(obj.rotation_quaternion)
-        # Store reference location as a plain tuple for fast numeric ops later
-        all_ref_locations.append((ref_location.x, ref_location.y, ref_location.z))
-        all_offsets.append(offsets_view)
-        out_len += 1
 
     end_processing = time.perf_counter()
     print(f"Block processing time elapsed: {(end_processing - start_processing) * 1000:.2f}ms")
