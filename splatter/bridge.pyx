@@ -75,15 +75,15 @@ def _build_coll_to_top_map(object scene_root):
     return coll_to_top
 
 
-def _collect_groups_and_individuals(list selected_objects):
-    """Return (obj_groups, individual_objects, total_verts, total_edges).
-    obj_groups maps top collection -> list of all mesh objs in that top collection.
+def aggregate_object_groups(list selected_objects):
+    """Return (mesh_groups, total_verts, total_edges).
+    mesh_groups is a list of lists, each sublist is a group of mesh objects.
     """
     cdef object scene_coll = bpy.context.scene.collection
     cdef dict coll_to_top = _build_coll_to_top_map(scene_coll)
     cdef dict mesh_cache = {}
-    cdef dict obj_groups = {}
-    cdef list individual_objects = []
+    cdef set added_groups = set()
+    cdef list mesh_groups = []
     cdef int total_verts = 0
     cdef int total_edges = 0
     cdef object obj
@@ -91,6 +91,7 @@ def _collect_groups_and_individuals(list selected_objects):
     cdef object top_coll
     cdef object group_coll
     cdef object o
+    cdef list group_list
 
     for obj in selected_objects:
         group_coll = None
@@ -105,30 +106,20 @@ def _collect_groups_and_individuals(list selected_objects):
                         group_coll = top_coll
 
         if group_coll is None:
-            individual_objects.append(obj)
+            mesh_groups.append([obj])
             if obj.type == 'MESH':
                 total_verts += len(obj.data.vertices)
                 total_edges += len(obj.data.edges)
         else:
-            if group_coll not in obj_groups:
-                obj_groups[group_coll] = mesh_cache[group_coll]
-                for o in obj_groups[group_coll]:
+            if group_coll not in added_groups:
+                added_groups.add(group_coll)
+                group_list = mesh_cache[group_coll]
+                mesh_groups.append(group_list)
+                for o in group_list:
                     total_verts += len(o.data.vertices)
                     total_edges += len(o.data.edges)
 
-    return obj_groups, individual_objects, total_verts, total_edges
-
-
-def _make_blocks(dict obj_groups, list individual_objects):
-    cdef list blocks = []
-    cdef list group
-    cdef object obj
-    for group in obj_groups.values():
-        blocks.append(group)
-    for obj in individual_objects:
-        blocks.append([obj])
-    return blocks
-
+    return mesh_groups, total_verts, total_edges
 
 # -----------------------------
 # Helpers for block processing
@@ -211,11 +202,10 @@ def align_to_axes_batch(list selected_objects):
     cdef Py_ssize_t out_len
 
     # Collect selection into groups and individuals and precompute totals
-    cdef dict obj_groups
-    cdef list individual_objects
+    cdef list mesh_groups
     cdef int total_verts
     cdef int total_edges
-    obj_groups, individual_objects, total_verts, total_edges = _collect_groups_and_individuals(selected_objects)
+    mesh_groups, total_verts, total_edges = aggregate_object_groups(selected_objects)
 
     # Allocate flat buffers
     all_verts = np.empty((total_verts * 3), dtype=np.float32)
@@ -229,8 +219,7 @@ def align_to_axes_batch(list selected_objects):
 
     start_processing = time.perf_counter()
     # Build blocks: each block is a list of mesh objects (group or individual)
-    cdef list blocks = _make_blocks(obj_groups, individual_objects)
-    blocks_len = len(blocks)
+    blocks_len = len(mesh_groups)
     # Preallocate per-block counts (uint32)
     vert_counts_arr = np.empty(blocks_len, dtype=np.uint32)
     edge_counts_arr = np.empty(blocks_len, dtype=np.uint32)
@@ -261,7 +250,7 @@ def align_to_axes_batch(list selected_objects):
     cdef object obj
     cdef float[::1] offsets_mv
 
-    for group in blocks:
+    for group in mesh_groups:
         obj_vert_counts, obj_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
 
         # Skip empty blocks (e.g., single object with 0 verts)

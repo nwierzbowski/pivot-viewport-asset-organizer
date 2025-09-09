@@ -319,16 +319,13 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         return False
 
     def execute(self, context):
-        startPython1 = time.perf_counter()
-        
-        # Call the Cython function to handle data preparation and alignment
-        endPython1 = time.perf_counter()
         startCPP = time.perf_counter()
         rots, locs, batch_items, all_local_quats, all_ref_locations = bridge.align_to_axes_batch(context.selected_objects)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
-        startPython2 = time.perf_counter()
-        
+
+
+        startPython = time.perf_counter()
         # Apply results
         obj_idx = 0
         for i, item in enumerate(batch_items):
@@ -337,19 +334,14 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
             for j, obj in enumerate(item):
                 local_quat = all_local_quats[obj_idx]
                 loc = locs[obj_idx]
-                if obj.parent:
-                    parent_world = obj.parent.matrix_world.to_quaternion()
-                    transformed_delta = parent_world.inverted() @ delta_quat @ parent_world
-                else:
-                    transformed_delta = delta_quat
                 
-                obj.rotation_quaternion = (transformed_delta @ local_quat).normalized()
+                obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
                 obj.location = Vector(loc)
                 # bpy.context.scene.cursor.location = Vector(loc) + obj.location
                 obj_idx += 1
         
-        endPython2 = time.perf_counter()
-        elapsedPython = endPython2 - startPython2 + endPython1 - startPython1
+        endPython = time.perf_counter()
+        elapsedPython = endPython - startPython
         print(f"Python time elapsed: {elapsedPython * 1000:.2f}ms")
         print(f"Total time elapsed: {(elapsedCPP + elapsedPython) * 1000:.2f}ms")
         return {FINISHED}
