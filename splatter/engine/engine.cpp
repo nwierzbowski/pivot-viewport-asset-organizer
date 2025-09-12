@@ -74,27 +74,9 @@ float calc_forward_angle(std::vector<Vec2> &hull)
         BoundingBox2D box = compute_aabb_2D(rot_hull);
         box.rotation_angle = -angle;
 
-        // Check if box.area is within epsilon of best_box.area
-        // if (std::abs(box.area - best_box.area) < 1e-3)
-        // {
-        //     std::cout << "Found equivalent area at angle: " << -angle << std::endl;
-        // }
-
         if (box.area < best_box.area)
         {
-            // // Choose the box with the larger perimeter if areas are equivalent
-            // if (std::abs(box.area - best_box.area) < 1e-3)
-            // {
-            //     if ((box.max_corner - box.min_corner).length_squared() >
-            //         (best_box.max_corner - best_box.min_corner).length_squared())
-            //     {
-            //         best_box = box;
-            //     }
-            // }
-            // else
-            // {
             best_box = box;
-            // }
         }
     }
 
@@ -170,17 +152,9 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
     }
 
     uint8_t curr_front_axis = 0;
-    if (is_display(working_cog_result, full_2DBB))
+    if (is_flat(working_verts, working_cog_result, full_3DBB, curr_front_axis))
     {
-        std::cout << "Classified as Display" << std::endl;
-        if (snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis, {0, 1, 2, 3}))
-        {
-            std::cout << "Snapped display to axis" << std::endl;
-        }
-        else
-        {
-            std::cout << "Failed to snap display to axis, defaulting to +Y" << std::endl;
-        }
+        std::cout << "Classified as Flat" << std::endl;
     }
     else if (is_ground(working_verts, working_cog_result, full_3DBB))
     {
@@ -273,11 +247,6 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
     {
         uint32_t v_count = vert_counts[i];
         uint32_t e_count = edge_counts[i];
-
-        // Print scale, offset, rotation
-        std::cout << "Object " << i << " Scale: (" << scales[i].x << ", " << scales[i].y << ", " << scales[i].z << ")" << std::endl;
-        std::cout << "Object " << i << " Offset: (" << offsets[i].x << ", " << offsets[i].y << ", " << offsets[i].z << ")" << std::endl;
-        std::cout << "Object " << i << " Rotation: (" << rotations[i].w << ", " << rotations[i].x << ", " << rotations[i].y << ", " << rotations[i].z << ")" << std::endl;
 
         // Rotate and offset vertices
         for (uint32_t j = 0; j < v_count; ++j)

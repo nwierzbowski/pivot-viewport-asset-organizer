@@ -46,7 +46,7 @@ bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBo
     auto base_chull = calc_base_convex_hull(verts, full_box);
     float ratio = calc_ratio_full_to_base(full_box, cog_result.slices.front().box);
 
-    bool base_large_enough = ratio < 3.0f;
+    bool base_large_enough = ratio < 4.0f;
     bool is_thick_enough = min_cross_section > 15e-5f;
     bool cog_over_base = is_point_inside_polygon_2D(cog_result.overall_cog, base_chull);
 
@@ -189,32 +189,54 @@ static inline Vec2 get_max_axes_middle_slices(const COGResult &cog_result)
     return {max_x, max_y};
 }
 
-bool is_display(const COGResult &cog_result, BoundingBox2D full_box)
+static inline Vec2 get_middle_slices_pos_neg_ratio(const std::vector<Vec3> &verts, const COGResult &cog_result, BoundingBox3D full_box)
 {
+    float total_height = full_box.max_corner.z - full_box.min_corner.z;
+    float start_z = full_box.min_corner.z + total_height * 3 / 8;
+    float end_z = full_box.min_corner.z + total_height;
 
-    Vec2 max_axes = get_max_axes_middle_slices(cog_result);
+    Vec2 center = {cog_result.overall_cog.x, cog_result.overall_cog.y};
 
-    float min_len = std::min(max_axes.x, max_axes.y);
-    float max_len = std::max(max_axes.x, max_axes.y);
+    size_t pos_x = 0, neg_x = 0, pos_y = 0, neg_y = 0;
 
-    // Print Max and min as debug info
-    std::cout << "Display Box Min Len: " << min_len << " Max Len: " << max_len << std::endl;
+    for (const Vec3 &vert : verts) {
+        if (vert.z >= start_z && vert.z < end_z) {
+            float rel_x = vert.x - center.x;
+            float rel_y = vert.y - center.y;
+            if (rel_x > 0) pos_x++;
+            else if (rel_x < 0) neg_x++;
+            if (rel_y > 0) pos_y++;
+            else if (rel_y < 0) neg_y++;
+        }
+    }
 
-    if (min_len == 0)
+    float ratio_x = neg_x > 0 ? static_cast<float>(pos_x) / neg_x : (pos_x > 0 ? 10.0f : 0.0f);
+    float ratio_y = neg_y > 0 ? static_cast<float>(pos_y) / neg_y : (pos_y > 0 ? 10.0f : 0.0f);
+
+    return {ratio_x, ratio_y};
+}
+
+bool is_flat(const std::vector<Vec3> &verts, const COGResult &cog_result, BoundingBox3D full_box, uint8_t &front_axis)
+{
+    const Vec2 max_axes = get_max_axes_middle_slices(cog_result);
+    const float min_len = std::min(max_axes.x, max_axes.y);
+    const float max_len = std::max(max_axes.x, max_axes.y);
+
+    if (min_len == 0.0f) {
         return false;
-
-    // uint8_t dummy = 0;
-
-    std::vector<uint8_t> options;
-
-    if (max_axes.y > max_axes.x)
-    {
-        options = {0, 2};
-    }
-    else
-    {
-        options = {1, 3};
     }
 
-    return (max_len / min_len) > 2.5f && min_len < 0.1f;
+    const Vec2 ratios = get_middle_slices_pos_neg_ratio(verts, cog_result, full_box);
+    const float facing_ratio = (max_axes.y > max_axes.x) ? ratios.x : ratios.y;
+    const uint8_t dir = (max_axes.y > max_axes.x) ? 3 : 2;
+
+    const bool is_valid_shape = (max_len / min_len) > 2.5f;
+    const bool is_valid_size = (min_len < 0.08f) && (max_len > 0.3f);
+
+    if (is_valid_shape && is_valid_size) {
+        front_axis = dir - 2 * static_cast<uint8_t>(facing_ratio > 1.0f);
+        return true;
+    }
+
+    return false;
 }
