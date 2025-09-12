@@ -6,7 +6,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Release, etc." FORCE)
 endif()
 
-# Core engine sources
+# Core engine sources (shared by library + bindings + executable)
 set(ENGINE_SOURCES
     splatter/engine/engine.cpp
     splatter/engine/share/stats.cpp
@@ -19,21 +19,48 @@ set(ENGINE_SOURCES
     splatter/engine/object/util/linalg3.cpp
 )
 
-# Executable only (removed Python/Cython bindings)
-add_executable(splatter_engine_exec
-    ${ENGINE_SOURCES}
-    splatter/engine/main.cpp
-)
-
-target_compile_features(splatter_engine_exec PRIVATE cxx_std_20)
-target_include_directories(splatter_engine_exec PRIVATE
+# Build a static core to avoid duplicate compilation
+add_library(splatter_engine_core STATIC ${ENGINE_SOURCES})
+target_compile_features(splatter_engine_core PUBLIC cxx_std_20)
+target_include_directories(splatter_engine_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/splatter/engine
 )
-
+set_property(TARGET splatter_engine_core PROPERTY POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
-    target_compile_options(splatter_engine_exec PRIVATE /W4 /permissive- /EHsc)
+    target_compile_options(splatter_engine_core PRIVATE /W4 /permissive- /EHsc)
 else()
-    target_compile_options(splatter_engine_exec PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(splatter_engine_core PRIVATE -Wall -Wextra -pedantic)
+endif()
+
+# Executable linking the core
+add_executable(splatter_engine_exec splatter/engine/main.cpp)
+target_link_libraries(splatter_engine_exec PRIVATE splatter_engine_core)
+
+# Optionally build Python (Cython) extension
+option(SPLATTER_BUILD_PY_EXTENSION "Build Cython Python module bridge" ON)
+if(SPLATTER_BUILD_PY_EXTENSION)
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python3 COMPONENTS NumPy REQUIRED)
+    find_program(CYTHON_EXECUTABLE cython REQUIRED)
+
+    set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bridge.pyx)
+    set(CYTHON_GENERATED_CPP ${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp)
+    add_custom_command(
+        OUTPUT ${CYTHON_GENERATED_CPP}
+        COMMAND ${CYTHON_EXECUTABLE} --cplus -I ${CMAKE_CURRENT_SOURCE_DIR} -o ${CYTHON_GENERATED_CPP} ${CYTHON_SOURCE}
+        DEPENDS ${CYTHON_SOURCE}
+        COMMENT "Cythonizing ${CYTHON_SOURCE}"
+    )
+    add_library(bridge MODULE ${CYTHON_GENERATED_CPP})
+    set_target_properties(bridge PROPERTIES PREFIX "")
+    if(WIN32)
+        set_target_properties(bridge PROPERTIES SUFFIX ".pyd")
+    else()
+        set_target_properties(bridge PROPERTIES SUFFIX ".so")
+    endif()
+    target_link_libraries(bridge PRIVATE Python::Python splatter_engine_core)
+    target_include_directories(bridge PRIVATE ${Python3_NumPy_INCLUDE_DIRS})
+    set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/splatter")
 endif()
 
 # Dependencies
@@ -45,8 +72,8 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(Eigen)
-target_link_libraries(splatter_engine_exec PRIVATE Eigen3::Eigen)
-target_compile_definitions(splatter_engine_exec PRIVATE $<$<CONFIG:Release>:NDEBUG>)
+target_link_libraries(splatter_engine_core PUBLIC Eigen3::Eigen)
+target_compile_definitions(splatter_engine_core PUBLIC $<$<CONFIG:Release>:NDEBUG>)
 
 # IPO / LTO when available
 include(CheckIPOSupported)
