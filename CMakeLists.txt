@@ -33,8 +33,17 @@ else()
 endif()
 
 # Executable linking the core
-add_executable(splatter_engine_exec splatter/engine/main.cpp)
-target_link_libraries(splatter_engine_exec PRIVATE splatter_engine_core)
+add_executable(splatter_engine splatter/engine/main.cpp)
+target_link_libraries(splatter_engine PRIVATE splatter_engine_core)
+
+# Set executable output directory to splatter/bin for clean packaging
+set_target_properties(splatter_engine PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin
+)
 
 # Optionally build Python (Cython) extension
 option(SPLATTER_BUILD_PY_EXTENSION "Build Cython Python module bridge" ON)
@@ -108,9 +117,9 @@ endif()
 include(CheckIPOSupported)
 check_ipo_supported(RESULT ipo_supported OUTPUT ipo_msg)
 if(ipo_supported)
-    set_property(TARGET splatter_engine_exec PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    set_property(TARGET splatter_engine PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 endif()
 
 # Install rule
 include(GNUInstallDirs)
-install(TARGETS splatter_engine_exec RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS splatter_engine RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
