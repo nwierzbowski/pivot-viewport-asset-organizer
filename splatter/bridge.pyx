@@ -168,83 +168,44 @@ def aggregate_object_groups(list selected_objects):
 
 cdef tuple _prepare_block_counts(list group):
     cdef uint32_t num_objects = len(group)
-    cdef cnp.ndarray group_vert_counts = np.fromiter(
+    cdef cnp.ndarray obj_vert_counts = np.fromiter(
         (len(obj.data.vertices) for obj in group), dtype=np.uint32, count=num_objects
     )
-    cdef cnp.ndarray group_edge_counts = np.fromiter(
+    cdef cnp.ndarray obj_edge_counts = np.fromiter(
         (len(obj.data.edges) for obj in group), dtype=np.uint32, count=num_objects
     )
-    cdef uint32_t group_vert_count = int(group_vert_counts.sum())
-    cdef uint32_t group_edge_count = int(group_edge_counts.sum())
-    return group_vert_counts, group_edge_counts, group_vert_count, group_edge_count, num_objects
+    cdef uint32_t group_vert_count = int(obj_vert_counts.sum())
+    cdef uint32_t group_edge_count = int(obj_edge_counts.sum())
+    return obj_vert_counts, obj_edge_counts, group_vert_count, group_edge_count, num_objects
 
 
-cdef tuple _fill_block_geometry(list group):
-    """Create shared memory segments using Python multiprocessing and fill with geometry data.
+cdef tuple _fill_block_geometry(list group, float[::1] all_verts_mv, uint32_t[::1] all_edges_mv, uint32_t curr_verts_offset, uint32_t curr_edges_offset):
+    """Fill the global shared memory arrays with geometry data for the group.
 
     Returns:
-        tuple: (verts_shm_name, edges_shm_name, total_verts, total_edges)
+        tuple: (updated_verts_offset, updated_edges_offset)
     """
-    cdef uint32_t total_verts = 0
-    cdef uint32_t total_edges = 0
-    cdef object verts_shm = None
-    cdef object edges_shm = None
-    cdef str verts_shm_name = ""
-    cdef str edges_shm_name = ""
+    cdef uint32_t vert_offset = 0
+    cdef uint32_t edge_offset = 0
+    cdef object obj
+    cdef object mesh
+    cdef uint32_t obj_vert_count
+    cdef uint32_t obj_edge_count
 
-    # Calculate total sizes needed
     for obj in group:
         mesh = obj.data
-        total_verts += len(mesh.vertices)
-        total_edges += len(mesh.edges)
+        obj_vert_count = len(mesh.vertices)
+        obj_edge_count = len(mesh.edges)
 
-    try:
-        # Generate unique names for shared memory segments
-        verts_shm_name = f"splatter_verts_{uuid.uuid4().hex}"
-        edges_shm_name = f"splatter_edges_{uuid.uuid4().hex}"
+        if obj_vert_count > 0:
+            mesh.vertices.foreach_get("co", all_verts_mv[curr_verts_offset + vert_offset:curr_verts_offset + vert_offset + obj_vert_count * 3])
+            vert_offset += obj_vert_count * 3
 
-        # Calculate memory sizes (3 floats per vertex, 2 uint32 per edge)
-        verts_size = total_verts * 3 * 4  # float32 = 4 bytes
-        edges_size = total_edges * 2 * 4  # uint32 = 4 bytes
+        if obj_edge_count > 0:
+            mesh.edges.foreach_get("vertices", all_edges_mv[curr_edges_offset + edge_offset:curr_edges_offset + edge_offset + obj_edge_count * 2])
+            edge_offset += obj_edge_count * 2
 
-        # Create shared memory segments using Python multiprocessing
-        verts_shm = shared_memory.SharedMemory(create=True, size=verts_size, name=verts_shm_name)
-        edges_shm = shared_memory.SharedMemory(create=True, size=edges_size, name=edges_shm_name)
-
-        # Create numpy arrays directly backed by shared memory (zero copy!)
-        verts_array = np.ndarray((total_verts * 3,), dtype=np.float32, buffer=verts_shm.buf)
-        edges_array = np.ndarray((total_edges * 2,), dtype=np.uint32, buffer=edges_shm.buf)
-
-        # Fill the shared memory with geometry data (direct write, no copying)
-        vert_offset = 0
-        edge_offset = 0
-
-        for obj in group:
-            mesh = obj.data
-            obj_vert_count = len(mesh.vertices)
-            obj_edge_count = len(mesh.edges)
-
-            if obj_vert_count > 0:
-                # Direct write to shared memory (zero copy!)
-                mesh.vertices.foreach_get("co", verts_array[vert_offset:vert_offset + obj_vert_count * 3])
-                vert_offset += obj_vert_count * 3
-
-            if obj_edge_count > 0:
-                # Direct write to shared memory (zero copy!)
-                mesh.edges.foreach_get("vertices", edges_array[edge_offset:edge_offset + obj_edge_count * 2])
-                edge_offset += obj_edge_count * 2
-
-        return verts_shm_name, edges_shm_name, total_verts, total_edges
-
-    except Exception as e:
-        # Clean up on error
-        if verts_shm is not None:
-            verts_shm.close()
-            verts_shm.unlink()
-        if edges_shm is not None:
-            edges_shm.close()
-            edges_shm.unlink()
-        raise
+    return curr_verts_offset + vert_offset, curr_edges_offset + edge_offset
 
 
 cdef tuple _compute_transforms(list group, uint32_t num_objects):
@@ -293,9 +254,21 @@ def align_to_axes_batch(list selected_objects):
     cdef int total_edges
     mesh_groups, parent_groups, total_verts, total_edges = aggregate_object_groups(selected_objects)
 
-    # Allocate flat buffers
-    cdef cnp.ndarray all_verts
-    cdef cnp.ndarray all_edges
+    # Generate unique names for shared memory segments
+    verts_shm_name = f"splatter_verts_{uuid.uuid4().hex}"
+    edges_shm_name = f"splatter_edges_{uuid.uuid4().hex}"
+
+    # Calculate memory sizes (3 floats per vertex, 2 uint32 per edge)
+    verts_size = total_verts * 3 * 4  # float32 = 4 bytes
+    edges_size = total_edges * 2 * 4  # uint32 = 4 bytes
+
+    # Create shared memory segments using Python multiprocessing
+    verts_shm = shared_memory.SharedMemory(create=True, size=verts_size, name=verts_shm_name)
+    edges_shm = shared_memory.SharedMemory(create=True, size=edges_size, name=edges_shm_name)
+
+    # Create numpy arrays directly backed by shared memory
+    cdef cnp.ndarray all_verts = np.ndarray((total_verts * 3,), dtype=np.float32, buffer=verts_shm.buf)
+    cdef cnp.ndarray all_edges = np.ndarray((total_edges * 2,), dtype=np.uint32, buffer=edges_shm.buf)
 
     cdef uint32_t curr_all_verts_offset = 0
     cdef uint32_t curr_all_edges_offset = 0
@@ -318,8 +291,6 @@ def align_to_axes_batch(list selected_objects):
     cdef uint32_t group_vert_count
     cdef uint32_t group_edge_count
     cdef uint32_t num_objects
-    cdef str verts_shm_name
-    cdef str edges_shm_name
 
     for idx, group in enumerate(mesh_groups):
         obj_vert_counts, obj_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
@@ -328,8 +299,8 @@ def align_to_axes_batch(list selected_objects):
         if group_vert_count == 0:
             continue
 
-        # Create shared memory segments and fill with geometry
-        verts_shm_name, edges_shm_name, group_vert_count, group_edge_count = _fill_block_geometry(group)
+        # Fill the global shared memory arrays with geometry data
+        curr_all_verts_offset, curr_all_edges_offset = _fill_block_geometry(group, all_verts, all_edges, curr_all_verts_offset, curr_all_edges_offset)
 
         # Record counts and mapping
         vert_counts_arr[out_len] = group_vert_count
@@ -367,11 +338,6 @@ def align_to_axes_batch(list selected_objects):
     print(f"Block processing time elapsed: {(end_processing - start_processing) * 1000:.2f}ms")
 
     start_alignment = time.perf_counter()
-
-    # For now, we'll need to create temporary numpy arrays for the C++ function call
-    # In the future, this will be replaced by subprocess communication
-    all_verts = np.empty((total_verts * 3), dtype=np.float32)
-    all_edges = np.empty((total_edges * 2), dtype=np.uint32)
 
     # Call batched C++ function to compute group rotations
     rots, _ = align_min_bounds(all_verts, all_edges, vert_counts_arr, edge_counts_arr)
