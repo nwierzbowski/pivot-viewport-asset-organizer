@@ -23,6 +23,33 @@ from .ui import Splatter_PT_Main_Panel
 # Global variable to track the engine process
 _engine_process = None
 
+def _read_engine_output():
+    """Debug function to read and print engine output."""
+    if _engine_process is None:
+        print("No engine process running")
+        return
+    
+    # Read any available output
+    if _engine_process.stdout:
+        try:
+            while True:
+                line = _engine_process.stdout.readline()
+                if not line:
+                    break
+                print(f"[ENGINE STDOUT] {line.strip()}")
+        except:
+            pass
+    
+    if _engine_process.stderr:
+        try:
+            while True:
+                line = _engine_process.stderr.readline()
+                if not line:
+                    break
+                print(f"[ENGINE STDERR] {line.strip()}")
+        except:
+            pass
+
 
 def _start_engine():
     """Start the splatter engine executable."""
@@ -35,12 +62,11 @@ def _start_engine():
     try:
         # Get the path to the executable relative to this file
         addon_dir = os.path.dirname(__file__)
-        engine_path = os.path.join(addon_dir, 'bin', 'splatter_engine_exec')
+        engine_path = os.path.join(addon_dir, 'bin', 'splatter_engine')
 
         # Check if executable exists
         if not os.path.exists(engine_path):
             print(f"Warning: Engine executable not found at {engine_path}")
-            print("Make sure to build the project with CMake first")
             return
 
         print(f"Starting splatter engine: {engine_path}")
