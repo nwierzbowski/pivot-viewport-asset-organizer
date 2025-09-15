@@ -19,114 +19,7 @@ from .operators import (
     Splatter_OT_Select_Seating,
 )
 from .ui import Splatter_PT_Main_Panel
-
-# Global variable to track the engine process
-_engine_process = None
-
-def _read_engine_output():
-    """Debug function to read and print engine output."""
-    if _engine_process is None:
-        print("No engine process running")
-        return
-    
-    # Read any available output
-    if _engine_process.stdout:
-        try:
-            while True:
-                line = _engine_process.stdout.readline()
-                if not line:
-                    break
-                print(f"[ENGINE STDOUT] {line.strip()}")
-        except:
-            pass
-    
-    if _engine_process.stderr:
-        try:
-            while True:
-                line = _engine_process.stderr.readline()
-                if not line:
-                    break
-                print(f"[ENGINE STDERR] {line.strip()}")
-        except:
-            pass
-
-
-def _start_engine():
-    """Start the splatter engine executable."""
-    global _engine_process
-
-    if _engine_process is not None:
-        print("Splatter engine is already running")
-        return
-
-    try:
-        # Get the path to the executable relative to this file
-        addon_dir = os.path.dirname(__file__)
-        engine_path = os.path.join(addon_dir, 'bin', 'splatter_engine')
-
-        # Check if executable exists
-        if not os.path.exists(engine_path):
-            print(f"Warning: Engine executable not found at {engine_path}")
-            return
-
-        print(f"Starting splatter engine: {engine_path}")
-
-        # Start the engine process
-        _engine_process = subprocess.Popen(
-            [engine_path],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,  # Line buffered
-            universal_newlines=True
-        )
-
-        print("Splatter engine started successfully")
-
-    except Exception as e:
-        print(f"Failed to start splatter engine: {e}")
-        _engine_process = None
-
-
-def _stop_engine():
-    """Stop the splatter engine executable."""
-    global _engine_process
-
-    if _engine_process is None:
-        return
-
-    try:
-        print("Stopping splatter engine...")
-
-        # Send quit command to the engine
-        if _engine_process.poll() is None:  # Process is still running
-            try:
-                _engine_process.stdin.write("__quit__\n")
-                _engine_process.stdin.flush()
-
-                # Wait a bit for graceful shutdown
-                _engine_process.wait(timeout=2.0)
-            except (subprocess.TimeoutExpired, BrokenPipeError):
-                # Force kill if graceful shutdown fails
-                _engine_process.terminate()
-                try:
-                    _engine_process.wait(timeout=1.0)
-                except subprocess.TimeoutExpired:
-                    _engine_process.kill()
-                    _engine_process.wait()
-
-        print("Splatter engine stopped")
-        _engine_process = None
-
-    except Exception as e:
-        print(f"Error stopping splatter engine: {e}")
-        if _engine_process:
-            try:
-                _engine_process.kill()
-            except:
-                pass
-        _engine_process = None
+from . import engine
 
 
 
@@ -167,7 +60,7 @@ def register():
     bpy.types.Object.classification = PointerProperty(type=ObjectAttributes)
 
     # Start the splatter engine
-    _start_engine()
+    engine.start_engine()
 
     # Example: Add addon preferences (if you create an AddonPreferences class)
     # bpy.utils.register_class(MyAddonPreferences)
@@ -191,7 +84,7 @@ def unregister():
     del bpy.types.Object.classification
 
     # Stop the splatter engine
-    _stop_engine()
+    engine.stop_engine()
 
     # Example: Remove addon preferences
     # bpy.utils.unregister_class(MyAddonPreferences)
@@ -202,6 +95,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
-# Register cleanup function to run on Python exit
-atexit.register(_stop_engine)

@@ -1,5 +1,7 @@
 from libc.stdint cimport uint32_t
 from libc.stdlib cimport malloc, free
+from libc.string cimport memcpy
+from libc.stddef cimport size_t
 from mathutils import Quaternion as MathutilsQuaternion, Vector
 
 cimport numpy as cnp
@@ -7,6 +9,25 @@ cimport numpy as cnp
 import bpy
 import numpy as np
 import time
+import uuid
+
+# Import Boost.Interprocess for shared memory
+cdef extern from "<boost/interprocess/managed_shared_memory.hpp>" namespace "boost::interprocess":
+    cdef cppclass managed_shared_memory:
+        managed_shared_memory(create_only_t, const char*, size_t) except +
+        managed_shared_memory(open_only_t, const char*) except +
+        void* allocate(size_t) except +
+        void deallocate(void*) except +
+        void destroy[T](const char*) except +
+
+cdef extern from "<boost/interprocess/creation_tags.hpp>" namespace "boost::interprocess":
+    cdef cppclass create_only_t:
+        create_only_t()
+    cdef create_only_t create_only
+
+    cdef cppclass open_only_t:
+        open_only_t()
+    cdef open_only_t open_only
 
 from splatter.cython_api.engine_api cimport prepare_object_batch as prepare_object_batch_cpp
 from splatter.cython_api.engine_api cimport group_objects as group_objects_cpp
@@ -174,28 +195,82 @@ cdef tuple _prepare_block_counts(list group):
     return group_vert_counts, group_edge_counts, group_vert_count, group_edge_count, num_objects
 
 
-cdef void _fill_block_geometry(list group, float[::1] group_verts_slice, uint32_t[::1] group_edges_slice):
+cdef void _fill_block_geometry(list group):
+    """Create shared memory segments and fill them with geometry data."""
     cdef uint32_t curr_group_vert_offset = 0
     cdef uint32_t curr_group_edge_offset = 0
     cdef object mesh
     cdef object obj
     cdef int obj_vert_count
     cdef int obj_edge_count
-    cdef object verts_slice
-    cdef object edges_slice
+    cdef uint32_t total_verts = 0
+    cdef uint32_t total_edges = 0
+
+    # Calculate total sizes needed
     for obj in group:
-        # obj.rotation_mode = 'QUATERNION'
         mesh = obj.data
-        obj_vert_count = len(mesh.vertices)
-        if obj_vert_count:
-            verts_slice = group_verts_slice[curr_group_vert_offset:curr_group_vert_offset + obj_vert_count * 3]
-            mesh.vertices.foreach_get("co", verts_slice)
-            curr_group_vert_offset += obj_vert_count * 3
-        obj_edge_count = len(mesh.edges)
-        if obj_edge_count:
-            edges_slice = group_edges_slice[curr_group_edge_offset:curr_group_edge_offset + obj_edge_count * 2]
-            mesh.edges.foreach_get("vertices", edges_slice)
-            curr_group_edge_offset += obj_edge_count * 2
+        total_verts += len(mesh.vertices)
+        total_edges += len(mesh.edges)
+
+    # Generate unique segment names
+    cdef str verts_segment_name = f"splatter_verts_{uuid.uuid4().hex}"
+    cdef str edges_segment_name = f"splatter_edges_{uuid.uuid4().hex}"
+
+    # Calculate memory sizes (3 floats per vertex, 2 uint32 per edge)
+    cdef size_t verts_size = total_verts * 3 * sizeof(float)
+    cdef size_t edges_size = total_edges * 2 * sizeof(uint32_t)
+
+    # Create shared memory segments
+    cdef managed_shared_memory* verts_segment = NULL
+    cdef managed_shared_memory* edges_segment = NULL
+    cdef float* verts_ptr
+    cdef uint32_t* edges_ptr
+    cdef uint32_t vert_offset = 0
+    cdef uint32_t edge_offset = 0
+    cdef object verts_data
+    cdef object edges_data
+    cdef float[::1] verts_view
+    cdef uint32_t[::1] edges_view
+
+    try:
+        verts_segment = new managed_shared_memory(create_only, verts_segment_name.encode('utf-8'), verts_size + 1024)  # Extra space for overhead
+        edges_segment = new managed_shared_memory(create_only, edges_segment_name.encode('utf-8'), edges_size + 1024)
+
+        # Allocate memory in segments
+        verts_ptr = <float*> verts_segment.allocate(verts_size)
+        edges_ptr = <uint32_t*> edges_segment.allocate(edges_size)
+
+        # Fill the shared memory with geometry data
+        for obj in group:
+            mesh = obj.data
+            obj_vert_count = len(mesh.vertices)
+            obj_edge_count = len(mesh.edges)
+
+            if obj_vert_count > 0:
+                # Get vertex coordinates directly into shared memory
+                verts_data = np.empty(obj_vert_count * 3, dtype=np.float32)
+                mesh.vertices.foreach_get("co", verts_data)
+                # Copy to shared memory
+                verts_view = verts_data
+                memcpy(&verts_ptr[vert_offset], &verts_view[0], obj_vert_count * 3 * sizeof(float))
+                vert_offset += obj_vert_count * 3
+
+            if obj_edge_count > 0:
+                # Get edge indices directly into shared memory
+                edges_data = np.empty(obj_edge_count * 2, dtype=np.uint32)
+                mesh.edges.foreach_get("vertices", edges_data)
+                # Copy to shared memory
+                edges_view = edges_data
+                memcpy(&edges_ptr[edge_offset], &edges_view[0], obj_edge_count * 2 * sizeof(uint32_t))
+                edge_offset += obj_edge_count * 2
+
+    except:
+        # Clean up on error
+        if verts_segment != NULL:
+            del verts_segment
+        if edges_segment != NULL:
+            del edges_segment
+        raise
 
 
 cdef tuple _compute_transforms(list group, uint32_t num_objects):
@@ -231,20 +306,10 @@ cdef tuple _compute_transforms(list group, uint32_t num_objects):
 
 def align_to_axes_batch(list selected_objects):
     start_prep = time.perf_counter()
-    cdef cnp.ndarray all_verts
-    cdef cnp.ndarray all_edges
-
     cdef list batch_items = []
     cdef list all_original_rots = []
-    
     cdef list all_offsets = []
-
     cdef list all_scales = []
-
-    cdef cnp.ndarray vert_counts_arr
-    cdef cnp.ndarray edge_counts_arr
-    cdef Py_ssize_t blocks_len
-    cdef Py_ssize_t out_len
     cdef list valid_parent_groups = []
 
     # Collect selection into groups and individuals and precompute totals
@@ -255,8 +320,8 @@ def align_to_axes_batch(list selected_objects):
     mesh_groups, parent_groups, total_verts, total_edges = aggregate_object_groups(selected_objects)
 
     # Allocate flat buffers
-    all_verts = np.empty((total_verts * 3), dtype=np.float32)
-    all_edges = np.empty((total_edges * 2), dtype=np.uint32)
+    cdef cnp.ndarray all_verts
+    cdef cnp.ndarray all_edges
 
     cdef uint32_t curr_all_verts_offset = 0
     cdef uint32_t curr_all_edges_offset = 0
@@ -279,25 +344,6 @@ def align_to_axes_batch(list selected_objects):
     cdef uint32_t group_vert_count
     cdef uint32_t group_edge_count
     cdef uint32_t num_objects
-    cdef uint32_t[::1] obj_vert_counts_view
-    cdef uint32_t[::1] obj_edge_counts_view
-    cdef uint32_t *obj_vert_counts_ptr
-    cdef uint32_t *obj_edge_counts_ptr
-    cdef float[::1] group_verts_slice
-    cdef uint32_t[::1] group_edges_slice
-    cdef float[::1] rotations_view
-    cdef float[::1] scales_view
-    cdef float[::1] offsets_view
-    cdef Vec3* group_verts_slice_ptr
-    cdef uVec2i* group_edges_slice_ptr
-    cdef Quaternion* rotations_ptr
-    cdef Vec3* offsets_ptr
-    cdef Vec3* scales_ptr
-    cdef Vec3* offsets_group_ptr
-    cdef Quaternion rot_cpp
-    cdef uint32_t group_size
-    cdef object obj
-    cdef float[::1] offsets_mv
 
     for idx, group in enumerate(mesh_groups):
         obj_vert_counts, obj_edge_counts, group_vert_count, group_edge_count, num_objects = _prepare_block_counts(group)
@@ -306,42 +352,15 @@ def align_to_axes_batch(list selected_objects):
         if group_vert_count == 0:
             continue
 
-        # Slices into the big buffers for this block
-        group_verts_slice = all_verts[curr_all_verts_offset:curr_all_verts_offset + group_vert_count * 3]
-        group_edges_slice = all_edges[curr_all_edges_offset:curr_all_edges_offset + group_edge_count * 2]
-        curr_all_verts_offset += group_vert_count * 3
-        curr_all_edges_offset += group_edge_count * 2
-
-        # Fill geometry for the block
-        _fill_block_geometry(group, group_verts_slice, group_edges_slice)
-
-        # Compute per-object transforms
-        rotations_view, scales_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
-
-        # Convert counts to typed pointers
-        obj_vert_counts_view = obj_vert_counts
-        obj_edge_counts_view = obj_edge_counts
-        obj_vert_counts_ptr = &obj_vert_counts_view[0]
-        obj_edge_counts_ptr = &obj_edge_counts_view[0]
-
-        # Convert slices to C pointers for C++ call
-        group_verts_slice_ptr = <Vec3*> &group_verts_slice[0]
-        group_edges_slice_ptr = <uVec2i*> &group_edges_slice[0]
-
-        # Derive transform pointers
-        rotations_ptr = <Quaternion*> &rotations_view[0]
-        offsets_ptr = <Vec3*> &offsets_view[0]
-        scales_ptr = <Vec3*> &scales_view[0]
-
-        # Apply transform/indexing in C++ for both groups and singletons
-        group_objects_cpp(group_verts_slice_ptr, group_edges_slice_ptr, obj_vert_counts_ptr, obj_edge_counts_ptr, offsets_ptr, rotations_ptr, scales_ptr, num_objects)
+        # Create shared memory segments and fill with geometry
+        _fill_block_geometry(group)
 
         # Record counts and mapping
         vert_counts_arr[out_len] = group_vert_count
         edge_counts_arr[out_len] = group_edge_count
-        
+
         valid_parent_groups.append(parent_groups[idx])
-        
+
         out_len += 1
 
     # Resize arrays to actual number of non-empty blocks
@@ -353,6 +372,7 @@ def align_to_axes_batch(list selected_objects):
     cdef float[::1] parent_offsets_view
     cdef Vec3 parent_ref_location
     cdef list all_ref_locations = []
+    cdef Quaternion rot_cpp
 
     for group in valid_parent_groups:
         parent_rotations_view, parent_scales_view, parent_offsets_view, parent_ref_location = _compute_transforms(group, len(group))
@@ -372,6 +392,11 @@ def align_to_axes_batch(list selected_objects):
 
     start_alignment = time.perf_counter()
 
+    # For now, we'll need to create temporary numpy arrays for the C++ function call
+    # In the future, this will be replaced by subprocess communication
+    all_verts = np.empty((total_verts * 3), dtype=np.float32)
+    all_edges = np.empty((total_edges * 2), dtype=np.uint32)
+
     # Call batched C++ function to compute group rotations
     rots, _ = align_min_bounds(all_verts, all_edges, vert_counts_arr, edge_counts_arr)
 
@@ -380,6 +405,10 @@ def align_to_axes_batch(list selected_objects):
     cdef Py_ssize_t i, j
     cdef float rx, ry, rz
     cdef tuple ref_loc_tup
+    cdef float[::1] offsets_mv
+    cdef Vec3* offsets_group_ptr
+    cdef uint32_t group_size
+
     for i in range(len(batch_items)):
         # Rotate this group's offsets in-place using C++ for speed
         group = batch_items[i]
@@ -399,5 +428,5 @@ def align_to_axes_batch(list selected_objects):
 
     end_alignment = time.perf_counter()
     print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
-    
+
     return rots, locs, batch_items, all_original_rots, all_ref_locations
