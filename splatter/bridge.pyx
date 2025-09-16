@@ -303,7 +303,7 @@ def align_to_axes_batch(list selected_objects):
     mesh_groups, parent_groups, total_verts, total_edges, total_objects = aggregate_object_groups(selected_objects)
 
     # Create shared memory segments and numpy arrays
-    (all_verts_mv, all_edges_mv, vert_counts_mv, edge_counts_mv, num_objects_mv) = create_shared_memory_arrays(
+    all_verts_mv, all_edges_mv, vert_counts_mv, edge_counts_mv, num_objects_mv = create_shared_memory_arrays(
          total_verts, total_edges, total_objects, mesh_groups)
 
     cdef uint32_t curr_all_verts_offset = 0
@@ -353,7 +353,7 @@ def align_to_axes_batch(list selected_objects):
 
         batch_items.append(group)
         for obj in group:
-            obj.rotation_mode = 'QUATERNION'
+            obj.rotation_mode = 'QUATERNION' 
             all_original_rots.append(obj.rotation_quaternion)
 
     end_processing = time.perf_counter()
