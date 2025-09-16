@@ -292,7 +292,6 @@ def align_to_axes_batch(list selected_objects):
     cdef list batch_items = []
     cdef list all_original_rots = []
     cdef list all_offsets = []
-    cdef list all_scales = []
 
     # Collect selection into groups and individuals and precompute totals
     cdef list mesh_groups
@@ -351,7 +350,6 @@ def align_to_axes_batch(list selected_objects):
         # Store reference location as a plain tuple for fast numeric ops later
         all_ref_locations.append((parent_ref_location.x, parent_ref_location.y, parent_ref_location.z))
         all_offsets.append(parent_offsets_view)
-        all_scales.append(parent_scales_view)
 
         batch_items.append(group)
         for obj in group:
