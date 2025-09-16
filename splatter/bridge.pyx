@@ -336,6 +336,8 @@ def align_to_axes_batch(list selected_objects):
 
         obj_offset += num_objects
 
+        rotations_view, scales_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
+
     cdef float[::1] parent_rotations_view
     cdef float[::1] parent_scales_view
     cdef float[::1] parent_offsets_view
