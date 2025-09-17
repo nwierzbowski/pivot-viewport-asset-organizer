@@ -202,18 +202,46 @@ cdef tuple create_shared_memory_arrays(uint32_t total_verts, uint32_t total_edge
 
     cdef cnp.ndarray all_verts = np.ndarray((verts_size // 4,), dtype=np.float32, buffer=verts_shm.buf)
     cdef cnp.ndarray all_edges = np.ndarray((edges_size // 4,), dtype=np.uint32, buffer=edges_shm.buf)
-    cdef cnp.ndarray rotations = np.fromiter((component for group in mesh_groups for obj in group for component in obj.matrix_world.to_3x3().to_quaternion()), dtype=np.float32, count=total_objects*4)
-    cdef cnp.ndarray scales = np.fromiter((component for group in mesh_groups for obj in group for component in obj.matrix_world.to_3x3().to_scale()), dtype=np.float32, count=total_objects*3)
-    cdef cnp.ndarray offsets = np.fromiter((component for group in mesh_groups for obj in group for component in obj.matrix_world.translation.to_tuple()), dtype=np.float32, count=total_objects*3)
+    cdef cnp.ndarray rotations = np.ndarray((rotations_size // 4,), dtype=np.float32, buffer=rotations_shm.buf)
+    cdef cnp.ndarray scales = np.ndarray((scales_size // 4,), dtype=np.float32, buffer=scales_shm.buf)
+    cdef cnp.ndarray offsets = np.ndarray((offsets_size // 4,), dtype=np.float32, buffer=offsets_shm.buf)
     cdef cnp.ndarray vert_counts = np.fromiter((len(obj.data.vertices) for group in mesh_groups for obj in group), dtype=np.uint32, count=total_objects)
     cdef cnp.ndarray edge_counts = np.fromiter((len(obj.data.edges) for group in mesh_groups for obj in group), dtype=np.uint32, count=total_objects)
     cdef cnp.ndarray object_counts = np.fromiter((len(group) for group in mesh_groups), dtype=np.uint32, count=num_groups)
 
+    # Fill transform arrays
+    cdef size_t idx_rot = 0
+    cdef size_t idx_scale = 0
+    cdef size_t idx_offset = 0
+    cdef object quat
+    cdef object scale_vec
+    cdef object trans_vec
+    cdef list group
+    cdef object obj
+    for group in mesh_groups:
+        for obj in group:
+            quat = obj.matrix_world.to_3x3().to_quaternion()
+            rotations[idx_rot] = quat.w
+            rotations[idx_rot + 1] = quat.x
+            rotations[idx_rot + 2] = quat.y
+            rotations[idx_rot + 3] = quat.z
+            idx_rot += 4
+
+            scale_vec = obj.matrix_world.to_3x3().to_scale()
+            scales[idx_scale] = scale_vec.x
+            scales[idx_scale + 1] = scale_vec.y
+            scales[idx_scale + 2] = scale_vec.z
+            idx_scale += 3
+
+            trans_vec = obj.matrix_world.translation
+            offsets[idx_offset] = trans_vec.x
+            offsets[idx_offset + 1] = trans_vec.y
+            offsets[idx_offset + 2] = trans_vec.z
+            idx_offset += 3
+
     # Fill geometry arrays
     cdef uint32_t curr_verts_offset = 0
     cdef uint32_t curr_edges_offset = 0
-    cdef list group
-    cdef object obj
     cdef object mesh
     cdef uint32_t obj_vert_count
     cdef uint32_t obj_edge_count
@@ -337,6 +365,7 @@ def align_to_axes_batch(list selected_objects):
     cdef tuple ref_loc_tup
     cdef Vec3* offsets_group_ptr
     cdef uint32_t group_size
+    cdef float[::1] parent_offsets_mv
 
     for i in range(len(batch_items)):
         # Rotate this group's offsets in-place using C++ for speed
