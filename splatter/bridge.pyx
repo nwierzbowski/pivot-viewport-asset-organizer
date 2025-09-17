@@ -209,17 +209,26 @@ cdef tuple create_shared_memory_arrays(uint32_t total_verts, uint32_t total_edge
     cdef cnp.ndarray edge_counts = np.fromiter((len(obj.data.edges) for group in mesh_groups for obj in group), dtype=np.uint32, count=total_objects)
     cdef cnp.ndarray object_counts = np.fromiter((len(group) for group in mesh_groups), dtype=np.uint32, count=num_groups)
 
-    # Fill transform arrays
+    # Fill transform and geometry arrays in a single pass
     cdef size_t idx_rot = 0
     cdef size_t idx_scale = 0
     cdef size_t idx_offset = 0
+    cdef uint32_t curr_verts_offset = 0
+    cdef uint32_t curr_edges_offset = 0
     cdef object quat
     cdef object scale_vec
     cdef object trans_vec
-    cdef list group
-    cdef object obj
+    cdef object mesh
+    cdef uint32_t obj_vert_count
+    cdef uint32_t obj_edge_count
+    cdef uint32_t vert_offset
+    cdef uint32_t edge_offset
+
     for group in mesh_groups:
+        vert_offset = 0
+        edge_offset = 0
         for obj in group:
+            # Fill transforms
             quat = obj.matrix_world.to_3x3().to_quaternion()
             rotations[idx_rot] = quat.w
             rotations[idx_rot + 1] = quat.x
@@ -239,19 +248,7 @@ cdef tuple create_shared_memory_arrays(uint32_t total_verts, uint32_t total_edge
             offsets[idx_offset + 2] = trans_vec.z
             idx_offset += 3
 
-    # Fill geometry arrays
-    cdef uint32_t curr_verts_offset = 0
-    cdef uint32_t curr_edges_offset = 0
-    cdef object mesh
-    cdef uint32_t obj_vert_count
-    cdef uint32_t obj_edge_count
-    cdef uint32_t vert_offset
-    cdef uint32_t edge_offset
-
-    for group in mesh_groups:
-        vert_offset = 0
-        edge_offset = 0
-        for obj in group:
+            # Fill geometry
             mesh = obj.data
             obj_vert_count = len(mesh.vertices)
             obj_edge_count = len(mesh.edges)
