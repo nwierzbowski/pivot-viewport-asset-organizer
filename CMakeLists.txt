@@ -84,34 +84,29 @@ FetchContent_MakeAvailable(Eigen)
 target_link_libraries(splatter_engine_core PUBLIC Eigen3::Eigen)
 target_compile_definitions(splatter_engine_core PUBLIC $<$<CONFIG:Release>:NDEBUG>)
 
-# Optional Boost.Interprocess for shared memory (header-only usage)
-option(SPLATTER_USE_BOOST_IPC "Enable Boost.Interprocess for shared memory abstractions" ON)
-if(SPLATTER_USE_BOOST_IPC)
-    # Suppress FindBoost deprecation warning
-    cmake_policy(SET CMP0167 NEW)
-    # Try system Boost first (quiet to avoid noise if not found)
-    find_package(Boost 1.70 QUIET COMPONENTS interprocess)
-    if(Boost_FOUND)
-        target_link_libraries(splatter_engine_core PUBLIC Boost::interprocess)
-        message(STATUS "Using system Boost.Interprocess")
-    else()
-        # Fallback: fetch Boost via FetchContent (header-only)
-        message(STATUS "Boost.Interprocess not found; fetching via FetchContent")
-        set(BOOST_VERSION 1.83.0 CACHE STRING "Boost release version to fetch")
-        string(REPLACE "." "_" BOOST_VERSION_U ${BOOST_VERSION})
-        include(FetchContent)
-        FetchContent_Declare(
-            boost_ext
-            URL https://archives.boost.io/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION_U}.tar.gz
-            DOWNLOAD_EXTRACT_TIMESTAMP OFF
-        )
-        FetchContent_MakeAvailable(boost_ext)
-        target_include_directories(splatter_engine_core PUBLIC ${boost_ext_SOURCE_DIR})
-    endif()
-    target_compile_definitions(splatter_engine_core PUBLIC SPLATTER_HAVE_BOOST_IPC=1)
+# Required Boost.Interprocess for shared memory
+# Suppress FindBoost deprecation warning
+cmake_policy(SET CMP0167 NEW)
+# Try system Boost first
+find_package(Boost 1.70 QUIET COMPONENTS interprocess)
+if(Boost_FOUND)
+    target_link_libraries(splatter_engine_core PUBLIC Boost::interprocess)
+    message(STATUS "Using system Boost.Interprocess")
 else()
-    target_compile_definitions(splatter_engine_core PUBLIC SPLATTER_HAVE_BOOST_IPC=0)
+    # Fallback: fetch Boost via FetchContent (required)
+    message(STATUS "Boost.Interprocess not found; fetching via FetchContent")
+    set(BOOST_VERSION 1.83.0 CACHE STRING "Boost release version to fetch")
+    string(REPLACE "." "_" BOOST_VERSION_U ${BOOST_VERSION})
+    include(FetchContent)
+    FetchContent_Declare(
+        boost_ext
+        URL https://archives.boost.io/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION_U}.tar.gz
+        DOWNLOAD_EXTRACT_TIMESTAMP OFF
+    )
+    FetchContent_MakeAvailable(boost_ext)
+    target_include_directories(splatter_engine_core PUBLIC ${boost_ext_SOURCE_DIR})
 endif()
+target_compile_definitions(splatter_engine_core PUBLIC SPLATTER_HAVE_BOOST_IPC=1)
 
 # IPO / LTO when available
 include(CheckIPOSupported)
