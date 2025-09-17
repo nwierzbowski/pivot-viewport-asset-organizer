@@ -1,8 +1,29 @@
-// Minimal JSON-over-stdin/stdout IPC loop with Boost.Interprocess shared memory for large data.
-// Protocol: JSON control messages; large arrays via shared memory segments.
-// Request: {"id":N, "op":"prepare", "shm_verts":"segment_name", "shm_edges":"segment_name", "shm_rotations":"segment_name", "shm_scales":"segment_name", "shm_offsets":"segment_name", "vert_counts":[...], "edge_counts":[...], "object_counts":[...]}
-// Response: {"id":N, "ok":true, "rots":[...], "trans":[...]} or error.
-// Shared memory: Python creates segments, engine maps them read-only, processes in-place.
+/**
+ * @file main.cpp
+ * @brief Main entry point for the Splatter Engine IPC server.
+ *
+ * This program implements a minimal IPC server that communicates with a Python client
+ * using JSON messages over stdin/stdout. It leverages Boost.Interprocess for efficient
+ * handling of large data arrays via shared memory segments to avoid copying overhead.
+ *
+ * @section Protocol
+ * The communication protocol uses JSON for control messages and shared memory for data:
+ * - **Request Format**: {"id": N, "op": "prepare", "shm_verts": "segment_name", ...}
+ *   - id: Unique request identifier
+ *   - op: Operation type (currently only "prepare" is supported)
+ *   - shm_*: Shared memory segment names for vertices, edges, rotations, scales, offsets
+ *   - *_counts: Arrays specifying counts for vertices, edges, and objects per batch
+ * - **Response Format**: {"id": N, "ok": true, "rots": [...], "trans": [...]} or error
+ * - **Shared Memory**: Python creates read-write segments; engine maps them read-only for processing
+ *
+ * @section Dependencies
+ * - Boost.Interprocess for shared memory management
+ * - Standard C++ libraries for JSON parsing and utilities
+ * - Custom engine.h for core processing logic
+ *
+ * @author [Your Name or Team]
+ * @date [Date]
+ */
 
 #include <iostream>
 #include <string>
@@ -19,6 +40,12 @@
 #include <numeric> // for std::accumulate
 
 // Helper functions for JSON control
+
+/**
+ * @brief Splits a JSON object string into top-level fields, handling nested structures.
+ * @param obj The JSON object string.
+ * @return Vector of field strings.
+ */
 static std::vector<std::string> split_top_level_fields(const std::string &obj)
 {
     std::vector<std::string> fields;
@@ -87,6 +114,12 @@ static std::vector<std::string> split_top_level_fields(const std::string &obj)
     return fields;
 }
 
+/**
+ * @brief Extracts the value for a given key from a JSON object string.
+ * @param line The JSON string.
+ * @param key The key to find.
+ * @return Optional string value if found.
+ */
 static std::optional<std::string> get_value(const std::string &line, const std::string &key)
 {
     auto fields = split_top_level_fields(line);
@@ -107,6 +140,12 @@ static std::optional<std::string> get_value(const std::string &line, const std::
     return std::nullopt;
 }
 
+/**
+ * @brief Parses a JSON array string into a vector of uint32_t.
+ * @param jsonArr The JSON array string.
+ * @param out The output vector.
+ * @return True if parsing succeeded.
+ */
 static bool parse_uint_array(const std::string &jsonArr, std::vector<uint32_t> &out)
 {
     if (jsonArr.empty())
@@ -151,11 +190,24 @@ static bool parse_uint_array(const std::string &jsonArr, std::vector<uint32_t> &
     return true;
 }
 
+/**
+ * @brief Sends an error response to stdout.
+ * @param id Request ID.
+ * @param msg Error message.
+ */
 static void respond_error(int id, const std::string &msg)
 {
     std::cout << '{' << "\"id\":" << id << ",\"ok\":false,\"error\":\"" << msg << "\"}" << std::endl;
 }
 
+/**
+ * @brief Maps a shared memory segment for read-only access.
+ * @param shm_name Name of the shared memory segment.
+ * @param expected_size Expected size in bytes.
+ * @param type_name Descriptive name for error messages.
+ * @return Pointer to the mapped memory.
+ * @throws std::runtime_error if size mismatch.
+ */
 inline void *map_shared_memory(const std::string &shm_name, uint32_t expected_size, const std::string &type_name)
 {
     boost::interprocess::shared_memory_object obj(boost::interprocess::open_only, shm_name.c_str(), boost::interprocess::read_only);
@@ -167,6 +219,118 @@ inline void *map_shared_memory(const std::string &shm_name, uint32_t expected_si
     return region.get_address();
 }
 
+/**
+ * @brief Handles the "prepare" operation by parsing input, mapping shared memory, and processing objects.
+ * @param id Request ID for response correlation.
+ * @param line The JSON input line containing the request.
+ */
+void handle_prepare(int id, const std::string &line)
+{
+    std::string shm_verts, shm_edges, shm_rotations, shm_scales, shm_offsets;
+    std::vector<uint32_t> vertCounts, edgeCounts, objectCounts;
+
+    // Parse required string fields
+    std::vector<std::pair<std::string, std::string *>> stringFields = {
+        {"shm_verts", &shm_verts},
+        {"shm_edges", &shm_edges},
+        {"shm_rotations", &shm_rotations},
+        {"shm_scales", &shm_scales},
+        {"shm_offsets", &shm_offsets}};
+    for (auto &[key, ptr] : stringFields)
+    {
+        if (auto v = get_value(line, key))
+        {
+            *ptr = *v;
+        }
+        else
+        {
+            respond_error(id, "missing " + key);
+            return;
+        }
+    }
+
+    // Parse required array fields
+    std::vector<std::pair<std::string, std::vector<uint32_t> *>> arrayFields = {
+        {"vert_counts", &vertCounts},
+        {"edge_counts", &edgeCounts},
+        {"object_counts", &objectCounts}};
+    for (auto &[key, ptr] : arrayFields)
+    {
+        if (auto v = get_value(line, key))
+        {
+            if (!parse_uint_array(*v, *ptr))
+            {
+                respond_error(id, "invalid " + key);
+                return;
+            }
+        }
+        else
+        {
+            respond_error(id, "missing " + key);
+            return;
+        }
+    }
+
+    uint32_t num_objects = static_cast<uint32_t>(vertCounts.size());
+    if (num_objects == 0)
+    {
+        std::cout << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":[],\"trans\":[]}" << std::endl;
+        return;
+    }
+    if (edgeCounts.size() != num_objects)
+    {
+        respond_error(id, "edge_counts size mismatch");
+        return;
+    }
+
+    // Calculate totals and expected sizes
+    uint32_t total_verts = std::accumulate(vertCounts.begin(), vertCounts.end(), 0U);
+    uint32_t total_edges = std::accumulate(edgeCounts.begin(), edgeCounts.end(), 0U);
+    uint32_t expected_verts_size = total_verts * sizeof(Vec3);
+    uint32_t expected_edges_size = total_edges * sizeof(uVec2i);
+    uint32_t expected_rotations_size = num_objects * sizeof(Quaternion);
+    uint32_t expected_scales_size = num_objects * sizeof(Vec3);
+    uint32_t expected_offsets_size = num_objects * sizeof(Vec3);
+
+    // Map shared memory segments
+    const Vec3 *verts_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_verts, expected_verts_size, "verts"));
+    const uVec2i *edges_ptr = static_cast<const uVec2i *>(map_shared_memory(shm_edges, expected_edges_size, "edges"));
+    const Quaternion *rotations_ptr = static_cast<const Quaternion *>(map_shared_memory(shm_rotations, expected_rotations_size, "rotations"));
+    const Vec3 *scales_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_scales, expected_scales_size, "scales"));
+    const Vec3 *offsets_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_offsets, expected_offsets_size, "offsets"));
+
+    // Prepare output vectors
+    std::vector<Quaternion> outR(num_objects);
+    std::vector<Vec3> outT(num_objects);
+
+    // Process the batch
+    prepare_object_batch(verts_ptr, edges_ptr, vertCounts.data(), edgeCounts.data(), num_objects, outR.data(), outT.data());
+
+    // Build JSON response
+    std::ostringstream rotsJson, transJson;
+    rotsJson << '[';
+    for (size_t i = 0; i < outR.size(); ++i)
+    {
+        if (i)
+            rotsJson << ',';
+        rotsJson << '[' << outR[i].w << ',' << outR[i].x << ',' << outR[i].y << ',' << outR[i].z << ']';
+    }
+    rotsJson << ']';
+    transJson << '[';
+    for (size_t i = 0; i < outT.size(); ++i)
+    {
+        if (i)
+            transJson << ',';
+        transJson << '[' << outT[i].x << ',' << outT[i].y << ',' << outT[i].z << ']';
+    }
+    transJson << ']';
+    std::cout << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":" << rotsJson.str() << ",\"trans\":" << transJson.str() << '}' << std::endl;
+}
+
+/**
+ * @brief Main entry point: runs the IPC server loop.
+ * Reads JSON requests from stdin, processes them, and writes responses to stdout.
+ */
 int main(int argc, char **argv)
 {
     std::cerr << "[engine] IPC server starting" << std::endl;
@@ -174,9 +338,10 @@ int main(int argc, char **argv)
     while (std::getline(std::cin, line))
     {
         if (line.empty())
-            continue;
+            continue; // Skip empty lines
         if (line == "__quit__")
-            break;
+            break; // Exit on quit signal
+        // Parse request ID and operation
         auto idVal = get_value(line, "id");
         int id = idVal ? std::stoi(*idVal) : -1;
         auto opVal = get_value(line, "op");
@@ -187,114 +352,13 @@ int main(int argc, char **argv)
         }
         std::string op = *opVal;
         if (!op.empty() && op.front() == '"' && op.back() == '"')
-            op = op.substr(1, op.size() - 2);
+            op = op.substr(1, op.size() - 2); // Remove quotes
 
         try
         {
             if (op == "prepare")
             {
-                std::string shm_verts, shm_edges, shm_rotations, shm_scales, shm_offsets;
-                std::vector<uint32_t> vertCounts, edgeCounts, objectCounts;
-
-                bool parsed = true;
-
-                // Parse required string fields
-                std::vector<std::pair<std::string, std::string *>> stringFields = {
-                    {"shm_verts", &shm_verts},
-                    {"shm_edges", &shm_edges},
-                    {"shm_rotations", &shm_rotations},
-                    {"shm_scales", &shm_scales},
-                    {"shm_offsets", &shm_offsets}};
-                for (auto &[key, ptr] : stringFields)
-                {
-                    if (auto v = get_value(line, key))
-                    {
-                        *ptr = *v;
-                    }
-                    else
-                    {
-                        respond_error(id, "missing " + key);
-                        parsed = false;
-                        break;
-                    }
-                }
-
-                if (!parsed)
-                    continue;
-
-                // Parse required array fields
-                std::vector<std::pair<std::string, std::vector<uint32_t> *>> arrayFields = {
-                    {"vert_counts", &vertCounts},
-                    {"edge_counts", &edgeCounts},
-                    {"object_counts", &objectCounts}};
-                for (auto &[key, ptr] : arrayFields)
-                {
-                    if (auto v = get_value(line, key))
-                    {
-                        if (!parse_uint_array(*v, *ptr))
-                        {
-                            respond_error(id, "invalid " + key);
-                            parsed = false;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        respond_error(id, "missing " + key);
-                        parsed = false;
-                        break;
-                    }
-                }
-
-                if (!parsed)
-                    continue;
-                uint32_t num_objects = static_cast<uint32_t>(vertCounts.size());
-                if (num_objects == 0)
-                {
-                    std::cout << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":[],\"trans\":[]}" << std::endl;
-                    continue;
-                }
-                if (edgeCounts.size() != num_objects)
-                {
-                    respond_error(id, "edge_counts size mismatch");
-                    continue;
-                }
-
-                uint32_t total_verts = std::accumulate(vertCounts.begin(), vertCounts.end(), 0U);
-                uint32_t total_edges = std::accumulate(edgeCounts.begin(), edgeCounts.end(), 0U);
-                uint32_t expected_verts_size = total_verts * sizeof(Vec3);
-                uint32_t expected_edges_size = total_edges * sizeof(uVec2i);
-                uint32_t expected_rotations_size = num_objects * sizeof(Quaternion);
-                uint32_t expected_scales_size = num_objects * sizeof(Vec3);
-                uint32_t expected_offsets_size = num_objects * sizeof(Vec3);
-
-                const Vec3 *verts_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_verts, expected_verts_size, "verts"));
-                const uVec2i *edges_ptr = static_cast<const uVec2i *>(map_shared_memory(shm_edges, expected_edges_size, "edges"));
-                const Quaternion *rotations_ptr = static_cast<const Quaternion *>(map_shared_memory(shm_rotations, expected_rotations_size, "rotations"));
-                const Vec3 *scales_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_scales, expected_scales_size, "scales"));
-                const Vec3 *offsets_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_offsets, expected_offsets_size, "offsets"));
-
-                std::vector<Quaternion> outR(num_objects);
-                std::vector<Vec3> outT(num_objects);
-                prepare_object_batch(verts_ptr, edges_ptr, vertCounts.data(), edgeCounts.data(), num_objects, outR.data(), outT.data());
-                std::ostringstream rotsJson, transJson;
-                rotsJson << '[';
-                for (size_t i = 0; i < outR.size(); ++i)
-                {
-                    if (i)
-                        rotsJson << ',';
-                    rotsJson << '[' << outR[i].w << ',' << outR[i].x << ',' << outR[i].y << ',' << outR[i].z << ']';
-                }
-                rotsJson << ']';
-                transJson << '[';
-                for (size_t i = 0; i < outT.size(); ++i)
-                {
-                    if (i)
-                        transJson << ',';
-                    transJson << '[' << outT[i].x << ',' << outT[i].y << ',' << outT[i].z << ']';
-                }
-                transJson << ']';
-                std::cout << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":" << rotsJson.str() << ",\"trans\":" << transJson.str() << '}' << std::endl;
+                handle_prepare(id, line);
             }
             else
             {
