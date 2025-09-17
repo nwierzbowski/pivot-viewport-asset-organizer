@@ -13,12 +13,10 @@
 
 #include "engine.h"
 
-#if SPLATTER_HAVE_BOOST_IPC
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include <numeric> // for std::accumulate
-#endif
 
 // Helper functions for JSON control
 static std::vector<std::string> split_top_level_fields(const std::string &obj)
@@ -158,6 +156,17 @@ static void respond_error(int id, const std::string &msg)
     std::cout << '{' << "\"id\":" << id << ",\"ok\":false,\"error\":\"" << msg << "\"}" << std::endl;
 }
 
+inline void *map_shared_memory(const std::string &shm_name, uint32_t expected_size, const std::string &type_name)
+{
+    boost::interprocess::shared_memory_object obj(boost::interprocess::open_only, shm_name.c_str(), boost::interprocess::read_only);
+    boost::interprocess::mapped_region region(obj, boost::interprocess::read_only);
+    if (region.get_size() < expected_size)
+    {
+        throw std::runtime_error(type_name + " shared memory size mismatch");
+    }
+    return region.get_address();
+}
+
 int main(int argc, char **argv)
 {
     std::cerr << "[engine] IPC server starting" << std::endl;
@@ -190,46 +199,55 @@ int main(int argc, char **argv)
                 bool parsed = true;
 
                 // Parse required string fields
-                std::vector<std::pair<std::string, std::string*>> stringFields = {
+                std::vector<std::pair<std::string, std::string *>> stringFields = {
                     {"shm_verts", &shm_verts},
                     {"shm_edges", &shm_edges},
                     {"shm_rotations", &shm_rotations},
                     {"shm_scales", &shm_scales},
-                    {"shm_offsets", &shm_offsets}
-                };
-                for (auto& [key, ptr] : stringFields) {
-                    if (auto v = get_value(line, key)) {
+                    {"shm_offsets", &shm_offsets}};
+                for (auto &[key, ptr] : stringFields)
+                {
+                    if (auto v = get_value(line, key))
+                    {
                         *ptr = *v;
-                    } else {
+                    }
+                    else
+                    {
                         respond_error(id, "missing " + key);
                         parsed = false;
                         break;
                     }
                 }
 
-                if (!parsed) continue;
+                if (!parsed)
+                    continue;
 
                 // Parse required array fields
-                std::vector<std::pair<std::string, std::vector<uint32_t>*>> arrayFields = {
+                std::vector<std::pair<std::string, std::vector<uint32_t> *>> arrayFields = {
                     {"vert_counts", &vertCounts},
                     {"edge_counts", &edgeCounts},
-                    {"object_counts", &objectCounts}
-                };
-                for (auto& [key, ptr] : arrayFields) {
-                    if (auto v = get_value(line, key)) {
-                        if (!parse_uint_array(*v, *ptr)) {
+                    {"object_counts", &objectCounts}};
+                for (auto &[key, ptr] : arrayFields)
+                {
+                    if (auto v = get_value(line, key))
+                    {
+                        if (!parse_uint_array(*v, *ptr))
+                        {
                             respond_error(id, "invalid " + key);
                             parsed = false;
                             break;
                         }
-                    } else {
+                    }
+                    else
+                    {
                         respond_error(id, "missing " + key);
                         parsed = false;
                         break;
                     }
                 }
 
-                if (!parsed) continue;
+                if (!parsed)
+                    continue;
                 uint32_t num_objects = static_cast<uint32_t>(vertCounts.size());
                 if (num_objects == 0)
                 {
@@ -246,25 +264,15 @@ int main(int argc, char **argv)
                 uint32_t total_edges = std::accumulate(edgeCounts.begin(), edgeCounts.end(), 0U);
                 uint32_t expected_verts_size = total_verts * sizeof(Vec3);
                 uint32_t expected_edges_size = total_edges * sizeof(uVec2i);
+                uint32_t expected_rotations_size = num_objects * sizeof(Quaternion);
+                uint32_t expected_scales_size = num_objects * sizeof(Vec3);
+                uint32_t expected_offsets_size = num_objects * sizeof(Vec3);
 
-#if SPLATTER_HAVE_BOOST_IPC
-                // Open and map verts shared memory
-                boost::interprocess::shared_memory_object verts_obj(boost::interprocess::open_only, shm_verts.c_str(), boost::interprocess::read_only);
-                boost::interprocess::mapped_region verts_region(verts_obj, boost::interprocess::read_only);
-                if (verts_region.get_size() < expected_verts_size) {
-                    respond_error(id, "verts shared memory size mismatch");
-                    continue;
-                }
-                const Vec3 *verts_ptr = static_cast<const Vec3*>(verts_region.get_address());
-
-                // Open and map edges shared memory
-                boost::interprocess::shared_memory_object edges_obj(boost::interprocess::open_only, shm_edges.c_str(), boost::interprocess::read_only);
-                boost::interprocess::mapped_region edges_region(edges_obj, boost::interprocess::read_only);
-                if (edges_region.get_size() < expected_edges_size) {
-                    respond_error(id, "edges shared memory size mismatch");
-                    continue;
-                }
-                const uVec2i *edges_ptr = static_cast<const uVec2i*>(edges_region.get_address());
+                const Vec3 *verts_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_verts, expected_verts_size, "verts"));
+                const uVec2i *edges_ptr = static_cast<const uVec2i *>(map_shared_memory(shm_edges, expected_edges_size, "edges"));
+                const Quaternion *rotations_ptr = static_cast<const Quaternion *>(map_shared_memory(shm_rotations, expected_rotations_size, "rotations"));
+                const Vec3 *scales_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_scales, expected_scales_size, "scales"));
+                const Vec3 *offsets_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_offsets, expected_offsets_size, "offsets"));
 
                 std::vector<Quaternion> outR(num_objects);
                 std::vector<Vec3> outT(num_objects);
@@ -287,9 +295,6 @@ int main(int argc, char **argv)
                 }
                 transJson << ']';
                 std::cout << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":" << rotsJson.str() << ",\"trans\":" << transJson.str() << '}' << std::endl;
-#else
-                respond_error(id, "Boost.Interprocess not available");
-#endif
             }
             else
             {
