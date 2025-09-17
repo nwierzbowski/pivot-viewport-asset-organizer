@@ -256,7 +256,7 @@ cdef tuple _fill_block_geometry(list group, float[::1] all_verts_mv, uint32_t[::
     return curr_verts_offset + vert_offset, curr_edges_offset + edge_offset
 
 
-cdef tuple _compute_transforms(list group, uint32_t num_objects):
+cdef tuple _compute_full_transforms(list group, uint32_t num_objects):
     cdef object first_obj = group[0]
     cdef cnp.ndarray rotations_array = np.fromiter(
         (component for obj in group for component in obj.matrix_world.to_3x3().to_quaternion()),
@@ -273,14 +273,26 @@ cdef tuple _compute_transforms(list group, uint32_t num_objects):
     cdef float[::1] scales_view = scales_array
 
     cdef cnp.ndarray offsets_array = np.fromiter(
-        (component for obj in group for component in (obj.matrix_world.translation - first_obj.matrix_world.translation).to_tuple()),
+        (component for obj in group for component in obj.matrix_world.translation.to_tuple()),
         dtype=np.float32,
         count=num_objects * 3,
     )
     cdef float[::1] offsets_view = offsets_array
 
     # Return memoryviews to keep arrays alive via references
-    return rotations_view, scales_view, offsets_view, Vec3(first_obj.matrix_world.translation.x, first_obj.matrix_world.translation.y, first_obj.matrix_world.translation.z)
+    return rotations_view, scales_view, offsets_view
+
+
+cdef tuple _compute_offset_transforms(list group, uint32_t num_objects):
+    cdef object first_obj = group[0]
+    cdef cnp.ndarray offsets_array = np.fromiter(
+        (component for obj in group for component in (obj.matrix_world.translation - first_obj.matrix_world.translation).to_tuple()),
+        dtype=np.float32,
+        count=num_objects * 3,
+    )
+    cdef float[::1] offsets_view = offsets_array
+
+    return offsets_view, Vec3(first_obj.matrix_world.translation.x, first_obj.matrix_world.translation.y, first_obj.matrix_world.translation.z)
 
 
 # -----------------------------
@@ -335,17 +347,15 @@ def align_to_axes_batch(list selected_objects):
 
         obj_offset += num_objects
 
-        rotations_view, scales_view, offsets_view, ref_location = _compute_transforms(group, num_objects)
+        rotations_view, scales_view, offsets_view = _compute_full_transforms(group, num_objects)
 
-    cdef float[::1] parent_rotations_view
-    cdef float[::1] parent_scales_view
     cdef float[::1] parent_offsets_view
     cdef Vec3 parent_ref_location
     cdef list all_ref_locations = []
     cdef Quaternion rot_cpp
 
     for group in parent_groups:
-        parent_rotations_view, parent_scales_view, parent_offsets_view, parent_ref_location = _compute_transforms(group, len(group))
+        parent_offsets_view, parent_ref_location = _compute_offset_transforms(group, len(group))
 
         # Store reference location as a plain tuple for fast numeric ops later
         all_ref_locations.append((parent_ref_location.x, parent_ref_location.y, parent_ref_location.z))
