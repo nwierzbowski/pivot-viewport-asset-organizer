@@ -111,13 +111,13 @@ class SplatterEngine:
         return self._is_running and self._process is not None and self._process.poll() is None
 
     def send_command(self, command_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Send a command to the engine and get response.
+        """Send a command to the engine and get the final response.
 
         Args:
             command_dict: Command to send as a dictionary
 
         Returns:
-            Dict containing the engine's response
+            Dict containing the engine's final response
 
         Raises:
             RuntimeError: If engine is not running or communication fails
@@ -131,13 +131,15 @@ class SplatterEngine:
             self._process.stdin.write(command_json)
             self._process.stdin.flush()
 
-            # Read response
-            response_line = self._process.stdout.readline().strip()
-            if not response_line:
-                raise RuntimeError("Engine process terminated unexpectedly")
+            # Read responses until we get the final one (with "ok")
+            while True:
+                response_line = self._process.stdout.readline().strip()
+                if not response_line:
+                    raise RuntimeError("Engine process terminated unexpectedly")
 
-            response = json.loads(response_line)
-            return response
+                response = json.loads(response_line)
+                if "ok" in response:
+                    return response
 
         except Exception as e:
             raise RuntimeError(f"Communication error: {e}")

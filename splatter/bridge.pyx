@@ -13,40 +13,42 @@ import multiprocessing.shared_memory as shared_memory
 import uuid
 
 
-from splatter.cython_api.engine_api cimport prepare_object_batch as prepare_object_batch_cpp
-from splatter.cython_api.engine_api cimport group_objects as group_objects_cpp
+# from splatter.cython_api.engine_api cimport prepare_object_batch as prepare_object_batch_cpp
+# from splatter.cython_api.engine_api cimport group_objects as group_objects_cpp
 from splatter.cython_api.engine_api cimport apply_rotation as apply_rotation_cpp
 
 from splatter.cython_api.vec_api cimport Vec3, uVec2i
 from splatter.cython_api.quaternion_api cimport Quaternion
 
+from splatter.engine import get_engine_communicator
 
-def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, uint32_t[::1] vert_counts, uint32_t[::1] edge_counts):
-    cdef uint32_t num_objects = vert_counts.shape[0]
-    if num_objects == 0 or verts_flat.shape[0] == 0:
-        return [], []
 
-    # Get direct pointers from memoryviews (no copy)
-    cdef uint32_t *vert_counts_ptr = &vert_counts[0]
-    cdef uint32_t *edge_counts_ptr = &edge_counts[0]
+# def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, uint32_t[::1] vert_counts, uint32_t[::1] edge_counts):
+#     cdef uint32_t num_objects = vert_counts.shape[0]
+#     if num_objects == 0 or verts_flat.shape[0] == 0:
+#         return [], []
 
-    cdef Vec3 *verts_ptr = <Vec3 *> &verts_flat[0]
-    cdef uVec2i *edges_ptr = <uVec2i *> &edges_flat[0]
+#     # Get direct pointers from memoryviews (no copy)
+#     cdef uint32_t *vert_counts_ptr = &vert_counts[0]
+#     cdef uint32_t *edge_counts_ptr = &edge_counts[0]
 
-    cdef Quaternion *out_rots = <Quaternion *> malloc(num_objects * sizeof(Quaternion))
-    cdef Vec3 *out_trans = <Vec3 *> malloc(num_objects * sizeof(Vec3))
+#     cdef Vec3 *verts_ptr = <Vec3 *> &verts_flat[0]
+#     cdef uVec2i *edges_ptr = <uVec2i *> &edges_flat[0]
 
-    with nogil:
-        prepare_object_batch_cpp(verts_ptr, edges_ptr, vert_counts_ptr, edge_counts_ptr, num_objects, out_rots, out_trans)
+#     cdef Quaternion *out_rots = <Quaternion *> malloc(num_objects * sizeof(Quaternion))
+#     cdef Vec3 *out_trans = <Vec3 *> malloc(num_objects * sizeof(Vec3))
 
-    # Convert results to Python lists
-    rots = [MathutilsQuaternion((out_rots[i].w, out_rots[i].x, out_rots[i].y, out_rots[i].z)) for i in range(num_objects)]
-    trans = [(out_trans[i].x, out_trans[i].y, out_trans[i].z) for i in range(num_objects)]
+#     with nogil:
+#         prepare_object_batch_cpp(verts_ptr, edges_ptr, vert_counts_ptr, edge_counts_ptr, num_objects, out_rots, out_trans)
 
-    free(out_rots)
-    free(out_trans)
+#     # Convert results to Python lists
+#     rots = [MathutilsQuaternion((out_rots[i].w, out_rots[i].x, out_rots[i].y, out_rots[i].z)) for i in range(num_objects)]
+#     trans = [(out_trans[i].x, out_trans[i].y, out_trans[i].z) for i in range(num_objects)]
 
-    return rots, trans
+#     free(out_rots)
+#     free(out_trans)
+
+#     return rots, trans
 
 
 # -----------------------------
@@ -176,8 +178,8 @@ def aggregate_object_groups(list selected_objects):
 # Helpers for shared memory
 # -----------------------------
 
-cdef tuple create_shared_memory_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups):
-    """Create shared memory segments and return memory views for numpy arrays backed by them."""
+cdef tuple create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups):
+    """Create shared memory segments and return shared memory objects, their names, and memory views for count arrays."""
     cdef uint32_t num_groups = len(mesh_groups)
     verts_size = total_verts * 3 * 4  # float32 = 4 bytes
     edges_size = total_edges * 2 * 4  # uint32 = 4 bytes
@@ -264,16 +266,15 @@ cdef tuple create_shared_memory_arrays(uint32_t total_verts, uint32_t total_edge
         curr_verts_offset += vert_offset
         curr_edges_offset += edge_offset
 
-    cdef float[::1] all_verts_mv = all_verts
-    cdef uint32_t[::1] all_edges_mv = all_edges
-    cdef float[::1] rotations_mv = rotations
-    cdef float[::1] scales_mv = scales
-    cdef float[::1] offsets_mv = offsets
     cdef uint32_t[::1] vert_counts_mv = vert_counts
     cdef uint32_t[::1] edge_counts_mv = edge_counts
     cdef uint32_t[::1] object_counts_mv = object_counts
 
-    return (all_verts_mv, all_edges_mv, rotations_mv, scales_mv, offsets_mv, vert_counts_mv, edge_counts_mv, object_counts_mv)
+    shm_objects = (verts_shm, edges_shm, rotations_shm, scales_shm, offsets_shm)
+    shm_names = (verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name)
+    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv)
+
+    return shm_objects, shm_names, count_memory_views
 
 
 cdef tuple _compute_offset_transforms(list group, uint32_t num_objects):
@@ -318,7 +319,13 @@ def align_to_axes_batch(list selected_objects):
     mesh_groups, parent_groups, total_verts, total_edges, total_objects = aggregate_object_groups(selected_objects)
 
     # Create shared memory segments and numpy arrays
-    all_verts_mv, all_edges_mv, rotations_mv, scales_mv, offsets_mv, vert_counts_mv, edge_counts_mv, object_counts_mv = create_shared_memory_arrays(total_verts, total_edges, total_objects, mesh_groups)
+    shm_objects, shm_names, count_memory_views = create_data_arrays(total_verts, total_edges, total_objects, mesh_groups)
+
+    verts_shm, edges_shm, rotations_shm, scales_shm, offsets_shm = shm_objects
+    verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
+    vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
+
+
 
     end_prep = time.perf_counter()
     print(f"Preparation time elapsed: {(end_prep - start_prep) * 1000:.2f}ms")
@@ -352,8 +359,23 @@ def align_to_axes_batch(list selected_objects):
 
     start_alignment = time.perf_counter()
 
-    # Call batched C++ function to compute object rotations
-    rots, _ = align_min_bounds(all_verts_mv, all_edges_mv, vert_counts_mv, edge_counts_mv)
+    # Send prepare op to engine
+    command = {
+        "id": 1,
+        "op": "prepare",
+        "shm_verts": verts_shm_name,
+        "shm_edges": edges_shm_name,
+        "shm_rotations": rotations_shm_name,
+        "shm_scales": scales_shm_name,
+        "shm_offsets": offsets_shm_name,
+        "vert_counts": list(vert_counts_mv),
+        "edge_counts": list(edge_counts_mv),
+        "object_counts": list(object_counts_mv)
+    }
+
+    engine = get_engine_communicator()
+    final_response = engine.send_command(command)
+    rots = [MathutilsQuaternion(r) for r in final_response["rots"]]
 
     # Compute new locations for each object using C++ rotation of offsets, then add ref location
     locs = []
@@ -380,6 +402,10 @@ def align_to_axes_batch(list selected_objects):
         rz = <float> ref_loc_tup[2]
         for j in range(len(group)):
             locs.append((rx + parent_offsets_mv[j * 3], ry + parent_offsets_mv[j * 3 + 1], rz + parent_offsets_mv[j * 3 + 2]))
+
+    # Unlink shared memory after processing
+    for shm in shm_objects:
+        shm.unlink()
 
     end_alignment = time.perf_counter()
     print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
