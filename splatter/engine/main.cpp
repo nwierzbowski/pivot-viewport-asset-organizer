@@ -14,7 +14,7 @@
  *   - shm_*: Shared memory segment names for vertices, edges, rotations, scales, offsets
  *   - *_counts: Arrays specifying counts for vertices, edges, and objects per batch
  * - **Response Format**: {"id": N, "ok": true, "rots": [...], "trans": [...]} or error
- * - **Shared Memory**: Python creates read-write segments; engine maps them read-only for processing
+ * - **Shared Memory**: Python creates read-write segments; engine maps them read-write for processing
  *
  * @section Dependencies
  * - Boost.Interprocess for shared memory management
@@ -203,7 +203,7 @@ static void respond_error(int id, const std::string &msg)
 }
 
 /**
- * @brief Maps a shared memory segment for read-only access.
+ * @brief Maps a shared memory segment for read-write access.
  * @param shm_name Name of the shared memory segment.
  * @param expected_size Expected size in bytes.
  * @param type_name Descriptive name for error messages.
@@ -216,8 +216,8 @@ inline boost::interprocess::mapped_region map_shared_memory(const std::string &s
     // Returning the mapped_region by value (move) ensures the mapping stays valid
     // for the caller's scope.
     boost::interprocess::shared_memory_object obj(
-        boost::interprocess::open_only, shm_name.c_str(), boost::interprocess::read_only);
-    boost::interprocess::mapped_region region(obj, boost::interprocess::read_only);
+        boost::interprocess::open_only, shm_name.c_str(), boost::interprocess::read_write);
+    boost::interprocess::mapped_region region(obj, boost::interprocess::read_write);
     if (region.get_size() < expected_size)
     {
         throw std::runtime_error(type_name + " shared memory size mismatch");
@@ -308,11 +308,11 @@ void handle_prepare(int id, const std::string &line)
     auto scales_region = map_shared_memory(shm_scales, expected_scales_size, "scales");
     auto offsets_region = map_shared_memory(shm_offsets, expected_offsets_size, "offsets");
 
-    const Vec3 *verts_ptr = static_cast<const Vec3 *>(verts_region.get_address());
-    const uVec2i *edges_ptr = static_cast<const uVec2i *>(edges_region.get_address());
-    const Quaternion *rotations_ptr = static_cast<const Quaternion *>(rotations_region.get_address());
-    const Vec3 *scales_ptr = static_cast<const Vec3 *>(scales_region.get_address());
-    const Vec3 *offsets_ptr = static_cast<const Vec3 *>(offsets_region.get_address());
+    Vec3 *verts_ptr = static_cast<Vec3 *>(verts_region.get_address());
+    uVec2i *edges_ptr = static_cast<uVec2i *>(edges_region.get_address());
+    Quaternion *rotations_ptr = static_cast<Quaternion *>(rotations_region.get_address());
+    Vec3 *scales_ptr = static_cast<Vec3 *>(scales_region.get_address());
+    Vec3 *offsets_ptr = static_cast<Vec3 *>(offsets_region.get_address());
 
     // Prepare output vectors
     std::vector<Quaternion> outR(num_objects);
