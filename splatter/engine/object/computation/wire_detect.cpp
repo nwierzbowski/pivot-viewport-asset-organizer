@@ -91,10 +91,10 @@ void select_wire_verts(
 
     // Print vertex_guess_indices
     // std::sort(vertex_guess_indices.begin(), vertex_guess_indices.end());
-    // std::cout << "Vertex Guess Indices: ";
+    // std::cerr << "Vertex Guess Indices: ";
     // for (uint32_t idx : vertex_guess_indices)
-    //     std::cout << idx << " ";
-    // std::cout << std::endl;
+    //     std::cerr << idx << " ";
+    // std::cerr << std::endl;
 
     float density = 0.f;
     if (!neighbor_sizes.empty())

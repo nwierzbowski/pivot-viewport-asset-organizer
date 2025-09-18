@@ -31,6 +31,8 @@
 #include <sstream>
 #include <cstdint>
 #include <optional>
+#include <csignal>
+#include <cstdlib>
 
 #include "engine.h"
 
@@ -208,15 +210,19 @@ static void respond_error(int id, const std::string &msg)
  * @return Pointer to the mapped memory.
  * @throws std::runtime_error if size mismatch.
  */
-inline void *map_shared_memory(const std::string &shm_name, uint32_t expected_size, const std::string &type_name)
+inline boost::interprocess::mapped_region map_shared_memory(const std::string &shm_name, uint32_t expected_size, const std::string &type_name)
 {
-    boost::interprocess::shared_memory_object obj(boost::interprocess::open_only, shm_name.c_str(), boost::interprocess::read_only);
+    // Note: We must keep the mapped_region alive while using the pointer it returns.
+    // Returning the mapped_region by value (move) ensures the mapping stays valid
+    // for the caller's scope.
+    boost::interprocess::shared_memory_object obj(
+        boost::interprocess::open_only, shm_name.c_str(), boost::interprocess::read_only);
     boost::interprocess::mapped_region region(obj, boost::interprocess::read_only);
     if (region.get_size() < expected_size)
     {
         throw std::runtime_error(type_name + " shared memory size mismatch");
     }
-    return region.get_address();
+    return region; // moved to caller
 }
 
 /**
@@ -295,12 +301,18 @@ void handle_prepare(int id, const std::string &line)
     uint32_t expected_scales_size = num_objects * sizeof(Vec3);
     uint32_t expected_offsets_size = num_objects * sizeof(Vec3);
 
-    // Map shared memory segments
-    const Vec3 *verts_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_verts, expected_verts_size, "verts"));
-    const uVec2i *edges_ptr = static_cast<const uVec2i *>(map_shared_memory(shm_edges, expected_edges_size, "edges"));
-    const Quaternion *rotations_ptr = static_cast<const Quaternion *>(map_shared_memory(shm_rotations, expected_rotations_size, "rotations"));
-    const Vec3 *scales_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_scales, expected_scales_size, "scales"));
-    const Vec3 *offsets_ptr = static_cast<const Vec3 *>(map_shared_memory(shm_offsets, expected_offsets_size, "offsets"));
+    // Map shared memory segments and keep regions alive in this scope
+    auto verts_region = map_shared_memory(shm_verts, expected_verts_size, "verts");
+    auto edges_region = map_shared_memory(shm_edges, expected_edges_size, "edges");
+    auto rotations_region = map_shared_memory(shm_rotations, expected_rotations_size, "rotations");
+    auto scales_region = map_shared_memory(shm_scales, expected_scales_size, "scales");
+    auto offsets_region = map_shared_memory(shm_offsets, expected_offsets_size, "offsets");
+
+    const Vec3 *verts_ptr = static_cast<const Vec3 *>(verts_region.get_address());
+    const uVec2i *edges_ptr = static_cast<const uVec2i *>(edges_region.get_address());
+    const Quaternion *rotations_ptr = static_cast<const Quaternion *>(rotations_region.get_address());
+    const Vec3 *scales_ptr = static_cast<const Vec3 *>(scales_region.get_address());
+    const Vec3 *offsets_ptr = static_cast<const Vec3 *>(offsets_region.get_address());
 
     // Prepare output vectors
     std::vector<Quaternion> outR(num_objects);
@@ -327,6 +339,8 @@ void handle_prepare(int id, const std::string &line)
         transJson << '[' << outT[i].x << ',' << outT[i].y << ',' << outT[i].z << ']';
     }
     transJson << ']';
+    //Print to cerr for debugging:
+    std::cerr << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":" << rotsJson.str() << ",\"trans\":" << transJson.str() << '}' << std::endl;
     std::cout << '{' << "\"id\":" << id << ",\"ok\":true,\"rots\":" << rotsJson.str() << ",\"trans\":" << transJson.str() << '}' << std::endl;
 }
 
@@ -334,9 +348,33 @@ void handle_prepare(int id, const std::string &line)
  * @brief Main entry point: runs the IPC server loop.
  * Reads JSON requests from stdin, processes them, and writes responses to stdout.
  */
+
+/**
+ * @brief Signal handler for crashes.
+ */
+void signal_handler(int signal) {
+    std::cerr << "[engine] Received signal " << signal << ": ";
+    if (signal == SIGSEGV) {
+        std::cerr << "Segmentation fault" << std::endl;
+    } else if (signal == SIGABRT) {
+        std::cerr << "Aborted" << std::endl;
+    } else if (signal == SIGFPE) {
+        std::cerr << "Floating point exception" << std::endl;
+    } else {
+        std::cerr << "Unknown signal" << std::endl;
+    }
+    std::exit(1);
+}
+
 int main(int argc, char **argv)
 {
     std::cerr << "[engine] IPC server starting" << std::endl;
+
+    // Install signal handlers for common crashes
+    std::signal(SIGSEGV, signal_handler);
+    std::signal(SIGABRT, signal_handler);
+    std::signal(SIGFPE, signal_handler);
+
     std::string line;
     while (std::getline(std::cin, line))
     {

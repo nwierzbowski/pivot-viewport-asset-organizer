@@ -50,9 +50,9 @@ bool is_ground(const std::vector<Vec3> &verts, COGResult &cog_result, BoundingBo
     bool is_thick_enough = min_cross_section > 15e-5f;
     bool cog_over_base = is_point_inside_polygon_2D(cog_result.overall_cog, base_chull);
 
-    std::cout << "Base large enough: " << base_large_enough << std::endl;
-    std::cout << "COG over base: " << cog_over_base << std::endl;
-    std::cout << "Thick enough: " << is_thick_enough << std::endl;
+    std::cerr << "Base large enough: " << base_large_enough << std::endl;
+    std::cerr << "COG over base: " << cog_over_base << std::endl;
+    std::cerr << "Thick enough: " << is_thick_enough << std::endl;
 
     return base_large_enough && cog_over_base && is_thick_enough;
 }

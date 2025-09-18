@@ -143,7 +143,7 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
 
     // auto end = std::chrono::high_resolution_clock::now();
     // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-    // std::cout << "COG Full Calc Time: " << (float)duration.count() / 1000000 << " ms" << std::endl;
+    // std::cerr << "COG Full Calc Time: " << (float)duration.count() / 1000000 << " ms" << std::endl;
     COGResult working_cog_result = {cog_result.overall_cog, cog_result.slices};
 
     rotate_vector(working_cog_result.overall_cog, angle_to_forward);
@@ -155,19 +155,19 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
     uint8_t curr_front_axis = 0;
     if (is_flat(working_verts, working_cog_result, full_3DBB, curr_front_axis))
     {
-        std::cout << "Classified as Flat" << std::endl;
+        std::cerr << "Classified as Flat" << std::endl;
     }
     else if (is_ground(working_verts, working_cog_result, full_3DBB))
     {
-        std::cout << "Classified as Ground" << std::endl;
+        std::cerr << "Classified as Ground" << std::endl;
 
         if (snapStandToYN(working_cog_result, full_2DBB, curr_front_axis))
         {
-            std::cout << "Snapped to Stand Axis" << std::endl;
+            std::cerr << "Snapped to Stand Axis" << std::endl;
         }
         else if (snapHighToYN(working_cog_result, full_2DBB, curr_front_axis))
         {
-            std::cout << "Snapped to High Axis" << std::endl;
+            std::cerr << "Snapped to High Axis" << std::endl;
         }
         else
         {
@@ -175,7 +175,7 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
             if (isSmall(full_3DBB))
             {
                 snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
-                std::cout << "Small, snapped dense to +Y" << std::endl;
+                std::cerr << "Small, snapped dense to +Y" << std::endl;
                 curr_front_axis -= 2;
             }
             else
@@ -183,12 +183,12 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
                 if (isSquarish(full_3DBB))
                 {
                     snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis);
-                    std::cout << "Large, snapped dense to -Y" << std::endl;
+                    std::cerr << "Large, snapped dense to -Y" << std::endl;
                 }
                 else
                 {
                     alignLongAxisToX(full_3DBB, curr_front_axis);
-                    std::cout << "Aligned long axis to +X" << std::endl;
+                    std::cerr << "Aligned long axis to +X" << std::endl;
                     snapDenseToYN(working_cog_result, full_2DBB, curr_front_axis, {0, 2});
                 }
             }
@@ -196,11 +196,11 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
     }
     else if (is_wall(working_verts, full_3DBB, curr_front_axis))
     {
-        std::cout << "Classified as Wall" << std::endl;
+        std::cerr << "Classified as Wall" << std::endl;
     }
     else
     {
-        std::cout << "Classified as Ceiling" << std::endl;
+        std::cerr << "Classified as Ceiling" << std::endl;
     }
 
     angle_to_forward += static_cast<float>(curr_front_axis) * M_PI_2;
