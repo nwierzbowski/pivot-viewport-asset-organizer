@@ -1,6 +1,4 @@
 from libc.stdint cimport uint32_t
-from libc.stdlib cimport malloc, free
-from libc.string cimport memcpy
 from libc.stddef cimport size_t
 from mathutils import Quaternion as MathutilsQuaternion, Vector
 
@@ -17,39 +15,10 @@ import uuid
 # from splatter.cython_api.engine_api cimport group_objects as group_objects_cpp
 from splatter.cython_api.engine_api cimport apply_rotation as apply_rotation_cpp
 
-from splatter.cython_api.vec_api cimport Vec3, uVec2i
+from splatter.cython_api.vec_api cimport Vec3
 from splatter.cython_api.quaternion_api cimport Quaternion
 
 from splatter.engine import get_engine_communicator
-
-
-# def align_min_bounds(float[::1] verts_flat, uint32_t[::1] edges_flat, uint32_t[::1] vert_counts, uint32_t[::1] edge_counts):
-#     cdef uint32_t num_objects = vert_counts.shape[0]
-#     if num_objects == 0 or verts_flat.shape[0] == 0:
-#         return [], []
-
-#     # Get direct pointers from memoryviews (no copy)
-#     cdef uint32_t *vert_counts_ptr = &vert_counts[0]
-#     cdef uint32_t *edge_counts_ptr = &edge_counts[0]
-
-#     cdef Vec3 *verts_ptr = <Vec3 *> &verts_flat[0]
-#     cdef uVec2i *edges_ptr = <uVec2i *> &edges_flat[0]
-
-#     cdef Quaternion *out_rots = <Quaternion *> malloc(num_objects * sizeof(Quaternion))
-#     cdef Vec3 *out_trans = <Vec3 *> malloc(num_objects * sizeof(Vec3))
-
-#     with nogil:
-#         prepare_object_batch_cpp(verts_ptr, edges_ptr, vert_counts_ptr, edge_counts_ptr, num_objects, out_rots, out_trans)
-
-#     # Convert results to Python lists
-#     rots = [MathutilsQuaternion((out_rots[i].w, out_rots[i].x, out_rots[i].y, out_rots[i].z)) for i in range(num_objects)]
-#     trans = [(out_trans[i].x, out_trans[i].y, out_trans[i].z) for i in range(num_objects)]
-
-#     free(out_rots)
-#     free(out_trans)
-
-#     return rots, trans
-
 
 # -----------------------------
 # Helpers for selection grouping
