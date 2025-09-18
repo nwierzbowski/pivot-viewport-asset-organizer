@@ -8,12 +8,12 @@
 #include <cstdint>
 #include <algorithm>
 #include <limits>
+#include <span>
 
 // Build per-slice edge buckets: slice_edges[slice_index] contains indices of edges overlapping slice slice_index.
 static inline void bucket_edges_per_slice(
     std::vector<std::vector<uint32_t>> &slice_edges,
-    const uVec2i *edges,
-    uint32_t edgeCount,
+    std::span<const uVec2i> edges,
     const std::vector<float> &vert_z,
     float z0,
     float slice_height,
@@ -21,7 +21,7 @@ static inline void bucket_edges_per_slice(
     uint8_t slice_count)
 {
     slice_edges.assign(slice_count, {});
-    for (uint32_t edge_index = 0; edge_index < edgeCount; ++edge_index)
+    for (uint32_t edge_index = 0; edge_index < edges.size(); ++edge_index)
     {
         const uVec2i &edge = edges[edge_index];
         float z1 = vert_z[edge.x];
@@ -50,7 +50,7 @@ static inline void bucket_edges_per_slice(
 static inline void build_slice_islands(
     const std::vector<Vec2> &vert_xy,
     const std::vector<float> &vert_z,
-    const uVec2i *edges,
+    std::span<const uVec2i> edges,
     const std::vector<uint32_t> &slice_edge_indices,
     float z_lower,
     float z_upper,
@@ -208,15 +208,15 @@ static inline void build_slice_islands(
 }
 
 // Driver function to calculate center of gravity using volume slicing and edge intersections
-COGResult calc_cog_volume_edges_intersections(const Vec3 *verts,
-                                              uint32_t vertCount,
-                                              const uVec2i *edges,
-                                              uint32_t edgeCount,
+COGResult calc_cog_volume_edges_intersections(std::span<const Vec3> verts,
+                                              std::span<const uVec2i> edges,
                                               BoundingBox3D full_box,
                                               float slice_height)
 {
+    uint32_t vertCount = verts.size();
+    uint32_t edgeCount = edges.size();
     COGResult result;
-    if (!verts || !edges || vertCount == 0 || edgeCount == 0 || slice_height <= 0.f)
+    if (vertCount == 0 || edgeCount == 0 || slice_height <= 0.f)
         return result;
 
     float total_height = full_box.max_corner.z - full_box.min_corner.z;
@@ -248,7 +248,7 @@ COGResult calc_cog_volume_edges_intersections(const Vec3 *verts,
     // No per-slice struct allocation needed.
 
     std::vector<std::vector<uint32_t>> slice_edges;
-    bucket_edges_per_slice(slice_edges, edges, edgeCount, vert_z,
+    bucket_edges_per_slice(slice_edges, edges, vert_z,
                            full_box.min_corner.z, slice_height, inv_slice_height, slice_count);
 
     // Global union-find (iterative find to reduce recursion overhead)

@@ -5,19 +5,20 @@
 
 #include <vector>
 #include <unordered_map>
+#include <span>
 
-VoxelMap build_voxel_map(const Vec3 *verts, uint32_t vertCount, float voxelSize)
+VoxelMap build_voxel_map(std::span<const Vec3> verts, float voxelSize)
 {
     VoxelMap voxel_map;
-    if (!verts || vertCount == 0)
+    if (verts.empty())
         return voxel_map;
 
-    voxel_map.reserve(vertCount / 4 + 1);
+    voxel_map.reserve(verts.size() / 4 + 1);
 
-    for (uint32_t i = 0; i < vertCount; ++i)
+    for (size_t i = 0; i < verts.size(); ++i)
     {
         VoxelKey key = make_voxel_key(verts[i], voxelSize);
-        voxel_map[key].vertex_indices.push_back(i);
+        voxel_map[key].vertex_indices.push_back(static_cast<uint32_t>(i));
         voxel_map[key].centroid += verts[i];
     }
 
@@ -36,7 +37,7 @@ VoxelMap build_voxel_map(const Vec3 *verts, uint32_t vertCount, float voxelSize)
         if (count >= 6)
         {
             float cov[3][3];
-            compute_cov(voxel_data.vertex_indices, verts, cov);
+            compute_cov(voxel_data.vertex_indices, verts.data(), cov);
             eig3(cov, lambda1, lambda2, lambda3, prim_vec, sec_vec, third_vec);
 
             // Only compute projections and 2D eigenvalues if we have a valid basis

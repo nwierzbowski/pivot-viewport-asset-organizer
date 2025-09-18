@@ -5,6 +5,7 @@
 #include <cmath>
 #include <unordered_map>
 #include <vector>
+#include <span>
 
 struct VoxelKey
 {
@@ -54,4 +55,4 @@ struct VoxelData
 
 using VoxelMap = std::unordered_map<VoxelKey, VoxelData, VoxelKeyHash>;
 
-VoxelMap build_voxel_map(const Vec3 *verts, uint32_t vertCount, float voxelSize);
+VoxelMap build_voxel_map(std::span<const Vec3> verts, float voxelSize);

@@ -33,6 +33,7 @@
 #include <optional>
 #include <csignal>
 #include <cstdlib>
+#include <span>
 
 #include "engine.h"
 
@@ -308,18 +309,19 @@ void handle_prepare(int id, const std::string &line)
     auto scales_region = map_shared_memory(shm_scales, expected_scales_size, "scales");
     auto offsets_region = map_shared_memory(shm_offsets, expected_offsets_size, "offsets");
 
-    Vec3 *verts_ptr = static_cast<Vec3 *>(verts_region.get_address());
-    uVec2i *edges_ptr = static_cast<uVec2i *>(edges_region.get_address());
-    Quaternion *rotations_ptr = static_cast<Quaternion *>(rotations_region.get_address());
-    Vec3 *scales_ptr = static_cast<Vec3 *>(scales_region.get_address());
-    Vec3 *offsets_ptr = static_cast<Vec3 *>(offsets_region.get_address());
+    std::span<Vec3> verts(static_cast<Vec3 *>(verts_region.get_address()), total_verts);
+    std::span<uVec2i> edges(static_cast<uVec2i *>(edges_region.get_address()), total_edges);
+    std::span<Quaternion> rotations(static_cast<Quaternion *>(rotations_region.get_address()), num_objects);
+    std::span<Vec3> scales(static_cast<Vec3 *>(scales_region.get_address()), num_objects);
+    std::span<Vec3> offsets(static_cast<Vec3 *>(offsets_region.get_address()), num_objects);
 
     // Prepare output vectors
     std::vector<Quaternion> outR(num_objects);
     std::vector<Vec3> outT(num_objects);
 
     // Process the batch
-    prepare_object_batch(verts_ptr, edges_ptr, vertCounts.data(), edgeCounts.data(), num_objects, outR.data(), outT.data());
+    // group_objects();
+    prepare_object_batch(verts, edges, vertCounts, edgeCounts, outR, outT);
 
     // Build JSON response
     std::ostringstream rotsJson, transJson;

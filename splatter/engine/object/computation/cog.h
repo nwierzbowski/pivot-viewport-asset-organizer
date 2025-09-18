@@ -4,6 +4,7 @@
 #include "object/computation/b_box.h"
 
 #include <vector>
+#include <span>
 
 struct SliceData
 {
@@ -19,9 +20,7 @@ struct COGResult
     std::vector<SliceData> slices;
 };
 
-COGResult calc_cog_volume_edges_intersections(const Vec3 *verts,
-                                              uint32_t vertCount,
-                                              const uVec2i *edges,
-                                              uint32_t edgeCount,
+COGResult calc_cog_volume_edges_intersections(std::span<const Vec3> verts,
+                                              std::span<const uVec2i> edges,
                                               BoundingBox3D full_box,
                                               float slice_height);

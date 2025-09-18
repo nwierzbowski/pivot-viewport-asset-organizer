@@ -315,6 +315,7 @@ def align_to_axes_batch(list selected_objects):
     cdef uint32_t[::1] vert_counts_mv
     cdef uint32_t[::1] edge_counts_mv
     cdef uint32_t[::1] object_counts_mv
+    cdef list group
     mesh_groups, parent_groups, total_verts, total_edges, total_objects = aggregate_object_groups(selected_objects)
 
     # Create shared memory segments and numpy arrays
@@ -387,7 +388,6 @@ def align_to_axes_batch(list selected_objects):
     cdef Vec3* offsets_group_ptr
     cdef uint32_t group_size
     cdef float[::1] parent_offsets_mv
-    cdef list group
 
     for i in range(len(parent_groups)):
         # Rotate this group's offsets in-place using C++ for speed

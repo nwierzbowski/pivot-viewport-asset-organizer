@@ -13,11 +13,13 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdint>
+#include <span>
 
-std::vector<std::vector<uint32_t>> build_adj_vertices(const uVec2i *edges, uint32_t edgeCount, uint32_t vertCount)
+std::vector<std::vector<uint32_t>> build_adj_vertices(std::span<const uVec2i> edges, uint32_t vertCount)
 {
     std::vector<std::vector<uint32_t>> adj_verts(vertCount);
-    if (!edges || edgeCount == 0)
+    uint32_t edgeCount = edges.size();
+    if (edgeCount == 0)
         return adj_verts;
 
     // --- Reserve memory for each adjacency list ---
@@ -95,20 +97,22 @@ void rotate_vector(V &v, float angle)
     v.y = y_new;
 }
 
-void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const uVec2i *edges, uint32_t edgeCount, Quaternion *out_rot, Vec3 *out_trans)
+void standardize_object_transform(std::span<const Vec3> verts, std::span<const uVec2i> edges, std::span<Quaternion> out_rot, std::span<Vec3> out_trans)
 {
-    if (!verts || vertCount == 0 || vertCount == 0 || !edges || edgeCount == 0 || !out_rot || !out_trans)
+    uint32_t vertCount = verts.size();
+    uint32_t edgeCount = edges.size();
+    if (vertCount == 0 || edgeCount == 0 || out_rot.empty() || out_trans.empty())
         return;
 
     if (vertCount == 1)
     {
-        *out_rot = {};
-        *out_trans = {verts[0].x, verts[0].y, verts[0].z};
+        out_rot[0] = {};
+        out_trans[0] = {verts[0].x, verts[0].y, verts[0].z};
         return;
     }
 
-    auto adj_verts = build_adj_vertices(edges, edgeCount, vertCount);
-    auto voxel_map = build_voxel_map(verts, vertCount, 0.03f);
+    auto adj_verts = build_adj_vertices(edges, vertCount);
+    auto voxel_map = build_voxel_map(verts, 0.03f);
 
     auto mask = calc_mask(vertCount, adj_verts, voxel_map);
 
@@ -139,7 +143,7 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
 
     // auto start = std::chrono::high_resolution_clock::now();
 
-    COGResult cog_result = calc_cog_volume_edges_intersections(verts, vertCount, edges, edgeCount, full_3DBB, 0.01f);
+    COGResult cog_result = calc_cog_volume_edges_intersections(verts, edges, full_3DBB, 0.01f);
 
     // auto end = std::chrono::high_resolution_clock::now();
     // auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -205,16 +209,17 @@ void standardize_object_transform(const Vec3 *verts, uint32_t vertCount, const u
 
     angle_to_forward += static_cast<float>(curr_front_axis) * M_PI_2;
 
-    *out_rot = Quaternion({0, 0, 1}, angle_to_forward); // Rotation to align object front with +Y axis
+    out_rot[0] = Quaternion({0, 0, 1}, angle_to_forward); // Rotation to align object front with +Y axis
 
     Vec3 final_cog = cog_result.overall_cog;
     rotate_vector(final_cog, angle_to_forward);
-    *out_trans = final_cog;
+    out_trans[0] = final_cog;
 }
 
-void prepare_object_batch(const Vec3 *verts_flat, const uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, uint32_t num_objects, Quaternion *out_rots, Vec3 *out_trans)
+void prepare_object_batch(std::span<const Vec3> verts_flat, std::span<const uVec2i> edges_flat, std::span<const uint32_t> vert_counts, std::span<const uint32_t> edge_counts, std::span<Quaternion> out_rots, std::span<Vec3> out_trans)
 {
-    if (!verts_flat || !edges_flat || !vert_counts || !edge_counts || num_objects == 0 || !out_rots || !out_trans)
+    uint32_t num_objects = vert_counts.size();
+    if (num_objects == 0 || edge_counts.size() != num_objects || out_rots.size() != num_objects || out_trans.size() != num_objects)
         return;
 
     uint32_t vert_offset = 0;
@@ -223,24 +228,21 @@ void prepare_object_batch(const Vec3 *verts_flat, const uVec2i *edges_flat, cons
     {
         uint32_t v_count = vert_counts[i];
         uint32_t e_count = edge_counts[i];
-        standardize_object_transform(&verts_flat[vert_offset], v_count, &edges_flat[edge_offset], e_count, &out_rots[i], &out_trans[i]);
+        std::span<const Vec3> obj_verts = verts_flat.subspan(vert_offset, v_count);
+        std::span<const uVec2i> obj_edges = edges_flat.subspan(edge_offset, e_count);
+        std::span<Quaternion> obj_rot = out_rots.subspan(i, 1);
+        std::span<Vec3> obj_trans = out_trans.subspan(i, 1);
+        standardize_object_transform(obj_verts, obj_edges, obj_rot, obj_trans);
         vert_offset += v_count;
         edge_offset += e_count;
     }
 }
 
-void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_counts, const uint32_t *edge_counts, const Vec3 *offsets, const Quaternion *rotations, const Vec3 *scales, uint32_t num_objects)
+void group_objects(std::span<Vec3> verts_flat, std::span<uVec2i> edges_flat, std::span<const uint32_t> vert_counts, std::span<const uint32_t> edge_counts, std::span<const Vec3> offsets, std::span<const Quaternion> rotations, std::span<const Vec3> scales)
 {
-    if (!verts_flat || !edges_flat || !vert_counts || !edge_counts || !offsets || !rotations || !scales || num_objects == 0)
+    uint32_t num_objects = vert_counts.size();
+    if (num_objects == 0 || edge_counts.size() != num_objects || offsets.size() != num_objects || rotations.size() != num_objects || scales.size() != num_objects)
         return;
-
-    // Calculate total sizes
-    uint32_t total_verts = 0, total_edges = 0;
-    for (uint32_t i = 0; i < num_objects; ++i)
-    {
-        total_verts += vert_counts[i];
-        total_edges += edge_counts[i];
-    }
 
     // Transform vertices and edges in place
     uint32_t vert_offset = 0, edge_offset = 0;
@@ -273,13 +275,14 @@ void group_objects(Vec3 *verts_flat, uVec2i *edges_flat, const uint32_t *vert_co
     }
 }
 
-void apply_rotation(Vec3 *verts, uint32_t vertCount, const Quaternion &rotation)
+void apply_rotation(Vec3* verts, uint32_t vertCount, const Quaternion &rotation)
 {
-    if (!verts || vertCount == 0)
+    std::span<Vec3> verts_span(verts, vertCount);
+    if (verts_span.empty())
         return;
 
-    for (uint32_t i = 0; i < vertCount; ++i)
+    for (auto &v : verts_span)
     {
-        verts[i] = rotate_vertex_3D_quat(verts[i], rotation);
+        v = rotate_vertex_3D_quat(v, rotation);
     }
 }
