@@ -316,15 +316,41 @@ void handle_prepare(int id, const std::string &line)
     std::span<Vec3> offsets(static_cast<Vec3 *>(offsets_region.get_address()), num_objects);
 
     
-    
+    //Print objectCounts
+    std::cerr << "Object counts: ";
+    for (size_t i = 0; i < objectCounts.size(); ++i)
+    {
+        if (i)
+            std::cerr << ',';
+        std::cerr << objectCounts[i];
+    }
+    std::cerr << std::endl;
 
     // Process the batch
     group_objects(verts, edges, vertCounts, edgeCounts, offsets, rotations, scales, objectCounts);
-    
+
+    //Print verts size
+    std::cerr << "Total verts after grouping: " << verts.size() << std::endl;
+    //Print vert counts
+    std::cerr << "Vert counts after grouping: ";
+    for (size_t i = 0; i < vertCounts.size(); ++i)
+    {
+        if (i)
+            std::cerr << ',';
+        std::cerr << vertCounts[i];
+    }
+    std::cerr << std::endl;
+
     // Prepare output vectors
     std::vector<Quaternion> outR(objectCounts.size());
     std::vector<Vec3> outT(objectCounts.size());
+
+    //Print transformation sizes
+    std::cerr << "Preparing output for " << outR.size() << " objects" << std::endl;
+
     prepare_object_batch(verts, edges, vertCounts, edgeCounts, outR, outT);
+
+    std::cerr << "Left classification" << std::endl;
 
     // Build JSON response
     std::ostringstream rotsJson, transJson;

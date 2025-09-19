@@ -290,7 +290,6 @@ def align_to_axes_batch(list selected_objects):
     # Create shared memory segments and numpy arrays
     shm_objects, shm_names, count_memory_views = create_data_arrays(total_verts, total_edges, total_objects, mesh_groups)
 
-    verts_shm, edges_shm, rotations_shm, scales_shm, offsets_shm = shm_objects
     verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
     vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
 
