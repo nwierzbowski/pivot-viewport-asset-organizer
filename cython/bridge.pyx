@@ -327,7 +327,8 @@ def align_to_axes_batch(list selected_objects):
         "shm_offsets": offsets_shm_name,
         "vert_counts": list(vert_counts_mv),
         "edge_counts": list(edge_counts_mv),
-        "object_counts": list(object_counts_mv)
+        "object_counts": list(object_counts_mv),
+        "group_names": group_names
     }
 
     engine = get_engine_communicator()
