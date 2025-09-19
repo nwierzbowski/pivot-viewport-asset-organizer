@@ -45,32 +45,29 @@ set_target_properties(splatter_engine PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin
 )
 
-# Optionally build Python (Cython) extension
-option(SPLATTER_BUILD_PY_EXTENSION "Build Cython Python module bridge" ON)
-if(SPLATTER_BUILD_PY_EXTENSION)
-    find_package(Python COMPONENTS Interpreter Development REQUIRED)
-    find_package(Python3 COMPONENTS NumPy REQUIRED)
-    find_program(CYTHON_EXECUTABLE cython REQUIRED)
+# Build Python (Cython) extension
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+find_package(Python3 COMPONENTS NumPy REQUIRED)
+find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
-    set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bridge.pyx)
-    set(CYTHON_GENERATED_CPP ${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp)
-    add_custom_command(
-        OUTPUT ${CYTHON_GENERATED_CPP}
-        COMMAND ${CYTHON_EXECUTABLE} --cplus -I ${CMAKE_CURRENT_SOURCE_DIR} -o ${CYTHON_GENERATED_CPP} ${CYTHON_SOURCE}
-        DEPENDS ${CYTHON_SOURCE}
-        COMMENT "Cythonizing ${CYTHON_SOURCE}"
-    )
-    add_library(bridge MODULE ${CYTHON_GENERATED_CPP})
-    set_target_properties(bridge PROPERTIES PREFIX "")
-    if(WIN32)
-        set_target_properties(bridge PROPERTIES SUFFIX ".pyd")
-    else()
-        set_target_properties(bridge PROPERTIES SUFFIX ".so")
-    endif()
-    target_link_libraries(bridge PRIVATE Python::Python splatter_engine_core)
-    target_include_directories(bridge PRIVATE ${Python3_NumPy_INCLUDE_DIRS})
-    set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/splatter")
+set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/splatter/bridge.pyx)
+set(CYTHON_GENERATED_CPP ${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp)
+add_custom_command(
+    OUTPUT ${CYTHON_GENERATED_CPP}
+    COMMAND ${CYTHON_EXECUTABLE} --cplus -I ${CMAKE_CURRENT_SOURCE_DIR} -o ${CYTHON_GENERATED_CPP} ${CYTHON_SOURCE}
+    DEPENDS ${CYTHON_SOURCE}
+    COMMENT "Cythonizing ${CYTHON_SOURCE}"
+)
+add_library(bridge MODULE ${CYTHON_GENERATED_CPP})
+set_target_properties(bridge PROPERTIES PREFIX "")
+if(WIN32)
+    set_target_properties(bridge PROPERTIES SUFFIX ".pyd")
+else()
+    set_target_properties(bridge PROPERTIES SUFFIX ".so")
 endif()
+target_link_libraries(bridge PRIVATE Python::Python splatter_engine_core)
+target_include_directories(bridge PRIVATE ${Python3_NumPy_INCLUDE_DIRS})
+set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/splatter")
 
 # Dependencies
 include(FetchContent)
