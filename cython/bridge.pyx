@@ -58,9 +58,10 @@ cdef list get_all_root_objects(object coll):
 
 
 def aggregate_object_groups(list selected_objects):
-    """Return (mesh_groups, parent_groups, total_verts, total_edges, total_objects).
+    """Return (mesh_groups, parent_groups, group_names, total_verts, total_edges, total_objects).
     mesh_groups is a list of lists, each sublist is a group of mesh objects with verts > 0.
     parent_groups is a list of lists, each sublist contains objects without a parent from the corresponding group.
+    group_names is a list of strings, one for each group: for scene collection groups, it's the root object's name; for other collections, it's the collection's name.
     Only groups with total_verts > 0 are included.
     """
     cdef object scene_coll = bpy.context.scene.collection
@@ -70,6 +71,7 @@ def aggregate_object_groups(list selected_objects):
     cdef list scene_roots = []
     cdef list mesh_groups = []
     cdef list parent_groups = []
+    cdef list group_names = []
     cdef int total_verts = 0
     cdef int total_edges = 0
     cdef int total_objects = 0
@@ -115,12 +117,13 @@ def aggregate_object_groups(list selected_objects):
         if group_verts > 0:
             mesh_groups.append(all_meshes)
             parent_groups.append([root])
+            group_names.append(root.name)
             total_verts += group_verts
             total_edges += group_edges
             total_objects += len(all_meshes)
 
     # For each group, collect mesh descendants and build groups
-    for roots in group_map.values():
+    for top_coll, roots in group_map.items():
         all_meshes = []
         for r in roots:
             all_meshes.extend(get_all_mesh_descendants(r))
@@ -129,11 +132,12 @@ def aggregate_object_groups(list selected_objects):
         if group_verts > 0:
             mesh_groups.append(all_meshes)
             parent_groups.append(roots)
+            group_names.append(top_coll.name)
             total_verts += group_verts
             total_edges += group_edges
             total_objects += len(all_meshes)
 
-    return mesh_groups, parent_groups, total_verts, total_edges, total_objects
+    return mesh_groups, parent_groups, group_names, total_verts, total_edges, total_objects
 
 # -----------------------------
 # Helpers for shared memory
@@ -265,6 +269,7 @@ def align_to_axes_batch(list selected_objects):
     # Collect selection into groups and individuals and precompute totals
     cdef list mesh_groups
     cdef list parent_groups
+    cdef list group_names
     cdef int total_verts
     cdef int total_edges
     cdef int total_objects
@@ -272,7 +277,7 @@ def align_to_axes_batch(list selected_objects):
     cdef uint32_t[::1] edge_counts_mv
     cdef uint32_t[::1] object_counts_mv
     cdef list group
-    mesh_groups, parent_groups, total_verts, total_edges, total_objects = aggregate_object_groups(selected_objects)
+    mesh_groups, parent_groups, group_names, total_verts, total_edges, total_objects = aggregate_object_groups(selected_objects)
 
     # Create shared memory segments and numpy arrays
     shm_objects, shm_names, count_memory_views = create_data_arrays(total_verts, total_edges, total_objects, mesh_groups)
