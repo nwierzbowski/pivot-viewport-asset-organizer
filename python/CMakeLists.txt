@@ -3,7 +3,7 @@
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
-set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/../splatter/bridge.pyx)
+set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/bridge.pyx)
 set(CYTHON_GENERATED_CPP ${CMAKE_CURRENT_BINARY_DIR}/bridge.cpp)
 
 add_custom_command(
