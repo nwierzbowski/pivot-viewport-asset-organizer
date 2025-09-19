@@ -268,11 +268,6 @@ def align_to_axes_batch(list selected_objects):
     cdef int total_verts
     cdef int total_edges
     cdef int total_objects
-    cdef float[::1] all_verts_mv
-    cdef uint32_t[::1] all_edges_mv
-    cdef float[::1] rotations_mv
-    cdef float[::1] scales_mv
-    cdef float[::1] offsets_mv
     cdef uint32_t[::1] vert_counts_mv
     cdef uint32_t[::1] edge_counts_mv
     cdef uint32_t[::1] object_counts_mv
@@ -311,7 +306,6 @@ def align_to_axes_batch(list selected_objects):
 
     end_processing = time.perf_counter()
     print(f"Block processing time elapsed: {(end_processing - start_processing) * 1000:.2f}ms")
-
 
 
 
