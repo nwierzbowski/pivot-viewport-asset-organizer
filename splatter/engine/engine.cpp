@@ -228,16 +228,10 @@ void standardize_object_transform(std::span<const Vec3> verts, std::span<const u
     rotate_vector(final_cog, angle_to_forward);
     out_trans[0] = final_cog;
 
-    std::cerr << "Finished classification" << std::endl;
 }
 
 void prepare_object_batch(std::span<const Vec3> verts_flat, std::span<const uVec2i> edges_flat, std::span<const uint32_t> vert_counts, std::span<const uint32_t> edge_counts, std::span<Quaternion> out_rots, std::span<Vec3> out_trans)
 {
-    //Print
-    std::cerr << "Entered prepare_object_batch" << std::endl;
-    std::cerr << "verts_flat size: " << verts_flat.size() << ", edges_flat size: " << edges_flat.size() << std::endl;
-    std::cerr << "vert_counts size: " << vert_counts.size() << ", edge_counts size: " << edge_counts.size() << std::endl;
-    std::cerr << "num_objects: " << vert_counts.size() << std::endl;
 
 
     uint32_t num_objects = vert_counts.size();
@@ -251,8 +245,6 @@ void prepare_object_batch(std::span<const Vec3> verts_flat, std::span<const uVec
         uint32_t v_count = vert_counts[i];
         uint32_t e_count = edge_counts[i];
 
-        //print counts
-        std::cerr << "Object " << i << ": vertCount=" << v_count << ", edgeCount=" << e_count << std::endl;
         std::span<const Vec3> obj_verts = verts_flat.subspan(vert_offset, v_count);
         std::span<const uVec2i> obj_edges = edges_flat.subspan(edge_offset, e_count);
         std::span<Quaternion> obj_rot = out_rots.subspan(i, 1);
@@ -369,8 +361,6 @@ void group_objects(std::span<Vec3> verts_flat, std::span<uVec2i> edges_flat,
     // Resize vectors to match the number of groups
     vert_counts.resize(num_groups);
     edge_counts.resize(num_groups);
-
-    std::cerr << "group_objects: Grouping complete\n";
 }
 
 void apply_rotation(Vec3* verts, uint32_t vertCount, const Quaternion &rotation)
