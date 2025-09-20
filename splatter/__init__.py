@@ -1,5 +1,6 @@
 import bpy
 import os
+import stat
 import subprocess
 import atexit
 
@@ -58,6 +59,17 @@ def register():
     for cls in classesToRegister:
         bpy.utils.register_class(cls)
     bpy.types.Object.classification = PointerProperty(type=ObjectAttributes)
+
+    # Ensure engine binary is executable after zip install (zip extraction often drops exec bits)
+    try:
+        engine_path = os.path.join(os.path.dirname(__file__), 'bin', 'splatter_engine')
+        if os.path.exists(engine_path) and os.name != 'nt':
+            st = os.stat(engine_path)
+            if not (st.st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
+                os.chmod(engine_path, st.st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                print("Fixed executable permissions on splatter engine binary (register)")
+    except Exception as e:
+        print(f"Note: Could not adjust permissions for engine binary during register: {e}")
 
     # Start the splatter engine
     engine.start_engine()
