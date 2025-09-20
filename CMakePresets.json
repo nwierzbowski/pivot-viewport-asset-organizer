@@ -10,5 +10,12 @@
         "Python_ROOT_DIR": "/home/nwier/.local/share/flatpak/app/org.blender.Blender/current/active/files/blender/4.5/python"
       }
     }
+  ],
+  "buildPresets": [
+    {
+      "name": "default-release",
+      "configurePreset": "default",
+      "configuration": "Release"
+    }
   ]
 }
