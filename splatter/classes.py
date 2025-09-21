@@ -1,3 +1,4 @@
+# type: ignore
 from bpy.types import PropertyGroup
 from bpy.props import BoolProperty, EnumProperty
 
@@ -11,5 +12,5 @@ class ObjectAttributes(PropertyGroup):
         name="Surface Type",
         description="Type of surface",
         items=classification.SURFACE_TYPE_ITEMS,
-        default=classification.SURFACE_GROUND,
+        default=classification.SURFACE_WALL,
     )
