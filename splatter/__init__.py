@@ -23,37 +23,62 @@ from .ui import Splatter_PT_Main_Panel
 from . import engine
 
 
+# Track the expected engine state for each object (what the engine thinks the surface type should be)
+# This is NOT part of Blender's undo system - it's for syncing with our external C++ engine
+_engine_expected_state = {}  # obj_name -> surface_type_int
+
+
 def sync_engine_after_undo(scene):
-    """Sync engine surface types after undo operations to maintain consistency"""
+    """Sync engine surface types after undo/redo operations by comparing expected vs actual state"""
+    global _engine_expected_state
+
     try:
         from .engine import get_engine_communicator
         engine_comm = get_engine_communicator()
-        
-        # Sync all objects with their current surface types
+
+        synced_count = 0
+
+        # Check all objects in the scene that have classification data
         for obj in scene.objects:
-            if hasattr(obj, 'classification') and hasattr(obj.classification, 'group_name'):
+            if (hasattr(obj, 'classification') and
+                hasattr(obj.classification, 'group_name') and
+                hasattr(obj.classification, 'surfaceType')):
+
                 group_name = obj.classification.group_name
-                surface_type_str = obj.classification.surfaceType
-                
-                if group_name and surface_type_str:
+                current_surface_type_str = obj.classification.surfaceType
+
+                if group_name and current_surface_type_str:
                     try:
-                        surface_type = int(surface_type_str)
-                        command = {
-                            "id": 3,  # Different ID for undo sync
-                            "op": "set_group_attr",
-                            "group_name": group_name,
-                            "attr": "surface_type",
-                            "value": surface_type
-                        }
-                        response = engine_comm.send_command(command)
-                        if "ok" not in response or not response["ok"]:
-                            print(f"Failed to sync engine after undo: {response.get('error', 'Unknown error')}")
-                        else:
-                            print(f"Synchronized object {obj.name} (group: {group_name}) to surface type {surface_type}")
+                        current_surface_type = int(current_surface_type_str)
+                        expected_surface_type = _engine_expected_state.get(obj.name)
+                        print(f"Post-undo: {obj.name} current surface type {current_surface_type}, expected {expected_surface_type}")
+
+                        # Only sync if the current UI state differs from what the engine expects
+                        if expected_surface_type is not None and current_surface_type != expected_surface_type:
+                            command = {
+                                "id": 3,  # Different ID for undo sync
+                                "op": "set_group_attr",
+                                "group_name": group_name,
+                                "attr": "surface_type",
+                                "value": current_surface_type
+                            }
+                            response = engine_comm.send_command(command)
+                            if "ok" not in response or not response["ok"]:
+                                print(f"Failed to sync {obj.name} after undo: {response.get('error', 'Unknown error')}")
+                            else:
+                                # Update our expected state to match what we just sent
+                                _engine_expected_state[obj.name] = current_surface_type
+                                synced_count += 1
+                                print(f"Undo sync: {obj.name} surface type corrected to {current_surface_type}")
+
                     except (ValueError, AttributeError) as e:
-                        print(f"Error syncing object {obj.name} after undo: {e}")
+                        print(f"Error processing {obj.name} after undo: {e}")
+
+        if synced_count > 0:
+            print(f"Undo/Redo sync: {synced_count} objects synchronized with engine")
+
     except Exception as e:
-        print(f"Error in undo sync: {e}")
+        print(f"Error in undo/redo sync: {e}")
 
 
 bl_info = {
