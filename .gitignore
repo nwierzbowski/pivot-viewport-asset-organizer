@@ -20,6 +20,7 @@ assets/
 build/
 dist/
 out/
+splatter/lib/
 splatter/bin/
 *.egg-info/
 *.so

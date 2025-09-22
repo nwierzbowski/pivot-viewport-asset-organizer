@@ -3,7 +3,7 @@ from bpy.types import PropertyGroup
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 
 # Import C enum values from Cython module
-from . import classification
+from .lib import classification
 
 def update_property(self, context, prop_name):
     """Generic callback that runs when any syncable property is changed"""

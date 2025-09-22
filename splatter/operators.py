@@ -6,7 +6,6 @@ import time
 
 import numpy as np
 
-
 from .utils import link_node_group
 from mathutils import Vector, Quaternion, Euler
 from .constants import (
@@ -31,9 +30,7 @@ from .constants import (
     WRITE_SEATING,
     WRITE_SURFACES,
 )
-
-from . import bridge
-
+from .lib import bridge
 
 class Splatter_OT_Segment_Scene(bpy.types.Operator):
     bl_idname = PRE.lower() + ".segment_scene"

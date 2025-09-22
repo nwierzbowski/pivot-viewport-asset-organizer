@@ -46,9 +46,6 @@ target_include_directories(bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core)
 # Link core library
 target_link_libraries(bridge PRIVATE core)
 
-# Output extension into the package directory so Python can import it
-set_target_properties(bridge PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../splatter")
-
 # Build helper modules (selection_utils, shm_utils, transform_utils, surface_types)
 foreach(mod ${CYTHON_MODULES})
     set(SRC ${CMAKE_CURRENT_SOURCE_DIR}/${mod}.pyx)
@@ -83,6 +80,10 @@ foreach(mod ${CYTHON_MODULES})
     endif()
     # Include engine src for classification.h (needed for surface_types)
     target_include_directories(${mod} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core)
-    # Output extension into the package directory so Python can import it
-    set_target_properties(${mod} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../splatter")
+endforeach()
+
+# Consolidate output directory for all Cython modules
+set(CYTHON_ALL_MODULES bridge ${CYTHON_MODULES})
+foreach(mod ${CYTHON_ALL_MODULES})
+    set_target_properties(${mod} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../splatter/lib")
 endforeach()
