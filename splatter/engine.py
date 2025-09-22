@@ -2,6 +2,14 @@
 Splatter Engine Management Module
 
 This module provides a unified interface for managing the C++ splatter engine subprocess.
+
+Responsibilities:
+- Process lifecycle management (start/stop subprocess)
+- Direct communication interface (JSON commands)
+- Low-level process state (is_running, PID, etc.)
+
+Note: High-level sync bridge state (connection status, expected state, etc.) 
+is managed in engine_state.py for separation of concerns.
 """
 
 import os

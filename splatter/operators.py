@@ -343,14 +343,19 @@ class Splatter_OT_Align_To_Axes(bpy.types.Operator):
         for i, group in enumerate(root_objects):
             surface_type_value = str(surface_type[i])
             group_name = group_names[i]
-            for obj in group:
-                if not hasattr(obj, "classification"):
-                    continue
-                obj.classification.surfaceType = surface_type_value
-                obj.classification.group_name = group_name
-                # Initialize expected engine state for this object
-                from . import _engine_expected_state
-                _engine_expected_state[obj.name] = surface_type[i]  # surface_type[i] is already an int
+            
+            # Since the engine is the source of truth, update each object without sending commands back to engine
+            if group:  # Make sure group is not empty
+                from .property_manager import get_property_manager
+                prop_manager = get_property_manager()
+                
+                # Set group names and surface types for all objects in the group
+                for obj in group:
+                    if hasattr(obj, "classification"):
+                        prop_manager.set_group_name(obj, group_name)
+                        prop_manager.set_surface_type(obj, surface_type_value, update_group=False, update_engine=False)
+                
+                
         
         endPython = time.perf_counter()
         elapsedPython = endPython - startPython
