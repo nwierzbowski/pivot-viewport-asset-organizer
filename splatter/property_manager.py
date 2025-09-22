@@ -1,13 +1,23 @@
 # Property Management System
 # Centralized management of object properties with automatic engine synchronization
 
+import bpy
+from typing import Any, Optional
+
+from . import engine_state
+
+# Command IDs for engine communication
+COMMAND_SET_GROUP_ATTR = 2
+COMMAND_SYNC_OBJECT = 3
+
+
 class PropertyManager:
     """Centralized manager for object properties that handles engine synchronization."""
 
-    def __init__(self):
-        self._engine_communicator = None
+    def __init__(self) -> None:
+        self._engine_communicator: Optional[Any] = None
 
-    def _get_engine_communicator(self):
+    def _get_engine_communicator(self) -> Optional[Any]:
         """Lazy initialization of engine communicator."""
         if self._engine_communicator is None:
             try:
@@ -17,15 +27,18 @@ class PropertyManager:
                 self._engine_communicator = None
         return self._engine_communicator
 
-    def set_surface_type(self, obj, surface_type, update_group=True, update_engine=True):
+    def set_surface_type(self, obj: Any, surface_type: Any, update_group: bool = True, update_engine: bool = True) -> bool:
         """
         Set surface type for an object with optional group and engine updates.
 
         Args:
-            obj: Blender object
-            surface_type: Surface type value (string for Blender, int for engine)
-            update_group: Whether to update all objects in the same group
-            update_engine: Whether to sync with the engine
+            obj: Blender object.
+            surface_type: Surface type value (string for Blender, int for engine).
+            update_group: Whether to update all objects in the same group.
+            update_engine: Whether to sync with the engine.
+
+        Returns:
+            bool: True if successful, False otherwise.
         """
         if not hasattr(obj, 'classification'):
             return False
@@ -39,63 +52,80 @@ class PropertyManager:
 
         group_name = obj.classification.group_name
 
-        # If this is a group update and we should update the engine, send group command
+        # Handle group update with engine sync
         if update_group and update_engine and group_name:
-            engine = self._get_engine_communicator()
-            if engine:
-                try:
-                    command = {
-                        "id": 2,
-                        "op": "set_group_attr",
-                        "group_name": group_name,
-                        "attr": "surface_type",
-                        "value": surface_type_int
-                    }
-
-                    response = engine.send_command(command)
-                    if "ok" not in response or not response["ok"]:
-                        print(f"Failed to update engine group surface type: {response.get('error', 'Unknown error')}")
-                        return False
-                except Exception as e:
-                    print(f"Error updating engine group: {e}")
-                    return False
+            if not self._send_group_surface_type_command(group_name, surface_type_int):
+                return False
 
         # Update the object's property
         if obj.classification.surfaceType != surface_type_str:
             obj.classification.surfaceType = surface_type_str
 
-        # Update group if requested
+        # Update group properties if requested
         if update_group and group_name:
             self._update_group_surface_type(obj, surface_type_str, surface_type_int)
-            # Update expected engine state for the group
-            self._update_group_engine_state(group_name, surface_type_int)
-        elif update_engine:
+            self._update_engine_state(group_name, surface_type_int)
+        elif update_engine and group_name:
             # Single object update - update the group's expected state
-            if group_name:
-                self._update_engine_state(group_name, surface_type_int)
+            self._update_engine_state(group_name, surface_type_int)
 
         return True
 
-    def set_group_name(self, obj, group_name):
-        """Set group name for an object."""
+    def _send_group_surface_type_command(self, group_name: str, surface_type_int: int) -> bool:
+        """Send command to engine to set group surface type."""
+        engine = self._get_engine_communicator()
+        if not engine:
+            return False
+
+        try:
+            command = {
+                "id": COMMAND_SET_GROUP_ATTR,
+                "op": "set_group_attr",
+                "group_name": group_name,
+                "attr": "surface_type",
+                "value": surface_type_int
+            }
+            response = engine.send_command(command)
+            if "ok" not in response or not response["ok"]:
+                print(f"Failed to update engine group surface type: {response.get('error', 'Unknown error')}")
+                return False
+            return True
+        except Exception as e:
+            print(f"Error updating engine group: {e}")
+            return False
+
+    def set_group_name(self, obj: Any, group_name: str) -> bool:
+        """Set group name for an object.
+
+        Args:
+            obj: Blender object.
+            group_name: Name of the group.
+
+        Returns:
+            bool: True if successful, False otherwise.
+        """
         if hasattr(obj, 'classification'):
             obj.classification.group_name = group_name
             return True
         return False
 
-    def _update_engine_state(self, group_name, surface_type_int):
-        """Update the expected engine state for a group."""
-        from . import engine_state
+    def _update_engine_state(self, group_name: str, surface_type_int: int) -> None:
+        """Update the expected engine state for a group.
+
+        Args:
+            group_name: Name of the group.
+            surface_type_int: Surface type as integer.
+        """
         engine_state._engine_expected_state[group_name] = surface_type_int
 
-    def _update_group_engine_state(self, group_name, surface_type_int):
-        """Update the expected engine state for a group."""
-        self._update_engine_state(group_name, surface_type_int)
+    def _update_group_surface_type(self, source_obj: Any, surface_type_str: str, surface_type_int: int) -> None:
+        """Update all objects in the same group as the source object.
 
-    def _update_group_surface_type(self, source_obj, surface_type_str, surface_type_int):
-        """Update all objects in the same group as the source object."""
-        import bpy
-
+        Args:
+            source_obj: The source Blender object.
+            surface_type_str: Surface type as string.
+            surface_type_int: Surface type as integer (unused here).
+        """
         group_name = source_obj.classification.group_name
         if not group_name:
             return
@@ -111,10 +141,15 @@ class PropertyManager:
                 if obj.classification.surfaceType != surface_type_str:
                     obj.classification.surfaceType = surface_type_str
 
-    def sync_object_with_engine(self, obj):
+    def sync_object_with_engine(self, obj: Any) -> bool:
         """
         Sync a single object's surface type with the engine.
-        Returns True if sync was successful.
+
+        Args:
+            obj: Blender object.
+
+        Returns:
+            bool: True if sync was successful, False otherwise.
         """
         if not (hasattr(obj, 'classification') and
                 hasattr(obj.classification, 'group_name') and
@@ -130,7 +165,7 @@ class PropertyManager:
             surface_type = int(obj.classification.surfaceType)
 
             command = {
-                "id": 3,
+                "id": COMMAND_SYNC_OBJECT,
                 "op": "set_group_attr",
                 "group_name": group_name,
                 "attr": "surface_type",
@@ -149,8 +184,15 @@ class PropertyManager:
 
         return False
 
-    def needs_surface_sync(self, obj):
-        """Check if an object needs surface type synchronization."""
+    def needs_surface_sync(self, obj: Any) -> bool:
+        """Check if an object needs surface type synchronization.
+
+        Args:
+            obj: Blender object.
+
+        Returns:
+            bool: True if sync is needed, False otherwise.
+        """
         if not (hasattr(obj, 'classification') and
                 hasattr(obj.classification, 'group_name') and
                 hasattr(obj.classification, 'surfaceType')):
@@ -162,7 +204,6 @@ class PropertyManager:
 
         try:
             current_type = int(obj.classification.surfaceType)
-            from . import engine_state
             expected_type = engine_state._engine_expected_state.get(obj.classification.group_name)
             return expected_type is not None and current_type != expected_type
         except (ValueError, AttributeError):
@@ -172,6 +213,6 @@ class PropertyManager:
 # Global instance
 _property_manager = PropertyManager()
 
-def get_property_manager():
+def get_property_manager() -> PropertyManager:
     """Get the global property manager instance."""
     return _property_manager

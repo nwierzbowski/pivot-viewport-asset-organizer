@@ -16,8 +16,6 @@ def update_surface_type(self, context):
     new_surface_type_str = self.surfaceType
     group_name = self.group_name
 
-    print(f"Updating surface type to {new_surface_type_str} for group {group_name}")
-
     if not group_name:
         # Object hasn't been grouped yet, just update this object
         return
