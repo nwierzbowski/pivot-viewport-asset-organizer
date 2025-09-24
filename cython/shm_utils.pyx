@@ -59,10 +59,13 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef uint32_t obj_edge_count
     cdef uint32_t vert_offset
     cdef uint32_t edge_offset
+    cdef object ref_trans
 
     for group in mesh_groups:
         vert_offset = 0
         edge_offset = 0
+        # Get reference position from first object in group
+        ref_trans = group[0].matrix_world.translation if group else None
         for obj in group:
             quat = obj.matrix_world.to_3x3().to_quaternion()
             rotations[idx_rot] = quat.w
@@ -78,9 +81,15 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
             idx_scale += 3
 
             trans_vec = obj.matrix_world.translation
-            offsets[idx_offset] = trans_vec.x
-            offsets[idx_offset + 1] = trans_vec.y
-            offsets[idx_offset + 2] = trans_vec.z
+            # Calculate offset relative to first object in group
+            if ref_trans is not None:
+                offsets[idx_offset] = trans_vec.x - ref_trans.x
+                offsets[idx_offset + 1] = trans_vec.y - ref_trans.y
+                offsets[idx_offset + 2] = trans_vec.z - ref_trans.z
+            else:
+                offsets[idx_offset] = trans_vec.x
+                offsets[idx_offset + 1] = trans_vec.y
+                offsets[idx_offset + 2] = trans_vec.z
             idx_offset += 3
 
             mesh = obj.data
