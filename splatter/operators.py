@@ -344,8 +344,59 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
             
             if "positions" in response:
                 positions = response["positions"]
-                self.report({"INFO"}, f"Organized {len(positions)} objects")
-                # TODO: Apply positions to objects in Blender scene
+                
+                # positions is now a dict mapping group_name -> [x, y, z]
+                
+                # Get all classified objects and group them by group_name
+                group_objects = {}
+                for obj in bpy.context.scene.objects:
+                    if hasattr(obj, 'classification') and obj.classification.group_name:
+                        group_name = obj.classification.group_name
+                        if group_name not in group_objects:
+                            group_objects[group_name] = []
+                        group_objects[group_name].append(obj)
+                
+                # Apply positions to each group
+                organized_count = 0
+                for group_name, pos in positions.items():
+                    if group_name in group_objects:
+                        target_pos = Vector((pos[0], pos[1], pos[2]))
+                        
+                        # Get all objects in this group
+                        objects_in_group = group_objects[group_name]
+                        
+                        # Try to use stored group origin first, otherwise calculate current center
+                        group_origin = None
+                        for obj in objects_in_group:
+                            if obj.classification.group_origin:
+                                try:
+                                    # Parse stored origin "x,y,z"
+                                    origin_str = obj.classification.group_origin
+                                    x, y, z = map(float, origin_str.split(','))
+                                    group_origin = Vector((x, y, z))
+                                    break
+                                except (ValueError, AttributeError):
+                                    pass
+                        
+                        if group_origin is None:
+                            # Calculate current center by averaging positions
+                            group_origin = Vector((0, 0, 0))
+                            for obj in objects_in_group:
+                                group_origin += obj.location
+                            group_origin /= len(objects_in_group)
+                        
+                        # Apply the organized position as absolute position
+                        for obj in objects_in_group:
+                            obj.location = target_pos
+                        
+                        # Store the new group origin for future use (origin stays the same, position changes)
+                        origin_str = f"{group_origin.x},{group_origin.y},{group_origin.z}"
+                        for obj in objects_in_group:
+                            obj.classification.group_origin = origin_str
+                        
+                        organized_count += 1
+                
+                self.report({"INFO"}, f"Organized {organized_count} object groups")
             else:
                 self.report({"WARNING"}, "No positions returned from engine")
                 

@@ -41,3 +41,8 @@ class ObjectAttributes(PropertyGroup):
         description="Name of the group this object belongs to",
         default="",
     )
+    group_origin: StringProperty(  # Stored as "x,y,z" string
+        name="Group Origin",
+        description="Origin position of the object's group",
+        default="",
+    )

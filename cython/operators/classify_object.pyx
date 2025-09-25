@@ -14,7 +14,6 @@ def classify_and_apply_objects(list selected_objects):
     cdef double start_prep = time.perf_counter()
 
     cdef list all_original_rots = []
-    cdef list all_offsets = []
 
     # Collect selection into groups and individuals and precompute totals
     cdef list mesh_groups
@@ -30,31 +29,44 @@ def classify_and_apply_objects(list selected_objects):
     cdef list group
     mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects = selection_utils.aggregate_object_groups(selected_objects)
 
+    # Create dictionary mapping group names to parent object lists
+    cdef dict parent_groups_dict = {group_names[i]: parent_groups[i] for i in range(len(group_names))}
+
     # Create shared memory segments and numpy arrays
     shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(total_verts, total_edges, total_objects, mesh_groups)
 
     verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
-    vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
+    vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv = count_memory_views
 
     cdef double end_prep = time.perf_counter()
     print(f"Preparation time elapsed: {(end_prep - start_prep) * 1000:.2f}ms")
 
     cdef double start_processing = time.perf_counter()
 
-    cdef float[::1] parent_offsets_view
-    cdef tuple parent_ref_location
-    cdef list all_ref_locations = []
+    cdef size_t current_offset_idx = 0
+    cdef size_t group_size
+    cdef size_t group_offset_size
+    cdef float[::1] group_offsets_slice
+    cdef object first_obj
 
-    for group in parent_groups:
-        parent_offsets_view, parent_ref_location = transform_utils.compute_offset_transforms(group, len(group))
+    cdef Py_ssize_t group_idx
+    cdef list all_parent_offsets = []
 
-        # Store reference location as a plain tuple for fast numeric ops later
-        all_ref_locations.append(parent_ref_location)
-        all_offsets.append(parent_offsets_view)
+    for group_idx in range(len(parent_groups)):
+        group = parent_groups[group_idx]
+        mesh_group = mesh_groups[group_idx]
+        group_size = len(mesh_group)
+        group_offset_size = group_size * 3  # 3 floats per object (x,y,z)
+        group_offsets_slice = offsets_mv[current_offset_idx:current_offset_idx + group_offset_size]
+        
+        parent_offsets = transform_utils.compute_offset_transforms(group, mesh_group, group_offsets_slice)
+        all_parent_offsets.append(parent_offsets)
 
         for obj in group:
             obj.rotation_mode = 'QUATERNION' 
             all_original_rots.append(obj.rotation_quaternion)
+        
+        current_offset_idx += group_offset_size
 
     cdef double end_processing = time.perf_counter()
     print(f"Block processing time elapsed: {(end_processing - start_processing) * 1000:.2f}ms")
@@ -77,7 +89,11 @@ def classify_and_apply_objects(list selected_objects):
     }
 
     from splatter.engine import get_engine_communicator
+    from splatter.engine_state import set_engine_parent_groups
     engine = get_engine_communicator()
+    
+    # Store parent groups globally for later positioning work
+    set_engine_parent_groups(parent_groups_dict)
     final_response = engine.send_command(command)
     
     if "ok" not in final_response or not final_response["ok"]:
@@ -87,29 +103,27 @@ def classify_and_apply_objects(list selected_objects):
     cdef list surface_type = final_response["surface_type"]
     cdef list origin = [tuple(o) for o in final_response["origin"]]
 
-    # Compute new locations for each object using C++ rotation of offsets, then add ref location
+    # Compute new locations for each object using Cython rotation of offsets, then add ref location
     cdef list locs = []
     cdef Py_ssize_t i, j
     cdef float rx, ry, rz
-    cdef tuple ref_loc_tup
-    cdef uint32_t group_size
-    cdef float[::1] parent_offsets_mv
+    cdef list parent_offsets_mv
 
     for i in range(len(parent_groups)):
         # Rotate this group's offsets in-place using numpy for speed
         group = parent_groups[i]
         group_size = <uint32_t> len(group)
-        parent_offsets_mv = all_offsets[i]
+        parent_offsets_mv = all_parent_offsets[i]
         rot_matrix = np.array(rots[i].to_matrix())
         offsets_array = np.asarray(parent_offsets_mv).reshape(group_size, 3)
         rotated_offsets = offsets_array @ rot_matrix.T
         rotated_flat = rotated_offsets.flatten()
 
         # Add the reference location to each rotated offset and collect as tuples
-        ref_loc_tup = all_ref_locations[i]
-        rx = <float> ref_loc_tup[0]
-        ry = <float> ref_loc_tup[1]
-        rz = <float> ref_loc_tup[2]
+        ref_vec = parent_groups[i][0].matrix_world.translation
+        rx = <float> ref_vec.x
+        ry = <float> ref_vec.y
+        rz = <float> ref_vec.z
         for j in range(len(group)):
             locs.append((rx + rotated_flat[j * 3], ry + rotated_flat[j * 3 + 1], rz + rotated_flat[j * 3 + 2]))
 

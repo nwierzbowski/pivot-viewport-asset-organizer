@@ -65,7 +65,6 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
         vert_offset = 0
         edge_offset = 0
         # Get reference position from first object in group
-        ref_trans = group[0].matrix_world.translation if group else None
         for obj in group:
             quat = obj.matrix_world.to_3x3().to_quaternion()
             rotations[idx_rot] = quat.w
@@ -82,14 +81,10 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
 
             trans_vec = obj.matrix_world.translation
             # Calculate offset relative to first object in group
-            if ref_trans is not None:
-                offsets[idx_offset] = trans_vec.x - ref_trans.x
-                offsets[idx_offset + 1] = trans_vec.y - ref_trans.y
-                offsets[idx_offset + 2] = trans_vec.z - ref_trans.z
-            else:
-                offsets[idx_offset] = trans_vec.x
-                offsets[idx_offset + 1] = trans_vec.y
-                offsets[idx_offset + 2] = trans_vec.z
+
+            offsets[idx_offset] = trans_vec.x
+            offsets[idx_offset + 1] = trans_vec.y
+            offsets[idx_offset + 2] = trans_vec.z
             idx_offset += 3
 
             mesh = obj.data
@@ -110,9 +105,10 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef uint32_t[::1] vert_counts_mv = vert_counts
     cdef uint32_t[::1] edge_counts_mv = edge_counts
     cdef uint32_t[::1] object_counts_mv = object_counts
+    cdef float[::1] offsets_mv = offsets
 
     shm_objects = (verts_shm, edges_shm, rotations_shm, scales_shm, offsets_shm)
     shm_names = (verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name)
-    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv)
+    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv)
 
     return shm_objects, shm_names, count_memory_views
