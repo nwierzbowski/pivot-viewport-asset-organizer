@@ -367,7 +367,7 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                         # Apply positions to each parent object using its offset + target position + first object location
                         for i, obj in enumerate(parent_objects):
                             obj_offset = Vector(offsets[i]) if i < len(offsets) else Vector((0, 0, 0))
-                            obj.location = obj_offset + target_pos
+                            obj.location = target_pos + obj_offset
                         
                         organized_count += 1
                 
