@@ -3,7 +3,7 @@
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
-set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/operators/prepare/bridge.pyx)
+set(CYTHON_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/operators/classify/classify_object.pyx)
 set(CYTHON_MODULES
     selection_utils
     shm_utils

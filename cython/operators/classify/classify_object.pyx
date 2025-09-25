@@ -11,7 +11,7 @@ from . import selection_utils, shm_utils, transform_utils
 # Main
 # -----------------------------
 
-def align_to_axes_batch(list selected_objects):
+def classify_object(list selected_objects):
 
 
     start_prep = time.perf_counter()
@@ -70,10 +70,10 @@ def align_to_axes_batch(list selected_objects):
 
     start_alignment = time.perf_counter()
 
-    # Send prepare op to engine
+    # Send classify op to engine
     command = {
         "id": 1,
-        "op": "prepare",
+        "op": "classify",
         "shm_verts": verts_shm_name,
         "shm_edges": edges_shm_name,
         "shm_rotations": rotations_shm_name,

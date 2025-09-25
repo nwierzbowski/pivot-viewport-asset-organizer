@@ -314,7 +314,7 @@ class Splatter_OT_Classify_Selected_Objects(bpy.types.Operator):
 
     def execute(self, context):
         startCPP = time.perf_counter()
-        rots, locs, root_groups, full_groups, all_local_quats, surface_type, group_names, origin = bridge.align_to_axes_batch(context.selected_objects)
+        rots, locs, root_groups, full_groups, all_local_quats, surface_type, group_names, origin = bridge.classify_object(context.selected_objects)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
 
