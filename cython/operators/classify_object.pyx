@@ -2,17 +2,16 @@
 
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
-from mathutils import Quaternion
+from mathutils import Quaternion, Vector
 
 import numpy as np
 import time
+import bpy
 
 from . import selection_utils, shm_utils, transform_utils
 
-def classify_object(list selected_objects):
-
-
-    start_prep = time.perf_counter()
+def classify_and_apply_objects(list selected_objects):
+    cdef double start_prep = time.perf_counter()
 
     cdef list all_original_rots = []
     cdef list all_offsets = []
@@ -37,14 +36,10 @@ def classify_object(list selected_objects):
     verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
     vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
 
-
-
-    end_prep = time.perf_counter()
+    cdef double end_prep = time.perf_counter()
     print(f"Preparation time elapsed: {(end_prep - start_prep) * 1000:.2f}ms")
 
-
-
-    start_processing = time.perf_counter()
+    cdef double start_processing = time.perf_counter()
 
     cdef float[::1] parent_offsets_view
     cdef tuple parent_ref_location
@@ -61,15 +56,13 @@ def classify_object(list selected_objects):
             obj.rotation_mode = 'QUATERNION' 
             all_original_rots.append(obj.rotation_quaternion)
 
-    end_processing = time.perf_counter()
+    cdef double end_processing = time.perf_counter()
     print(f"Block processing time elapsed: {(end_processing - start_processing) * 1000:.2f}ms")
 
-
-
-    start_alignment = time.perf_counter()
+    cdef double start_alignment = time.perf_counter()
 
     # Send classify op to engine
-    command = {
+    cdef dict command = {
         "id": 1,
         "op": "classify",
         "shm_verts": verts_shm_name,
@@ -90,12 +83,12 @@ def classify_object(list selected_objects):
     if "ok" not in final_response or not final_response["ok"]:
         raise RuntimeError(f"Engine error: {final_response.get('error', 'Unknown error')}")
     
-    rots = [Quaternion(r) for r in final_response["rots"]]
-    surface_type = final_response["surface_type"]
-    origin = [tuple(o) for o in final_response["origin"]]
+    cdef list rots = [Quaternion(r) for r in final_response["rots"]]
+    cdef list surface_type = final_response["surface_type"]
+    cdef list origin = [tuple(o) for o in final_response["origin"]]
 
     # Compute new locations for each object using C++ rotation of offsets, then add ref location
-    locs = []
+    cdef list locs = []
     cdef Py_ssize_t i, j
     cdef float rx, ry, rz
     cdef tuple ref_loc_tup
@@ -124,7 +117,41 @@ def classify_object(list selected_objects):
     for shm in shm_objects:
         shm.close()
 
-    end_alignment = time.perf_counter()
+    cdef double end_alignment = time.perf_counter()
     print(f"Alignment time elapsed: {(end_alignment - start_alignment) * 1000:.2f}ms")
 
-    return rots, locs, parent_groups, full_groups, all_original_rots, surface_type, group_names, origin
+    # Apply results
+    cdef double start_apply = time.perf_counter()
+    cdef int obj_idx = 0
+    cdef tuple loc
+    for i, group in enumerate(parent_groups):
+        delta_quat = rots[i]
+        first_obj = group[0]
+        cursor_loc = Vector(origin[i]) + first_obj.location
+        bpy.context.scene.cursor.location = cursor_loc
+
+        for obj in group:
+            local_quat = all_original_rots[obj_idx]
+            loc = locs[obj_idx]
+            
+            obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
+            obj.location = Vector(loc)
+            obj_idx += 1
+
+    for i, group in enumerate(full_groups):
+        surface_type_value = surface_type[i]
+        group_name = group_names[i]
+        
+        # Since the engine is the source of truth, update each object without sending commands back to engine
+        if group:  # Make sure group is not empty
+            from splatter.property_manager import get_property_manager
+            prop_manager = get_property_manager()
+            
+            # Set group names and surface types for all objects in the group
+            for obj in group:
+                if hasattr(obj, "classification"):
+                    prop_manager.set_group_name(obj, group_name)
+                    prop_manager.set_attribute(obj, 'surface_type', surface_type_value, update_group=False, update_engine=False)
+    
+    cdef double end_apply = time.perf_counter()
+    print(f"Application time elapsed: {(end_apply - start_apply) * 1000:.2f}ms")

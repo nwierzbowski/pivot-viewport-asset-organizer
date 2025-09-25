@@ -314,48 +314,10 @@ class Splatter_OT_Classify_Selected_Objects(bpy.types.Operator):
 
     def execute(self, context):
         startCPP = time.perf_counter()
-        rots, locs, root_groups, full_groups, all_local_quats, surface_type, group_names, origin = classify_object.classify_object(context.selected_objects)
+        classify_object.classify_and_apply_objects(context.selected_objects)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
-
-
-        startPython = time.perf_counter()
-        # Apply results
-        obj_idx = 0
-        for i, group in enumerate(root_groups):
-            delta_quat = rots[i]
-            first_obj = group[0]
-
-            for obj in group:
-                local_quat = all_local_quats[obj_idx]
-                loc = locs[obj_idx]
-                
-                obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
-                obj.location = Vector(loc)
-                bpy.context.scene.cursor.location = Vector(origin[i]) + first_obj.location
-                obj_idx += 1
-
-        for i, group in enumerate(full_groups):
-            surface_type_value = surface_type[i]
-            group_name = group_names[i]
-            
-            # Since the engine is the source of truth, update each object without sending commands back to engine
-            if group:  # Make sure group is not empty
-                from .property_manager import get_property_manager
-                prop_manager = get_property_manager()
-                
-                # Set group names and surface types for all objects in the group
-                for obj in group:
-                    if hasattr(obj, "classification"):
-                        prop_manager.set_group_name(obj, group_name)
-                        prop_manager.set_attribute(obj, 'surface_type', surface_type_value, update_group=False, update_engine=False)
-                
-                
-        
-        endPython = time.perf_counter()
-        elapsedPython = endPython - startPython
-        print(f"Python time elapsed: {elapsedPython * 1000:.2f}ms")
-        print(f"Total time elapsed: {(elapsedCPP + elapsedPython) * 1000:.2f}ms")
+        print(f"Total time elapsed: {(elapsedCPP) * 1000:.2f}ms")
         return {FINISHED}
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
