@@ -1,3 +1,5 @@
+# cython: module_name = "bridge"
+
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 from mathutils import Quaternion
