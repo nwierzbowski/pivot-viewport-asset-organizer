@@ -337,6 +337,20 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
         return get_engine_has_groups_cached()
 
     def execute(self, context):
-        print("Organize Classified Objects Operator Called (Not Implemented Yet)")
-        self.report({"INFO"}, "Organize Classified Objects (Not Implemented Yet)")
+        try:
+            # Call the engine to organize objects
+            engine_comm = engine.get_engine_communicator()
+            response = engine_comm.send_command({"id": 1, "op": "organize_objects"})
+            
+            if "positions" in response:
+                positions = response["positions"]
+                self.report({"INFO"}, f"Organized {len(positions)} objects")
+                # TODO: Apply positions to objects in Blender scene
+            else:
+                self.report({"WARNING"}, "No positions returned from engine")
+                
+        except Exception as e:
+            self.report({"ERROR"}, f"Failed to organize objects: {e}")
+            return {CANCELLED}
+            
         return {FINISHED}
