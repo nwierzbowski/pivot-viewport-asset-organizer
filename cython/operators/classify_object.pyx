@@ -89,9 +89,6 @@ def classify_and_apply_objects(list selected_objects):
     from splatter.engine_state import set_engine_parent_groups
     engine = get_engine_communicator()
     
-    # Store parent groups globally for later positioning work
-    cdef dict parent_groups_dict = {group_names[i]: {'objects': parent_groups[i], 'offsets': all_parent_offsets[i]} for i in range(len(group_names))}
-    set_engine_parent_groups(parent_groups_dict)
     final_response = engine.send_command(command)
     
     if "ok" not in final_response or not final_response["ok"]:
@@ -106,6 +103,7 @@ def classify_and_apply_objects(list selected_objects):
     cdef Py_ssize_t i, j
     cdef float rx, ry, rz
     cdef list parent_offsets_mv
+    cdef list all_rotated_offsets = []
 
     for i in range(len(parent_groups)):
         # Rotate this group's offsets in-place using numpy for speed
@@ -117,6 +115,10 @@ def classify_and_apply_objects(list selected_objects):
         rotated_offsets = offsets_array @ rot_matrix.T
         rotated_flat = rotated_offsets.flatten()
 
+        # Convert to list for storage
+        rotated_offsets_list = [(rotated_flat[j * 3], rotated_flat[j * 3 + 1], rotated_flat[j * 3 + 2]) for j in range(group_size)]
+        all_rotated_offsets.append(rotated_offsets_list)
+
         # Add the reference location to each rotated offset and collect as tuples
         ref_vec = parent_groups[i][0].matrix_world.translation
         rx = <float> ref_vec.x
@@ -124,6 +126,10 @@ def classify_and_apply_objects(list selected_objects):
         rz = <float> ref_vec.z
         for j in range(len(group)):
             locs.append((rx + rotated_flat[j * 3], ry + rotated_flat[j * 3 + 1], rz + rotated_flat[j * 3 + 2]))
+
+    # Store parent groups globally for later positioning work
+    cdef dict parent_groups_dict = {group_names[i]: {'objects': parent_groups[i], 'offsets': all_rotated_offsets[i]} for i in range(len(group_names))}
+    set_engine_parent_groups(parent_groups_dict)
 
     # Close shared memory handles in parent process; let engine manage unlinking since it may hold longer
     for shm in shm_objects:
