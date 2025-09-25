@@ -29,7 +29,7 @@ from .constants import (
 )
 from .lib import classify_object
 from . import engine
-from .engine_state import get_engine_has_groups_cached
+from .engine_state import get_engine_has_groups_cached, set_engine_has_groups_cached
 
 class Splatter_OT_Segment_Scene(bpy.types.Operator):
     bl_idname = PRE.lower() + ".segment_scene"
@@ -320,6 +320,10 @@ class Splatter_OT_Classify_Selected_Objects(bpy.types.Operator):
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
         print(f"Total time elapsed: {(elapsedCPP) * 1000:.2f}ms")
+        
+        # Mark that we now have classified objects/groups
+        set_engine_has_groups_cached(True)
+        
         return {FINISHED}
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
@@ -329,17 +333,8 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        # Once we have groups cached as true, keep returning true (groups are never deleted)
-        if get_engine_has_groups_cached():
-            return True
-        
-        # Otherwise, try to query the engine
-        try:
-            engine_comm = engine.get_engine_communicator()
-            response = engine_comm.send_command({"id": 0, "op": "has_groups"})
-            return response.get("has_groups", False)
-        except Exception:
-            return False
+        # Return true if we have successfully classified objects (cached)
+        return get_engine_has_groups_cached()
 
     def execute(self, context):
         print("Organize Classified Objects Operator Called (Not Implemented Yet)")

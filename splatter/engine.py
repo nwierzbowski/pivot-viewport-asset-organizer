@@ -151,10 +151,6 @@ class SplatterEngine:
 
                 response = json.loads(response_line)
                 if "ok" in response:
-                    # Update cache for has_groups responses
-                    if command_dict.get("op") == "has_groups" and "has_groups" in response:
-                        from .engine_state import set_engine_has_groups_cached
-                        set_engine_has_groups_cached(response["has_groups"])
                     return response
 
         except Exception as e:
