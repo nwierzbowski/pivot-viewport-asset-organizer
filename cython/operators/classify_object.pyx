@@ -1,4 +1,4 @@
-# cython: module_name = "bridge"
+# classification.pyx - C declarations and Python constants for classification
 
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t

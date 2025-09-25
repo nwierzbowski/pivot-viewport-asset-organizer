@@ -27,7 +27,7 @@ from .constants import (
     WRITE_SEATING,
     WRITE_SURFACES,
 )
-from .lib import bridge
+from .lib import classify_object
 
 class Splatter_OT_Segment_Scene(bpy.types.Operator):
     bl_idname = PRE.lower() + ".segment_scene"
@@ -314,7 +314,7 @@ class Splatter_OT_Classify_Selected_Objects(bpy.types.Operator):
 
     def execute(self, context):
         startCPP = time.perf_counter()
-        rots, locs, root_groups, full_groups, all_local_quats, surface_type, group_names, origin = bridge.classify_object(context.selected_objects)
+        rots, locs, root_groups, full_groups, all_local_quats, surface_type, group_names, origin = classify_object.classify_object(context.selected_objects)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
 
