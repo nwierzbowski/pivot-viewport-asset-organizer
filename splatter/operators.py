@@ -337,15 +337,17 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
         return get_engine_has_groups_cached()
 
     def execute(self, context):
+        start_total = time.perf_counter()
         try:
             # Call the engine to organize objects
+            start_engine = time.perf_counter()
             engine_comm = engine.get_engine_communicator()
             response = engine_comm.send_command({"id": 1, "op": "organize_objects"})
+            end_engine = time.perf_counter()
             
+            start_post = time.perf_counter()
             if "positions" in response:
                 positions = response["positions"]
-                
-                # positions is now a dict mapping group_name -> [x, y, z]
                 
                 # Get the cached parent groups dictionary
                 parent_groups = get_engine_parent_groups()
@@ -360,11 +362,8 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                         group_data = parent_groups[group_name]
                         parent_objects = group_data['objects']
                         offsets = group_data['offsets']
-                        
-                        # Get the location of the first object in the group
-                        first_obj_location = parent_objects[0].location
-                        
-                        # Apply positions to each parent object using its offset + target position + first object location
+
+                        # Apply positions to each parent object using its offset + target position
                         for i, obj in enumerate(parent_objects):
                             obj_offset = Vector(offsets[i]) if i < len(offsets) else Vector((0, 0, 0))
                             obj.location = target_pos + obj_offset
@@ -374,9 +373,15 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                 self.report({"INFO"}, f"Organized {organized_count} object groups")
             else:
                 self.report({"WARNING"}, "No positions returned from engine")
+            end_post = time.perf_counter()
                 
         except Exception as e:
+            end_total = time.perf_counter()
             self.report({"ERROR"}, f"Failed to organize objects: {e}")
+            print(f"Organize objects failed - Total time: {(end_total - start_total) * 1000:.2f}ms")
             return {CANCELLED}
+        
+        end_total = time.perf_counter()
+        print(f"Organize objects - Engine call: {(end_engine - start_engine) * 1000:.2f}ms, Post-processing: {(end_post - start_post) * 1000:.2f}ms, Total: {(end_total - start_total) * 1000:.2f}ms")
             
         return {FINISHED}
