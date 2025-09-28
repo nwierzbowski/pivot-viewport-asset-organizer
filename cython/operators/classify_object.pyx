@@ -94,9 +94,10 @@ def classify_and_apply_objects(list selected_objects):
     if "ok" not in final_response or not final_response["ok"]:
         raise RuntimeError(f"Engine error: {final_response.get('error', 'Unknown error')}")
     
-    cdef list rots = [Quaternion(r) for r in final_response["rots"]]
-    cdef list surface_type = final_response["surface_type"]
-    cdef list origin = [tuple(o) for o in final_response["origin"]]
+    cdef dict groups = final_response["groups"]
+    cdef list rots = [Quaternion(groups[name]["rot"]) for name in group_names]
+    cdef list surface_type = [groups[name]["surface_type"] for name in group_names]
+    cdef list origin = [tuple(groups[name]["origin"]) for name in group_names]
 
     # Compute new locations for each object using Cython rotation of offsets, then add ref location
     cdef list locs = []
