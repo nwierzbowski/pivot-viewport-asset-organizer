@@ -2,7 +2,7 @@ import bpy
 import os
 import stat
 
-from .classes import ObjectAttributes
+from .classes import ObjectAttributes, SceneAttributes
 from bpy.props import PointerProperty
 from bpy.app.handlers import persistent
 
@@ -106,6 +106,7 @@ bl_info = {
 
 classesToRegister = (
     ObjectAttributes,
+    SceneAttributes,
     Splatter_OT_Segment_Scene,
     Splatter_OT_Generate_Base,
     Splatter_OT_Classify_Base,
@@ -126,6 +127,7 @@ def register():
     for cls in classesToRegister:
         bpy.utils.register_class(cls)
     bpy.types.Object.classification = PointerProperty(type=ObjectAttributes)
+    bpy.types.Scene.splatter = PointerProperty(type=SceneAttributes)
 
     # Ensure engine binary is executable after zip install (zip extraction often drops exec bits)
     try:
@@ -164,6 +166,7 @@ def unregister():
         bpy.utils.unregister_class(cls)
 
     del bpy.types.Object.classification
+    del bpy.types.Scene.splatter
 
     # Stop the splatter engine
     engine.stop_engine()

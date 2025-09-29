@@ -1,13 +1,15 @@
 # type: ignore
-from bpy.types import PropertyGroup
-from bpy.props import BoolProperty, EnumProperty, StringProperty
+from bpy.types import PropertyGroup, Collection
+from bpy.props import BoolProperty, EnumProperty, StringProperty, PointerProperty
 
 # Import C enum values from Cython module
 from .lib import classification
 
+
+
 def update_property(self, context, prop_name):
     """Generic callback that runs when any syncable property is changed"""
-    import bpy
+    
 
     # Only run callback if this object is the active object (user-initiated change)
     if self.id_data != bpy.context.active_object:
@@ -24,6 +26,19 @@ def update_property(self, context, prop_name):
     from .property_manager import get_property_manager
     prop_manager = get_property_manager()
     prop_manager.set_attribute(context.active_object, prop_name, blender_value)
+
+
+class SceneAttributes(PropertyGroup):
+    objects_collection: PointerProperty(
+        name="Objects Collection",
+        description="Collection containing objects to scatter",
+        type=Collection,
+    )
+    room_collection: PointerProperty(
+        name="Room Collection",
+        description="Collection containing room geometry",
+        type=Collection,
+    )
 
 
 class ObjectAttributes(PropertyGroup):

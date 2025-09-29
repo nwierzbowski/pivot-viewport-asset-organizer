@@ -28,6 +28,9 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         obj = context.active_object
 
         layout = self.layout
+        layout.prop(context.scene.splatter, "objects_collection")
+        layout.prop(context.scene.splatter, "room_collection")
+        layout.separator()
         layout.label(text="Deep Learning Operations:")
         layout.operator(
             Splatter_OT_Segment_Scene.bl_idname
