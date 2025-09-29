@@ -2,6 +2,7 @@ from re import S
 import bpy
 from .operators import (
     Splatter_OT_Classify_Selected_Objects,
+    Splatter_OT_Classify_All_Objects_In_Collection,
     Splatter_OT_Organize_Classified_Objects,
     Splatter_OT_Classify_Object,
     Splatter_OT_Selection_To_Seating,
@@ -32,14 +33,10 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         
         # Objects Collection - split label and selector 50/50
         row = layout.row()
-        # split = row.split()
-        # split.label(text=LABEL_OBJECTS_COLLECTION)
         row.prop(context.scene.splatter, "objects_collection")
         
         # Room Collection - split label and selector 50/50
         row = layout.row()
-        # split = row.split()
-        # split.label(text=LABEL_ROOM_COLLECTION)
         row.prop(context.scene.splatter, "room_collection")
         
         layout.separator()
@@ -87,15 +84,13 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
                 if not c.group_name:
                     layout.label(text="Classify object first")
                 else:
-                    # layout.prop(c, "isSeating")
-                    # layout.prop(c, "isSurface")
-                    # Split surface type label and selector 50/50
                     row = layout.row()
-                    # split = row.split()
-                    # split.label(text=LABEL_SURFACE_TYPE)
+
                     row.prop(c, "surface_type")
             except (AttributeError, ReferenceError, MemoryError) as e:
                 layout.label(text="Classification data not available")
         layout.separator()
-        layout.operator(Splatter_OT_Classify_Selected_Objects.bl_idname)
+        row = layout.row()
+        row.operator(Splatter_OT_Classify_Selected_Objects.bl_idname)
+        row.operator(Splatter_OT_Classify_All_Objects_In_Collection.bl_idname)
         layout.operator(Splatter_OT_Organize_Classified_Objects.bl_idname)

@@ -261,7 +261,8 @@ class Splatter_OT_Classify_Object(bpy.types.Operator):
 
 class Splatter_OT_Classify_Selected_Objects(bpy.types.Operator):
     bl_idname = PRE.lower() + ".classify_selected_objects"
-    bl_label = "Classify Selected Objects"
+    bl_label = "Classify Selected"
+    bl_description = "Classify selected objects in Objects collection"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -322,6 +323,54 @@ class Splatter_OT_Classify_Selected_Objects(bpy.types.Operator):
         objects_collection = context.scene.splatter.objects_collection or context.scene.collection
         
         classify_object.classify_and_apply_objects(context.selected_objects, objects_collection)
+        endCPP = time.perf_counter()
+        elapsedCPP = endCPP - startCPP
+        print(f"Total time elapsed: {(elapsedCPP) * 1000:.2f}ms")
+        
+        # Mark that we now have classified objects/groups
+        set_engine_has_groups_cached(True)
+        
+        return {FINISHED}
+
+class Splatter_OT_Classify_All_Objects_In_Collection(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".classify_all_objects_in_collection"
+    bl_label = "Classify Collection"
+    bl_description = "Classify all objects in Objects collection"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        objects_collection = context.scene.splatter.objects_collection or context.scene.collection
+
+        def has_mesh_in_collection(coll):
+            for obj in coll.objects:
+                if obj.type == 'MESH':
+                    return True
+            for child in coll.children:
+                if has_mesh_in_collection(child):
+                    return True
+            return False
+
+        return has_mesh_in_collection(objects_collection)
+
+    def execute(self, context):
+        startCPP = time.perf_counter()
+        
+        # Determine which collection to use
+        objects_collection = context.scene.splatter.objects_collection or context.scene.collection
+        
+        def get_all_mesh_objects_in_collection(coll):
+            meshes = []
+            for obj in coll.objects:
+                if obj.type == 'MESH':
+                    meshes.append(obj)
+            for child in coll.children:
+                meshes.extend(get_all_mesh_objects_in_collection(child))
+            return meshes
+        
+        all_objects = get_all_mesh_objects_in_collection(objects_collection)
+        
+        classify_object.classify_and_apply_objects(all_objects, objects_collection)
         endCPP = time.perf_counter()
         elapsedCPP = endCPP - startCPP
         print(f"Total time elapsed: {(elapsedCPP) * 1000:.2f}ms")
