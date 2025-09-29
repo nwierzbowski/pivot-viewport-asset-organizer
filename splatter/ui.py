@@ -32,15 +32,15 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         
         # Objects Collection - split label and selector 50/50
         row = layout.row()
-        split = row.split()
-        split.label(text=LABEL_OBJECTS_COLLECTION)
-        split.prop(context.scene.splatter, "objects_collection", text="")
+        # split = row.split()
+        # split.label(text=LABEL_OBJECTS_COLLECTION)
+        row.prop(context.scene.splatter, "objects_collection")
         
         # Room Collection - split label and selector 50/50
         row = layout.row()
-        split = row.split()
-        split.label(text=LABEL_ROOM_COLLECTION)
-        split.prop(context.scene.splatter, "room_collection", text="")
+        # split = row.split()
+        # split.label(text=LABEL_ROOM_COLLECTION)
+        row.prop(context.scene.splatter, "room_collection")
         
         layout.separator()
         layout.label(text="Deep Learning Operations:")
@@ -91,9 +91,9 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
                     # layout.prop(c, "isSurface")
                     # Split surface type label and selector 50/50
                     row = layout.row()
-                    split = row.split()
-                    split.label(text=LABEL_SURFACE_TYPE)
-                    split.prop(c, "surface_type", text="")
+                    # split = row.split()
+                    # split.label(text=LABEL_SURFACE_TYPE)
+                    row.prop(c, "surface_type")
             except (AttributeError, ReferenceError, MemoryError) as e:
                 layout.label(text="Classification data not available")
         layout.separator()

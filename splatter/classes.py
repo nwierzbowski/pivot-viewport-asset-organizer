@@ -6,9 +6,9 @@ from bpy.props import BoolProperty, EnumProperty, StringProperty, PointerPropert
 from .lib import classification
 
 # UI Labels (property names derived from these)
-LABEL_OBJECTS_COLLECTION = "Objects Collection:"
-LABEL_ROOM_COLLECTION = "Room Collection:"
-LABEL_SURFACE_TYPE = "Surface Type:"
+LABEL_OBJECTS_COLLECTION = "Objects:"
+LABEL_ROOM_COLLECTION = "Room:"
+LABEL_SURFACE_TYPE = "Surface:"
 
 
 
