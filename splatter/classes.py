@@ -5,6 +5,11 @@ from bpy.props import BoolProperty, EnumProperty, StringProperty, PointerPropert
 # Import C enum values from Cython module
 from .lib import classification
 
+# UI Labels (property names derived from these)
+LABEL_OBJECTS_COLLECTION = "Objects Collection:"
+LABEL_ROOM_COLLECTION = "Room Collection:"
+LABEL_SURFACE_TYPE = "Surface Type:"
+
 
 
 def update_property(self, context, prop_name):
@@ -30,12 +35,12 @@ def update_property(self, context, prop_name):
 
 class SceneAttributes(PropertyGroup):
     objects_collection: PointerProperty(
-        name="Objects Collection",
+        name=LABEL_OBJECTS_COLLECTION.rstrip(":"),
         description="Collection containing objects to scatter",
         type=Collection,
     )
     room_collection: PointerProperty(
-        name="Room Collection",
+        name=LABEL_ROOM_COLLECTION.rstrip(":"),
         description="Collection containing room geometry",
         type=Collection,
     )
@@ -45,7 +50,7 @@ class ObjectAttributes(PropertyGroup):
     # isSeating: BoolProperty(name="Is Seating")
     # isSurface: BoolProperty(name="Is Surface")
     surface_type: EnumProperty(
-        name="Surface Type",
+        name=LABEL_SURFACE_TYPE.rstrip(":"),
         description="Type of surface",
         items=classification.SURFACE_TYPE_ITEMS,
         default=classification.SURFACE_WALL,

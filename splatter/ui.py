@@ -15,6 +15,7 @@ from .operators import (
 )
 
 from .constants import PRE, CATEGORY
+from .classes import LABEL_OBJECTS_COLLECTION, LABEL_ROOM_COLLECTION, LABEL_SURFACE_TYPE
 
 
 class Splatter_PT_Main_Panel(bpy.types.Panel):
@@ -28,8 +29,19 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         obj = context.active_object
 
         layout = self.layout
-        layout.prop(context.scene.splatter, "objects_collection")
-        layout.prop(context.scene.splatter, "room_collection")
+        
+        # Objects Collection - split label and selector 50/50
+        row = layout.row()
+        split = row.split(factor=0.5)
+        split.label(text=LABEL_OBJECTS_COLLECTION)
+        split.prop(context.scene.splatter, "objects_collection", text="")
+        
+        # Room Collection - split label and selector 50/50
+        row = layout.row()
+        split = row.split(factor=0.5)
+        split.label(text=LABEL_ROOM_COLLECTION)
+        split.prop(context.scene.splatter, "room_collection", text="")
+        
         layout.separator()
         layout.label(text="Deep Learning Operations:")
         layout.operator(
@@ -77,7 +89,11 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
                 else:
                     # layout.prop(c, "isSeating")
                     # layout.prop(c, "isSurface")
-                    layout.prop(c, "surface_type")
+                    # Split surface type label and selector 50/50
+                    row = layout.row()
+                    split = row.split(factor=0.5)
+                    split.label(text=LABEL_SURFACE_TYPE)
+                    split.prop(c, "surface_type", text="")
             except (AttributeError, ReferenceError, MemoryError) as e:
                 layout.label(text="Classification data not available")
         layout.separator()

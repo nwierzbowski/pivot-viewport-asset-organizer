@@ -11,14 +11,14 @@ SURFACE_WALL = SurfaceType_Wall
 SURFACE_CEILING = SurfaceType_Ceiling
 
 # Also expose as a dict for easy lookup
-SURFACE_TYPE_NAMES = {
-    SurfaceType_Ground: "Ground",
-    SurfaceType_Wall: "Wall",
-    SurfaceType_Ceiling: "Ceiling"
-}
+# SURFACE_TYPE_NAMES = {
+#     SurfaceType_Ground: "Ground",
+#     SurfaceType_Wall: "Wall",
+#     SurfaceType_Ceiling: "Ceiling"
+# }
 
 SURFACE_TYPE_ITEMS = [
-    (str(SurfaceType_Ground), "Ground", "Ground surface"),
-    (str(SurfaceType_Wall), "Wall", "Wall surface"),
-    (str(SurfaceType_Ceiling), "Ceiling", "Ceiling surface"),
+    (str(SurfaceType_Ground), "Ground", "Object belongs on the ground"),
+    (str(SurfaceType_Wall), "Wall", "Object belongs on the wall"),
+    (str(SurfaceType_Ceiling), "Ceiling", "Object belongs on the ceiling"),
 ]
