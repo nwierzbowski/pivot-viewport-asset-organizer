@@ -92,17 +92,8 @@ def classify_and_apply_objects(list selected_objects, collection):
     # Start preparing face data while classify command is being processed
     cdef double face_prep_start = time.perf_counter()
     
-    # Calculate face totals for face data preparation
-    cdef int total_faces = 0
-    cdef int total_faces_count = 0
-    for group in mesh_groups:
-        for obj in group:
-            total_faces_count += len(obj.data.polygons)
-            for poly in obj.data.polygons:
-                total_faces += len(poly.vertices)
-    
     # Prepare face data asynchronously while engine processes
-    face_shm_objects, face_shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv = shm_utils.prepare_face_data(total_faces, total_objects, mesh_groups)
+    face_shm_objects, face_shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv, total_faces_count, total_faces = shm_utils.prepare_face_data(total_objects, mesh_groups)
     faces_shm_name, face_sizes_shm_name = face_shm_names
     
     cdef double face_prep_end = time.perf_counter()
@@ -116,30 +107,31 @@ def classify_and_apply_objects(list selected_objects, collection):
     
     # Send face data to engine for each group
     cdef uint32_t face_sizes_offset = 0
+    cdef uint32_t obj_global_idx = 0
     cdef list group_face_counts
-    cdef list group_face_sizes
     cdef uint32_t group_face_total
     cdef dict faces_command
+    cdef uint32_t obj_face_count
     
     for group_idx in range(len(group_names)):
         group = mesh_groups[group_idx]
         group_name = group_names[group_idx]
         
-        # Collect face data for this group
+        # Collect face data for this group using numpy operations
         group_face_counts = []
-        group_face_sizes = []
         group_face_total = 0
         
         for obj in group:
-            obj_face_count = len(obj.data.polygons)
+            obj_face_count = face_counts_mv[obj_global_idx]
             group_face_counts.append(obj_face_count)
             
             if obj_face_count > 0:
-                # Use face_sizes_mv directly instead of reading from shared memory
-                face_sizes_data = face_sizes_mv[face_sizes_offset:face_sizes_offset + obj_face_count]
-                group_face_sizes.extend(face_sizes_data.tolist())
-                group_face_total += np.sum(face_sizes_data)
+                # Use memory view slice directly for sum - much faster than tolist().extend()
+                face_sizes_slice = face_sizes_mv[face_sizes_offset:face_sizes_offset + obj_face_count]
+                group_face_total += np.sum(face_sizes_slice)
                 face_sizes_offset += obj_face_count
+            
+            obj_global_idx += 1
         
         if group_face_total > 0:  # Only send if group has faces
             faces_command = {
@@ -148,8 +140,7 @@ def classify_and_apply_objects(list selected_objects, collection):
                 "shm_faces": faces_shm_name,
                 "shm_face_sizes": face_sizes_shm_name,
                 "group_name": group_name,
-                "face_counts": group_face_counts,
-                "face_sizes": group_face_sizes
+                "face_counts": group_face_counts
             }
             
             faces_response = engine.send_command(faces_command)

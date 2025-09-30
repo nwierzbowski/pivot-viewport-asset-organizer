@@ -114,80 +114,81 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     return shm_objects, shm_names, count_memory_views
 
 
-def prepare_face_data(uint32_t total_faces, uint32_t total_objects, list mesh_groups):
+def prepare_face_data(uint32_t total_objects, list mesh_groups):
     """Prepare face data for sending to engine after initial classification."""
-    cdef uint32_t num_groups = len(mesh_groups)
-    
-    # Calculate face_sizes_size
+    # Variable declarations (must be at top in Cython)
     cdef uint32_t total_faces_count = 0
+    cdef uint32_t total_faces = 0
     cdef list group
     cdef object obj
-    for group in mesh_groups:
-        for obj in group:
-            total_faces_count += len(obj.data.polygons)
-    
-    faces_size = total_faces * 4  # uint32 = 4 bytes
-    face_sizes_size = total_faces_count * 4  # uint32 = 4 bytes
-
-    # Create shared memory for faces
-    faces_shm_name = f"splatter_faces_{uuid.uuid4().hex}"
-    face_sizes_shm_name = f"splatter_face_sizes_{uuid.uuid4().hex}"
-
-    faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
-    face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
-
-    cdef cnp.ndarray all_faces = np.ndarray((faces_size // 4,), dtype=np.uint32, buffer=faces_shm.buf)
-    cdef cnp.ndarray all_face_sizes = np.ndarray((face_sizes_size // 4,), dtype=np.uint32, buffer=face_sizes_shm.buf)
-
-    # Build face-related counts
-    cdef list face_counts_list = []
-    cdef list face_sizes_list = []
-    cdef list face_vert_counts_list = []
-    cdef uint32_t count_face_idx = 0
     cdef uint32_t obj_face_count
-    cdef uint32_t obj_face_vert_count
+    cdef cnp.ndarray face_sizes_temp
+    cdef uint32_t obj_vertex_count
     
     for group in mesh_groups:
         for obj in group:
             obj_face_count = len(obj.data.polygons)
-            face_counts_list.append(obj_face_count)
+            total_faces_count += obj_face_count
             
-            # Use foreach_get to write directly into face_sizes array and accumulate total vertex count
             if obj_face_count > 0:
-                obj.data.polygons.foreach_get('loop_total', all_face_sizes[count_face_idx:count_face_idx + obj_face_count])
-                # Accumulate total vertex count using vectorized sum
-                obj_face_vert_count = np.sum(all_face_sizes[count_face_idx:count_face_idx + obj_face_count])
-                # Store face sizes for return
-                face_sizes_list.extend(all_face_sizes[count_face_idx:count_face_idx + obj_face_count].tolist())
-                count_face_idx += obj_face_count
-            else:
-                obj_face_vert_count = 0
-            
-            face_vert_counts_list.append(obj_face_vert_count)
+                # Use vectorized sum on polygon loop totals
+                face_sizes_temp = np.empty(obj_face_count, dtype=np.uint32)
+                obj.data.polygons.foreach_get('loop_total', face_sizes_temp)
+                total_faces += np.sum(face_sizes_temp)
     
-    cdef cnp.ndarray face_counts = np.array(face_counts_list, dtype=np.uint32)
-    cdef cnp.ndarray face_sizes = np.array(face_sizes_list, dtype=np.uint32)
-    cdef cnp.ndarray face_vert_counts = np.array(face_vert_counts_list, dtype=np.uint32)
-
-    # Copy face data
-    cdef uint32_t curr_faces_offset = 0
-    cdef uint32_t face_offset
+    # Create shared memory first, then create numpy arrays backed by it
+    cdef uint32_t faces_size = total_faces * 4
+    cdef uint32_t face_sizes_size = total_faces_count * 4
+    
+    cdef str faces_shm_name = f"splatter_faces_{uuid.uuid4().hex}"
+    cdef str face_sizes_shm_name = f"splatter_face_sizes_{uuid.uuid4().hex}"
+    
+    cdef object faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
+    cdef object face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
+    
+    # Create numpy arrays backed by shared memory for direct filling
+    cdef cnp.ndarray shm_faces_buf = np.ndarray((faces_size // 4,), dtype=np.uint32, buffer=faces_shm.buf)
+    cdef cnp.ndarray shm_face_sizes_buf = np.ndarray((face_sizes_size // 4,), dtype=np.uint32, buffer=face_sizes_shm.buf)
+    
+    # Use regular numpy arrays for counts (not shared memory)
+    cdef cnp.ndarray face_counts = np.empty(total_objects, dtype=np.uint32)
+    cdef cnp.ndarray face_vert_counts = np.empty(total_objects, dtype=np.uint32)
+    
+    # Single pass: collect all data directly into shared memory
     cdef uint32_t obj_idx = 0
+    cdef uint32_t face_sizes_offset = 0
+    cdef uint32_t faces_offset = 0
     
     for group in mesh_groups:
-        face_offset = 0
         for obj in group:
-            obj_face_vert_count = face_vert_counts[obj_idx]
+            obj_face_count = len(obj.data.polygons)
+            face_counts[obj_idx] = obj_face_count
             
-            if obj_face_vert_count > 0:
-                obj.data.polygons.foreach_get("vertices", all_faces[curr_faces_offset + face_offset:curr_faces_offset + face_offset + obj_face_vert_count])
-                face_offset += obj_face_vert_count
+            if obj_face_count > 0:
+                # Write face sizes directly to shared memory
+                obj.data.polygons.foreach_get('loop_total', shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count])
+                
+                # Calculate vertex count from the face sizes we just wrote
+                obj_vertex_count = np.sum(shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count])
+                face_vert_counts[obj_idx] = obj_vertex_count
+                
+                if obj_vertex_count > 0:
+                    # Write face vertices directly to shared memory
+                    obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
+                    faces_offset += obj_vertex_count
+                
+                face_sizes_offset += obj_face_count
+            else:
+                face_vert_counts[obj_idx] = 0
             
             obj_idx += 1
-        
-        curr_faces_offset += face_offset
 
-    shm_objects = (faces_shm, face_sizes_shm)
-    shm_names = (faces_shm_name, face_sizes_shm_name)
+    # Return memory views for efficient access
+    cdef uint32_t[::1] face_counts_mv = face_counts
+    cdef uint32_t[::1] face_sizes_mv = shm_face_sizes_buf
+    cdef uint32_t[::1] face_vert_counts_mv = face_vert_counts
+
+    cdef tuple shm_objects = (faces_shm, face_sizes_shm)
+    cdef tuple shm_names = (faces_shm_name, face_sizes_shm_name)
     
-    return shm_objects, shm_names, face_counts, face_sizes, face_vert_counts
+    return shm_objects, shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv, total_faces_count, total_faces
