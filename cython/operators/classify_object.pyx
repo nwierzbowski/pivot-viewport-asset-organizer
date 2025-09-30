@@ -105,47 +105,21 @@ def classify_and_apply_objects(list selected_objects, collection):
     if "ok" not in final_response or not final_response["ok"]:
         raise RuntimeError(f"Engine error: {final_response.get('error', 'Unknown error')}")
     
-    # Send face data to engine for each group
-    cdef uint32_t face_sizes_offset = 0
-    cdef uint32_t obj_global_idx = 0
-    cdef list group_face_counts
-    cdef uint32_t group_face_total
-    cdef dict faces_command
-    cdef uint32_t obj_face_count
-    
-    for group_idx in range(len(group_names)):
-        group = mesh_groups[group_idx]
-        group_name = group_names[group_idx]
+    # Send face data to engine in single command (all groups at once)
+    if total_faces > 0:  # Only send if there are faces to send
+        faces_command = {
+            "id": 2,
+            "op": "send_faces",
+            "shm_faces": faces_shm_name,
+            "shm_face_sizes": face_sizes_shm_name,
+            "face_counts": list(face_counts_mv),  # All face counts for all objects
+            "group_names": group_names,  # Group names for association
+            "object_counts": list(object_counts_mv)  # Object counts per group to split face data
+        }
         
-        # Collect face data for this group using numpy operations
-        group_face_counts = []
-        group_face_total = 0
-        
-        for obj in group:
-            obj_face_count = face_counts_mv[obj_global_idx]
-            group_face_counts.append(obj_face_count)
-            
-            if obj_face_count > 0:
-                # Use memory view slice directly for sum - much faster than tolist().extend()
-                face_sizes_slice = face_sizes_mv[face_sizes_offset:face_sizes_offset + obj_face_count]
-                group_face_total += np.sum(face_sizes_slice)
-                face_sizes_offset += obj_face_count
-            
-            obj_global_idx += 1
-        
-        if group_face_total > 0:  # Only send if group has faces
-            faces_command = {
-                "id": 2 + group_idx,
-                "op": "send_faces",
-                "shm_faces": faces_shm_name,
-                "shm_face_sizes": face_sizes_shm_name,
-                "group_name": group_name,
-                "face_counts": group_face_counts
-            }
-            
-            faces_response = engine.send_command(faces_command)
-            if "ok" not in faces_response or not faces_response["ok"]:
-                print(f"Warning: Failed to send face data for group {group_name}: {faces_response.get('error', 'Unknown error')}")
+        faces_response = engine.send_command(faces_command)
+        if "ok" not in faces_response or not faces_response["ok"]:
+            print(f"Warning: Failed to send face data: {faces_response.get('error', 'Unknown error')}")
     
     # Close face shared memory handles
     for shm in face_shm_objects:
