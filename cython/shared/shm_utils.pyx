@@ -122,64 +122,64 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
     cdef list group
     cdef object obj
     cdef uint32_t obj_face_count
-    cdef cnp.ndarray face_sizes_temp
     cdef uint32_t obj_vertex_count
+    cdef cnp.ndarray face_sizes_slice
     
+    # First pass: calculate total_faces_count
     for group in mesh_groups:
         for obj in group:
-            obj_face_count = len(obj.data.polygons)
-            total_faces_count += obj_face_count
-            
-            if obj_face_count > 0:
-                # Use vectorized sum on polygon loop totals
-                face_sizes_temp = np.empty(obj_face_count, dtype=np.uint32)
-                obj.data.polygons.foreach_get('loop_total', face_sizes_temp)
-                total_faces += np.sum(face_sizes_temp)
+            total_faces_count += len(obj.data.polygons)
     
-    # Create shared memory first, then create numpy arrays backed by it
-    cdef uint32_t faces_size = total_faces * 4
+    # Create shared memory for face sizes
     cdef uint32_t face_sizes_size = total_faces_count * 4
-    
-    cdef str faces_shm_name = f"splatter_faces_{uuid.uuid4().hex}"
     cdef str face_sizes_shm_name = f"splatter_face_sizes_{uuid.uuid4().hex}"
-    
-    cdef object faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
     cdef object face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
-    
-    # Create numpy arrays backed by shared memory for direct filling
-    cdef cnp.ndarray shm_faces_buf = np.ndarray((faces_size // 4,), dtype=np.uint32, buffer=faces_shm.buf)
-    cdef cnp.ndarray shm_face_sizes_buf = np.ndarray((face_sizes_size // 4,), dtype=np.uint32, buffer=face_sizes_shm.buf)
+    cdef cnp.ndarray shm_face_sizes_buf = np.ndarray((total_faces_count,), dtype=np.uint32, buffer=face_sizes_shm.buf)
     
     # Use regular numpy arrays for counts (not shared memory)
     cdef cnp.ndarray face_counts = np.empty(total_objects, dtype=np.uint32)
     cdef cnp.ndarray face_vert_counts = np.empty(total_objects, dtype=np.uint32)
     
-    # Single pass: collect all data directly into shared memory
-    cdef uint32_t obj_idx = 0
+    # Second pass: write face sizes directly to shared memory, calculate total_faces, fill counts
     cdef uint32_t face_sizes_offset = 0
-    cdef uint32_t faces_offset = 0
-    
+    cdef uint32_t obj_idx = 0
     for group in mesh_groups:
         for obj in group:
             obj_face_count = len(obj.data.polygons)
             face_counts[obj_idx] = obj_face_count
             
             if obj_face_count > 0:
-                # Write face sizes directly to shared memory
-                obj.data.polygons.foreach_get('loop_total', shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count])
+                # Create view into shared memory for this object
+                face_sizes_slice = shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count]
+                obj.data.polygons.foreach_get('loop_total', face_sizes_slice)
                 
                 # Calculate vertex count from the face sizes we just wrote
-                obj_vertex_count = np.sum(shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count])
+                obj_vertex_count = np.sum(face_sizes_slice)
                 face_vert_counts[obj_idx] = obj_vertex_count
-                
-                if obj_vertex_count > 0:
-                    # Write face vertices directly to shared memory
-                    obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
-                    faces_offset += obj_vertex_count
-                
-                face_sizes_offset += obj_face_count
+                total_faces += obj_vertex_count
             else:
                 face_vert_counts[obj_idx] = 0
+            
+            face_sizes_offset += obj_face_count
+            obj_idx += 1
+    
+    # Create shared memory for faces
+    cdef uint32_t faces_size = total_faces * 4
+    cdef str faces_shm_name = f"splatter_faces_{uuid.uuid4().hex}"
+    cdef object faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
+    cdef cnp.ndarray shm_faces_buf = np.ndarray((total_faces,), dtype=np.uint32, buffer=faces_shm.buf)
+    
+    # Third pass: write face vertices directly to shared memory
+    cdef uint32_t faces_offset = 0
+    obj_idx = 0
+    for group in mesh_groups:
+        for obj in group:
+            obj_vertex_count = face_vert_counts[obj_idx]
+            
+            if obj_vertex_count > 0:
+                # Write face vertices directly to shared memory
+                obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
+                faces_offset += obj_vertex_count
             
             obj_idx += 1
 
