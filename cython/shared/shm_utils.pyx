@@ -217,7 +217,7 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
             for obj in group:
                 obj_vertex_count = face_vert_counts_view[obj_idx]
                 if obj_vertex_count > 0:
-                    obj.data.loops.foreach_get("vertex_index", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
+                    obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
                     faces_offset += obj_vertex_count
                 obj_idx += 1
 
