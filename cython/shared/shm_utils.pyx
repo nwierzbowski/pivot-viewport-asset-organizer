@@ -116,79 +116,119 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
 
 def prepare_face_data(uint32_t total_objects, list mesh_groups):
     """Prepare face data for sending to engine after initial classification."""
-    # Variable declarations (must be at top in Cython)
     cdef uint32_t total_faces_count = 0
-    cdef uint32_t total_faces = 0
+    cdef uint32_t total_face_vertices = 0
+    cdef size_t expected_objects = 0
     cdef list group
     cdef object obj
     cdef uint32_t obj_face_count
     cdef uint32_t obj_vertex_count
-    cdef cnp.ndarray face_sizes_slice
-    
-    # First pass: calculate total_faces_count
-    for group in mesh_groups:
-        for obj in group:
-            total_faces_count += len(obj.data.polygons)
-    
-    # Create shared memory for face sizes
-    cdef uint32_t face_sizes_size = total_faces_count * 4
-    cdef str face_sizes_shm_name = f"splatter_face_sizes_{uuid.uuid4().hex}"
-    cdef object face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
-    cdef cnp.ndarray shm_face_sizes_buf = np.ndarray((total_faces_count,), dtype=np.uint32, buffer=face_sizes_shm.buf)
-    
-    # Use regular numpy arrays for counts (not shared memory)
-    cdef cnp.ndarray face_counts = np.empty(total_objects, dtype=np.uint32)
-    cdef cnp.ndarray face_vert_counts = np.empty(total_objects, dtype=np.uint32)
-    
-    # Second pass: write face sizes directly to shared memory, calculate total_faces, fill counts
+    cdef cnp.ndarray[cnp.uint32_t, ndim=1] face_sizes_slice
+    cdef cnp.ndarray[cnp.uint32_t, ndim=1] shm_face_sizes_buf = None
+    cdef cnp.ndarray[cnp.uint32_t, ndim=1] shm_faces_buf = None
+    cdef cnp.ndarray[cnp.uint32_t, ndim=1] face_counts = None
+    cdef cnp.ndarray[cnp.uint32_t, ndim=1] face_vert_counts = None
+    cdef uint32_t[::1] face_sizes_slice_view
+    cdef uint32_t[::1] face_counts_mv
+    cdef uint32_t[::1] face_vert_counts_view
     cdef uint32_t face_sizes_offset = 0
     cdef uint32_t obj_idx = 0
-    for group in mesh_groups:
-        for obj in group:
-            obj_face_count = len(obj.data.polygons)
-            face_counts[obj_idx] = obj_face_count
-            
-            if obj_face_count > 0:
-                # Create view into shared memory for this object
-                face_sizes_slice = shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count]
-                obj.data.polygons.foreach_get('loop_total', face_sizes_slice)
-                
-                # Calculate vertex count from the face sizes we just wrote
-                obj_vertex_count = np.sum(face_sizes_slice)
-                face_vert_counts[obj_idx] = obj_vertex_count
-                total_faces += obj_vertex_count
-            else:
-                face_vert_counts[obj_idx] = 0
-            
-            face_sizes_offset += obj_face_count
-            obj_idx += 1
-    
-    # Create shared memory for faces
-    cdef uint32_t faces_size = total_faces * 4
-    cdef str faces_shm_name = f"splatter_faces_{uuid.uuid4().hex}"
-    cdef object faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
-    cdef cnp.ndarray shm_faces_buf = np.ndarray((total_faces,), dtype=np.uint32, buffer=faces_shm.buf)
-    
-    # Third pass: write face vertices directly to shared memory
     cdef uint32_t faces_offset = 0
-    obj_idx = 0
+    cdef size_t faces_size = 0
+    cdef tuple shm_objects
+    cdef tuple shm_names
+    cdef str faces_shm_name = ""
+    cdef str face_sizes_shm_name = ""
+    cdef object faces_shm = None
+    cdef object face_sizes_shm = None
+
+    # First pass: gather totals and validate counts
     for group in mesh_groups:
+        expected_objects += len(group)
         for obj in group:
-            obj_vertex_count = face_vert_counts[obj_idx]
-            
-            if obj_vertex_count > 0:
-                # Write face vertices directly to shared memory
-                obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
-                faces_offset += obj_vertex_count
-            
-            obj_idx += 1
+            total_faces_count += len(obj.data.polygons)
 
-    # Return memory views for efficient access
-    cdef uint32_t[::1] face_counts_mv = face_counts
-    cdef uint32_t[::1] face_sizes_mv = shm_face_sizes_buf
-    cdef uint32_t[::1] face_vert_counts_mv = face_vert_counts
+    if expected_objects != total_objects:
+        raise ValueError(f"prepare_face_data: expected {expected_objects} objects, received {total_objects}")
 
-    cdef tuple shm_objects = (faces_shm, face_sizes_shm)
-    cdef tuple shm_names = (faces_shm_name, face_sizes_shm_name)
-    
-    return shm_objects, shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv, total_faces_count, total_faces
+    # Early exit when no faces are present
+    if total_faces_count == 0:
+        face_counts = np.zeros(total_objects, dtype=np.uint32)
+        face_vert_counts = np.zeros(total_objects, dtype=np.uint32)
+        shm_face_sizes_buf = np.zeros(0, dtype=np.uint32)
+
+        face_counts_mv = face_counts
+
+        return (), ("", ""), face_counts_mv, 0
+
+    cdef size_t face_sizes_size = <size_t>total_faces_count * 4
+
+    face_sizes_shm_name = f"splatter_face_sizes_{uuid.uuid4().hex}"
+
+    try:
+        face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
+        shm_face_sizes_buf = np.ndarray((total_faces_count,), dtype=np.uint32, buffer=face_sizes_shm.buf)
+
+        face_counts = np.empty(total_objects, dtype=np.uint32)
+        face_vert_counts = np.empty(total_objects, dtype=np.uint32)
+
+        face_sizes_offset = 0
+        obj_idx = 0
+
+        for group in mesh_groups:
+            for obj in group:
+                obj_face_count = <uint32_t>len(obj.data.polygons)
+                face_counts[obj_idx] = obj_face_count
+
+                if obj_face_count > 0:
+                    face_sizes_slice = shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count]
+                    obj.data.polygons.foreach_get('loop_total', face_sizes_slice)
+
+                    obj_vertex_count = 0
+                    face_sizes_slice_view = face_sizes_slice
+                    for i in range(obj_face_count):
+                        obj_vertex_count += face_sizes_slice_view[i]
+
+                    face_vert_counts[obj_idx] = obj_vertex_count
+                    total_face_vertices += obj_vertex_count
+                else:
+                    face_vert_counts[obj_idx] = 0
+
+                face_sizes_offset += obj_face_count
+                obj_idx += 1
+
+        if total_face_vertices == 0:
+            raise ValueError("prepare_face_data: collected faces but no vertex indices recorded")
+
+        faces_shm_name = f"splatter_faces_{uuid.uuid4().hex}"
+        faces_size = <size_t>total_face_vertices * 4
+        faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
+        shm_faces_buf = np.ndarray((total_face_vertices,), dtype=np.uint32, buffer=faces_shm.buf)
+
+        faces_offset = 0
+        obj_idx = 0
+        face_vert_counts_view = face_vert_counts
+
+        for group in mesh_groups:
+            for obj in group:
+                obj_vertex_count = face_vert_counts_view[obj_idx]
+                if obj_vertex_count > 0:
+                    obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
+                    faces_offset += obj_vertex_count
+                obj_idx += 1
+
+        face_counts_mv = face_counts
+
+        shm_objects = (faces_shm, face_sizes_shm)
+        shm_names = (faces_shm_name, face_sizes_shm_name)
+
+        return shm_objects, shm_names, face_counts_mv, total_face_vertices
+
+    except Exception:
+        if faces_shm is not None:
+            faces_shm.close()
+            faces_shm.unlink()
+        if face_sizes_shm is not None:
+            face_sizes_shm.close()
+            face_sizes_shm.unlink()
+        raise

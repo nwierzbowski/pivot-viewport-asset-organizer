@@ -96,7 +96,7 @@ def classify_and_apply_objects(list selected_objects, collection):
 
     start_alignment = time.perf_counter()
     classify_wait_start = time.perf_counter()
-    face_shm_objects, face_shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv, total_faces_count, total_faces = shm_utils.prepare_face_data(total_objects, mesh_groups)
+    face_shm_objects, face_shm_names, face_counts_mv, total_faces = shm_utils.prepare_face_data(total_objects, mesh_groups)
     faces_shm_name, face_sizes_shm_name = face_shm_names
 
     print(f"Time to prepare face data for sending to engine: {(time.perf_counter() - classify_wait_start) * 1000:.2f}ms")
