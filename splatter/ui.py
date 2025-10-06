@@ -35,42 +35,42 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         row.prop(context.scene.splatter, "objects_collection")
         
         # Room Collection - split label and selector 50/50
-        row = layout.row()
-        row.prop(context.scene.splatter, "room_collection")
+        # row = layout.row()
+        # row.prop(context.scene.splatter, "room_collection")
         
         # Add more operators here later
-        layout.separator()
-        layout.label(text="Room Generation:")
-        layout.operator(
-            Splatter_OT_Generate_Base.bl_idname
-        )
-        layout.operator(
-            Splatter_OT_Classify_Base.bl_idname
-        )
-        layout.separator()
-        layout.label(text="Surface Classification:")
-        layout.operator(
-            Splatter_OT_Classify_Faces.bl_idname
-        )
-        row = layout.row()
-        row.operator(
-            Splatter_OT_Select_Surfaces.bl_idname
-        )
-        row.operator(
-            Splatter_OT_Selection_To_Surfaces.bl_idname
-        )
-        row = layout.row()
-        row.operator(
-            Splatter_OT_Select_Seating.bl_idname
-        )
-        row.operator(
-            Splatter_OT_Selection_To_Seating.bl_idname
-        )
-        layout.separator()
-        layout.label(text="Object Analysis:")
-        layout.operator(
-            Splatter_OT_Classify_Object.bl_idname
-        )
+        # layout.separator()
+        # layout.label(text="Room Generation:")
+        # layout.operator(
+        #     Splatter_OT_Generate_Base.bl_idname
+        # )
+        # layout.operator(
+        #     Splatter_OT_Classify_Base.bl_idname
+        # )
+        # layout.separator()
+        # layout.label(text="Surface Classification:")
+        # layout.operator(
+        #     Splatter_OT_Classify_Faces.bl_idname
+        # )
+        # row = layout.row()
+        # row.operator(
+        #     Splatter_OT_Select_Surfaces.bl_idname
+        # )
+        # row.operator(
+        #     Splatter_OT_Selection_To_Surfaces.bl_idname
+        # )
+        # row = layout.row()
+        # row.operator(
+        #     Splatter_OT_Select_Seating.bl_idname
+        # )
+        # row.operator(
+        #     Splatter_OT_Selection_To_Seating.bl_idname
+        # )
+        # layout.separator()
+        # layout.label(text="Object Analysis:")
+        # layout.operator(
+        #     Splatter_OT_Classify_Object.bl_idname
+        # )
         if obj:
             try:
                 c = obj.classification
