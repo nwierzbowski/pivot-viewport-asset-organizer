@@ -3,6 +3,10 @@
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
+set(EDITION_FLAGS_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/edition_flags.pxi.in)
+set(EDITION_FLAGS_FILE ${CMAKE_CURRENT_BINARY_DIR}/edition_flags.pxi)
+configure_file(${EDITION_FLAGS_TEMPLATE} ${EDITION_FLAGS_FILE} @ONLY)
+
 set(CYTHON_MODULE_SOURCES
     operators/classify_object.pyx
     shared/classification.pyx
@@ -25,17 +29,17 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
         if(EXISTS ${PXD_FILE})
             add_custom_command(
                 OUTPUT ${OUT}
-                COMMAND ${CYTHON_EXECUTABLE} --cplus -a -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR}/.. -o ${OUT} ${SRC}
+                COMMAND ${CYTHON_EXECUTABLE} --cplus -a -I ${CMAKE_CURRENT_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR}/.. -o ${OUT} ${SRC}
                 BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${mod}.html
-                DEPENDS ${SRC} ${PXD_FILE}
+                DEPENDS ${SRC} ${PXD_FILE} ${EDITION_FLAGS_FILE}
                 COMMENT "Cythonizing ${SRC} with HTML annotations"
             )
         else()
             add_custom_command(
                 OUTPUT ${OUT}
-                COMMAND ${CYTHON_EXECUTABLE} --cplus -a -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR}/.. -o ${OUT} ${SRC}
+                COMMAND ${CYTHON_EXECUTABLE} --cplus -a -I ${CMAKE_CURRENT_BINARY_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR} -I ${CMAKE_CURRENT_SOURCE_DIR}/.. -o ${OUT} ${SRC}
                 BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${mod}.html
-                DEPENDS ${SRC}
+                DEPENDS ${SRC} ${EDITION_FLAGS_FILE}
                 COMMENT "Cythonizing ${SRC} with HTML annotations"
             )
         endif()
@@ -60,6 +64,11 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
                 target_compile_definitions(${mod} PRIVATE ${def})
             endforeach()
         endif()
+        # Force rebuild on edition switch by removing old module
+        add_custom_command(TARGET ${mod} PRE_BUILD
+            COMMAND ${CMAKE_COMMAND} -E remove $<TARGET_FILE:${mod}>
+            COMMENT "Removing old Cython module to force rebuild on edition switch"
+        )
     endif()
 endforeach()
 
