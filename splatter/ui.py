@@ -16,6 +16,8 @@ from .operators import (
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
 from .classes import LABEL_OBJECTS_COLLECTION, LABEL_ROOM_COLLECTION, LABEL_SURFACE_TYPE, LABEL_LICENSE_TYPE
+from .engine_state import get_engine_license_status, set_engine_license_status
+from . import engine
 
 
 class Splatter_PT_Main_Panel(bpy.types.Panel):
@@ -28,10 +30,20 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
     def draw(self, context):
         obj = context.active_object
         layout = self.layout
-        license_type = context.scene.splatter.license_type
+        scene = context.scene
+        
+        # Get license_type from cached engine status, sync if needed
+        match, license_type = get_engine_license_status()
+        if license_type == "UNKNOWN":
+            try:
+                match, license_type = engine.sync_license_mode()
+                set_engine_license_status(match, license_type)
+            except Exception as e:
+                print(f"[Splatter] Failed to sync license: {e}")
+                license_type = "UNKNOWN"
         
         # Always show license selector
-        self._draw_license_selector(layout)
+        self._draw_license_selector(layout, license_type)
         
         layout.separator()
         
@@ -40,10 +52,10 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         else:
             self._draw_standard_ui(layout)
     
-    def _draw_license_selector(self, layout):
-        """Draw the license type selector (always visible)."""
+    def _draw_license_selector(self, layout, license_type):
+        """Draw the license type display (read-only)."""
         row = layout.row()
-        row.prop(bpy.context.scene.splatter, "license_type")
+        row.label(text=f"License: {license_type}")
     
     def _draw_standard_ui(self, layout):
         """Draw the standard license UI - minimal functionality."""

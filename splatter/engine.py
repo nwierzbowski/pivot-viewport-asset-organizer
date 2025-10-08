@@ -17,7 +17,7 @@ import subprocess
 import atexit
 import json
 import select
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 
 class SplatterEngine:
@@ -238,6 +238,27 @@ def get_engine_communicator() -> SplatterEngine:
 def get_engine_process():
     """Get the current engine process (for backward compatibility)."""
     return _engine_instance._process
+
+
+def sync_license_mode() -> Tuple[bool, str]:
+    """Retrieve the compiled edition from the engine.
+
+    Returns:
+        Tuple consisting of (True, engine_mode) where engine_mode is the
+        edition compiled into the engine binary ("PRO", "STANDARD", or "UNKNOWN").
+
+    Raises:
+        RuntimeError: If communication with the engine fails.
+    """
+
+    engine_comm = get_engine_communicator()
+    payload = {
+        "id": 0,
+        "op": "sync_license",
+    }
+    response = engine_comm.send_command(payload)
+    engine_mode = str(response.get("engine_edition", "UNKNOWN")).upper()
+    return True, engine_mode
 
 
 def test_engine_communication() -> bool:

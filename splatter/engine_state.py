@@ -15,6 +15,8 @@ _engine_has_groups_cached = False
 
 # Cache the current parent groups dictionary (group_name -> list of parent objects)
 _engine_parent_groups = {}
+_engine_license_match = True
+_engine_license_mode = "UNKNOWN"
 
 
 def get_engine_has_groups_cached() -> bool:
@@ -45,4 +47,16 @@ def set_engine_parent_groups(parent_groups: dict) -> None:
     """
     global _engine_parent_groups
     _engine_parent_groups.update(parent_groups)
+
+
+def set_engine_license_status(match: bool, engine_mode: str) -> None:
+    """Record the engine license compatibility information."""
+    global _engine_license_match, _engine_license_mode
+    _engine_license_match = bool(match)
+    _engine_license_mode = engine_mode
+
+
+def get_engine_license_status() -> tuple[bool, str]:
+    """Retrieve the last known engine license compatibility information."""
+    return _engine_license_match, _engine_license_mode
 

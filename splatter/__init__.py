@@ -21,6 +21,7 @@ from .operators import (
 )
 from .ui import Splatter_PT_Main_Panel
 from . import engine
+from .engine_state import set_engine_license_status
 
 
 @persistent
@@ -141,8 +142,11 @@ def register():
         print(f"Note: Could not adjust permissions for engine binary during register: {e}")
 
     # Start the splatter engine
-    engine.start_engine()
+    engine_started = engine.start_engine()
 
+    if not engine_started:
+        print("[Splatter] Failed to start engine")
+    
     # Always-on undo/redo handlers (fast no-ops when not applicable)
     _register_undo_handlers()
 

@@ -47,14 +47,10 @@ class SceneAttributes(PropertyGroup):
         description="Collection containing room geometry",
         type=Collection,
     )
-    license_type: EnumProperty(
+    license_type: StringProperty(
         name=LABEL_LICENSE_TYPE.rstrip(":"),
-        description="License type for UI features",
-        items=[
-            (LICENSE_STANDARD, "Standard", "Standard license features"),
-            (LICENSE_PRO, "Pro", "Pro license features"),
-        ],
-        default=LICENSE_STANDARD,
+        description="License type (read-only, determined by engine)",
+        default="UNKNOWN",
     )
 
 

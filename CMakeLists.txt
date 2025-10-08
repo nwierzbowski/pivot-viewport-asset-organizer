@@ -30,7 +30,7 @@ else()
     list(APPEND _edition_defines "SPLATTER_EDITION_PRO=0" "SPLATTER_EDITION_STANDARD=1")
 endif()
 
-set(SPLATTER_EDITION_DEFINES "${_edition_defines}" CACHE INTERNAL "Compile definitions for the selected edition")
+set(SPLATTER_EDITION_DEFINES "${_edition_defines}" CACHE INTERNAL "Compile definitions for the selected edition" FORCE)
 set(SPLATTER_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin" CACHE INTERNAL "Engine output directory")
 set(SPLATTER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/splatter/lib" CACHE INTERNAL "Cython module output directory")
 
