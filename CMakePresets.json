@@ -2,8 +2,8 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "default",
-      "displayName": "Default Config",
+      "name": "pro",
+      "displayName": "Pro Edition Config",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
@@ -15,7 +15,7 @@
     {
       "name": "standard",
       "displayName": "Standard Edition",
-      "inherits": "default",
+      "inherits": "pro",
       "binaryDir": "${sourceDir}/build-standard",
       "cacheVariables": {
         "SPLATTER_EDITION": "STANDARD"
@@ -24,8 +24,8 @@
   ],
   "buildPresets": [
     {
-      "name": "default-release",
-      "configurePreset": "default",
+      "name": "pro-release",
+      "configurePreset": "pro",
       "configuration": "Release"
     },
     {
