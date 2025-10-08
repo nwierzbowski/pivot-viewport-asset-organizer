@@ -46,15 +46,25 @@ class SplatterEngine:
         try:
             # Get the path to the executable relative to this file
             addon_dir = os.path.dirname(os.path.dirname(__file__))  # Go up from splatter/
-            # Resolve engine binary name based on OS
-            engine_name = 'splatter_engine.exe' if os.name == 'nt' else 'splatter_engine'
-            engine_path = os.path.join(addon_dir, 'splatter', 'bin', engine_name)
-            print(f"Engine path: {engine_path}")
-
-            # Check if executable exists
-            if not os.path.exists(engine_path):
-                print(f"Warning: Engine executable not found at {engine_path}")
+            bin_dir = os.path.join(addon_dir, 'splatter', 'bin')
+            
+            # Try different engine names in order of preference
+            engine_names = ['splatter_engine_PRO', 'splatter_engine_STANDARD']
+            if os.name == 'nt':
+                engine_names = [name + '.exe' for name in engine_names]
+            
+            engine_path = None
+            for name in engine_names:
+                candidate_path = os.path.join(bin_dir, name)
+                if os.path.exists(candidate_path):
+                    engine_path = candidate_path
+                    break
+            
+            if engine_path is None:
+                print(f"Warning: Engine executable not found in {bin_dir}")
                 return False
+            
+            print(f"Engine path: {engine_path}")
 
             print(f"Starting splatter engine: {engine_path}")
 
