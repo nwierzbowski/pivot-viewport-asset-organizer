@@ -5,16 +5,6 @@ import multiprocessing.shared_memory as shared_memory
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 
-include "edition_flags.pxi"
-
-IF SPLATTER_EDITION_PRO:
-    DEF CYTHON_EDITION_NAME = "PRO"
-ELIF SPLATTER_EDITION_STANDARD:
-    DEF CYTHON_EDITION_NAME = "STANDARD"
-ELSE:
-    DEF CYTHON_EDITION_NAME = "UNKNOWN"
-
-
 def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups):
     cdef uint32_t num_groups = len(mesh_groups)
     verts_size = total_verts * 3 * 4  # float32 = 4 bytes
@@ -247,13 +237,3 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
             face_sizes_shm.close()
             face_sizes_shm.unlink()
         raise
-
-def print_edition() -> None:
-    """Print the edition this Cython module was compiled for (testing helper)."""
-    IF SPLATTER_EDITION_PRO:
-        print("[Splatter][Cython] Compile-time branch: PRO edition")
-    ELIF SPLATTER_EDITION_STANDARD:
-        print("[Splatter][Cython] Compile-time branch: STANDARD edition")
-    ELSE:
-        print("[Splatter][Cython] Compile-time branch: UNKNOWN edition")
-    print(f"Cython compiled for {CYTHON_EDITION_NAME} edition")

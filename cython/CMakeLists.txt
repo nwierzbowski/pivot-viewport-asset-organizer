@@ -10,6 +10,7 @@ configure_file(${EDITION_FLAGS_TEMPLATE} ${EDITION_FLAGS_FILE} @ONLY)
 set(CYTHON_MODULE_SOURCES
     operators/classify_object.pyx
     shared/classification.pyx
+    shared/edition_utils.pyx
     shared/selection_utils.pyx
     shared/shm_utils.pyx
     shared/transform_utils.pyx
@@ -47,6 +48,9 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
         set_target_properties(${mod} PROPERTIES PREFIX "")
         if(WIN32)
             set_target_properties(${mod} PROPERTIES SUFFIX ".pyd")
+        endif()
+        if(TARGET splatter_ensure_outputs)
+            add_dependencies(${mod} splatter_ensure_outputs)
         endif()
         target_link_libraries(${mod} PRIVATE Python3::Module)
         # Numpy headers
