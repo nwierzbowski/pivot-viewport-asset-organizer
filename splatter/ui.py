@@ -1,17 +1,21 @@
 from re import S
 import bpy
-from .operators import (
-    Splatter_OT_Classify_Selected_Objects,
-    Splatter_OT_Classify_All_Objects_In_Collection,
+from .operators.operators import (
     Splatter_OT_Organize_Classified_Objects,
-    Splatter_OT_Classify_Object,
-    Splatter_OT_Selection_To_Seating,
-    Splatter_OT_Selection_To_Surfaces,
-    Splatter_OT_Classify_Faces,
-    Splatter_OT_Generate_Base,
-    Splatter_OT_Classify_Base,
-    Splatter_OT_Select_Surfaces,
-    Splatter_OT_Select_Seating,
+    # Splatter_OT_Classify_Object,
+    # Splatter_OT_Selection_To_Seating,
+    # Splatter_OT_Selection_To_Surfaces,
+    # Splatter_OT_Classify_Faces,
+    # Splatter_OT_Generate_Base,
+    # Splatter_OT_Classify_Base,
+    # Splatter_OT_Select_Surfaces,
+    # Splatter_OT_Select_Seating,
+)
+
+from .operators.classification import (
+    Splatter_OT_Classify_Selected,
+    Splatter_OT_Classify_All_Objects_In_Collection,
+    Splatter_OT_Classify_Active_Object,
 )
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
@@ -60,7 +64,7 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         """Draw the standard license UI - minimal functionality."""
         # Classification buttons
         row = layout.row()
-        row.operator(Splatter_OT_Classify_Selected_Objects.bl_idname)
+        row.operator(Splatter_OT_Classify_Active_Object.bl_idname)
     
     def _draw_pro_ui(self, layout, obj):
         """Draw the pro license UI - full functionality."""
@@ -75,7 +79,7 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         
         # Classification buttons
         row = layout.row()
-        row.operator(Splatter_OT_Classify_Selected_Objects.bl_idname)
+        row.operator(Splatter_OT_Classify_Selected.bl_idname)
         row.operator(Splatter_OT_Classify_All_Objects_In_Collection.bl_idname)
         
         # Organization button

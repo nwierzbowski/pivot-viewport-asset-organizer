@@ -7,18 +7,21 @@ from .classes import ObjectAttributes, SceneAttributes
 from bpy.props import PointerProperty
 from bpy.app.handlers import persistent
 
-from .operators import (
-    Splatter_OT_Classify_Selected_Objects,
-    Splatter_OT_Classify_All_Objects_In_Collection,
+from .operators.operators import (
+    # Splatter_OT_Generate_Base,
+    # Splatter_OT_Classify_Base,
+    # Splatter_OT_Classify_Faces,
+    # Splatter_OT_Select_Surfaces,
+    # Splatter_OT_Selection_To_Surfaces,
+    # Splatter_OT_Select_Seating,
+    # Splatter_OT_Selection_To_Seating,
+    # Splatter_OT_Classify_Object,
     Splatter_OT_Organize_Classified_Objects,
-    Splatter_OT_Classify_Base,
-    Splatter_OT_Classify_Object,
-    Splatter_OT_Selection_To_Seating,
-    Splatter_OT_Selection_To_Surfaces,
-    Splatter_OT_Classify_Faces,
-    Splatter_OT_Generate_Base,
-    Splatter_OT_Select_Surfaces,
-    Splatter_OT_Select_Seating,
+)
+from .operators.classification import (
+    Splatter_OT_Classify_Selected,
+    Splatter_OT_Classify_Active_Object,
+    Splatter_OT_Classify_All_Objects_In_Collection,
 )
 from .ui import Splatter_PT_Main_Panel
 from . import engine
@@ -108,16 +111,17 @@ bl_info = {
 classesToRegister = (
     ObjectAttributes,
     SceneAttributes,
-    Splatter_OT_Generate_Base,
-    Splatter_OT_Classify_Base,
+    # Splatter_OT_Generate_Base,
+    # Splatter_OT_Classify_Base,
     Splatter_PT_Main_Panel,
-    Splatter_OT_Classify_Faces,
-    Splatter_OT_Select_Surfaces,
-    Splatter_OT_Selection_To_Surfaces,
-    Splatter_OT_Select_Seating,
-    Splatter_OT_Selection_To_Seating,
-    Splatter_OT_Classify_Object,
-    Splatter_OT_Classify_Selected_Objects,
+    # Splatter_OT_Classify_Faces,
+    # Splatter_OT_Select_Surfaces,
+    # Splatter_OT_Selection_To_Surfaces,
+    # Splatter_OT_Select_Seating,
+    # Splatter_OT_Selection_To_Seating,
+    # Splatter_OT_Classify_Object,
+    Splatter_OT_Classify_Selected,
+    Splatter_OT_Classify_Active_Object,
     Splatter_OT_Classify_All_Objects_In_Collection,
     Splatter_OT_Organize_Classified_Objects,
 )
