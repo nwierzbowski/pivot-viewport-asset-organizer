@@ -180,7 +180,8 @@ def classify_and_apply_objects(list selected_objects, collection):
         delta_quat = rots[i]
         first_obj = group[0]
         cursor_loc = Vector(origin[i]) + first_obj.location
-        bpy.context.scene.cursor.location = cursor_loc
+
+        
 
         for obj in group:
             local_quat = all_original_rots[obj_idx]
@@ -189,6 +190,12 @@ def classify_and_apply_objects(list selected_objects, collection):
             obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
             obj.location = Vector(loc)
             obj_idx += 1
+
+        bpy.context.scene.cursor.location = cursor_loc
+        # bpy.ops.object.select_all(action='DESELECT')
+        # for obj in group:
+        #     obj.select_set(True)
+        # bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
 
 
     if edition_utils.is_pro_edition():

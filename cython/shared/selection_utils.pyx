@@ -18,15 +18,20 @@ cpdef object get_root_parent(object obj):
 #     return meshes
 
 
-cpdef tuple get_mesh_and_all_descendants(object root):
+cpdef tuple get_mesh_and_all_descendants(object root, object depsgraph):
     cdef list meshes = []
     cdef list descendants = [root]
     cdef list stack = [root]
     cdef object current
+    cdef object eval_obj
+    cdef object eval_mesh
     while stack:
         current = stack.pop()
-        if current.type == 'MESH' and len(current.data.vertices) != 0:
-            meshes.append(current)
+        if current.type == 'MESH':
+            eval_obj = current.evaluated_get(depsgraph)
+            eval_mesh = eval_obj.data
+            if len(eval_mesh.vertices) != 0:
+                meshes.append(current)
         for child in current.children:
             descendants.append(child)
             stack.append(child)
@@ -57,6 +62,7 @@ def aggregate_object_groups(list selected_objects, object collection):
     Returns a 7-tuple:
       (mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects)
     """
+    cdef object depsgraph = bpy.context.evaluated_depsgraph_get()
     cdef object scene_coll = collection
     cdef dict coll_to_top = {}
     cdef object top_coll
@@ -122,9 +128,9 @@ def aggregate_object_groups(list selected_objects, object collection):
 
     # Handle scene roots individually
     for root in scene_roots:
-        all_meshes, all_descendants = get_mesh_and_all_descendants(root)
-        group_verts = sum(len(m.data.vertices) for m in all_meshes)
-        group_edges = sum(len(m.data.edges) for m in all_meshes)
+        all_meshes, all_descendants = get_mesh_and_all_descendants(root, depsgraph)
+        group_verts = sum(len(m.evaluated_get(depsgraph).data.vertices) for m in all_meshes)
+        group_edges = sum(len(m.evaluated_get(depsgraph).data.edges) for m in all_meshes)
         if group_verts > 0:
             mesh_groups.append(all_meshes)
             parent_groups.append([root])
@@ -139,11 +145,11 @@ def aggregate_object_groups(list selected_objects, object collection):
         all_meshes = []
         full_objects = []
         for r in roots:
-            meshes, desc = get_mesh_and_all_descendants(r)
+            meshes, desc = get_mesh_and_all_descendants(r, depsgraph)
             all_meshes.extend(meshes)
             full_objects.extend(desc)
-        group_verts = sum(len(m.data.vertices) for m in all_meshes)
-        group_edges = sum(len(m.data.edges) for m in all_meshes)
+        group_verts = sum(len(m.evaluated_get(depsgraph).data.vertices) for m in all_meshes)
+        group_edges = sum(len(m.evaluated_get(depsgraph).data.edges) for m in all_meshes)
         if group_verts > 0:
             mesh_groups.append(all_meshes)
             parent_groups.append(roots)

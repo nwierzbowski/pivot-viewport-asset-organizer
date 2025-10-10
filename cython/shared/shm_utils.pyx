@@ -2,11 +2,13 @@ import numpy as np
 cimport numpy as cnp
 import uuid
 import multiprocessing.shared_memory as shared_memory
+import bpy
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 
 def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups):
     cdef uint32_t num_groups = len(mesh_groups)
+    depsgraph = bpy.context.evaluated_depsgraph_get()
     verts_size = total_verts * 3 * 4  # float32 = 4 bytes
     edges_size = total_edges * 2 * 4  # uint32 = 4 bytes
     rotations_size = total_objects * 4 * 4  # float32 = 4 bytes
@@ -36,11 +38,15 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef list object_counts_list = []
     cdef list group
     cdef object obj
+    cdef object eval_obj
+    cdef object eval_mesh
     for group in mesh_groups:
         object_counts_list.append(len(group))
         for obj in group:
-            vert_counts_list.append(len(obj.data.vertices))
-            edge_counts_list.append(len(obj.data.edges))
+            eval_obj = obj.evaluated_get(depsgraph)
+            eval_mesh = eval_obj.data
+            vert_counts_list.append(len(eval_mesh.vertices))
+            edge_counts_list.append(len(eval_mesh.edges))
     cdef cnp.ndarray vert_counts = np.array(vert_counts_list, dtype=np.uint32)
     cdef cnp.ndarray edge_counts = np.array(edge_counts_list, dtype=np.uint32)
     cdef cnp.ndarray object_counts = np.array(object_counts_list, dtype=np.uint32)
@@ -86,7 +92,8 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
             offsets[idx_offset + 2] = trans_vec.z
             idx_offset += 3
 
-            mesh = obj.data
+            eval_obj = obj.evaluated_get(depsgraph)
+            mesh = eval_obj.data
             obj_vert_count = len(mesh.vertices)
             obj_edge_count = len(mesh.edges)
 
@@ -142,12 +149,15 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
     cdef str face_sizes_shm_name = ""
     cdef object faces_shm = None
     cdef object face_sizes_shm = None
+    depsgraph = bpy.context.evaluated_depsgraph_get()
 
     # First pass: gather totals and validate counts
     for group in mesh_groups:
         expected_objects += len(group)
         for obj in group:
-            total_faces_count += len(obj.data.polygons)
+            eval_obj = obj.evaluated_get(depsgraph)
+            eval_mesh = eval_obj.data
+            total_faces_count += len(eval_mesh.polygons)
 
     if expected_objects != total_objects:
         raise ValueError(f"prepare_face_data: expected {expected_objects} objects, received {total_objects}")
@@ -180,12 +190,14 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
 
         for group in mesh_groups:
             for obj in group:
-                obj_face_count = <uint32_t>len(obj.data.polygons)
+                eval_obj = obj.evaluated_get(depsgraph)
+                eval_mesh = eval_obj.data
+                obj_face_count = <uint32_t>len(eval_mesh.polygons)
                 face_counts[obj_idx] = obj_face_count
 
                 if obj_face_count > 0:
                     face_sizes_slice = shm_face_sizes_buf[face_sizes_offset:face_sizes_offset + obj_face_count]
-                    obj.data.polygons.foreach_get('loop_total', face_sizes_slice)
+                    eval_mesh.polygons.foreach_get('loop_total', face_sizes_slice)
 
                     obj_vertex_count = 0
                     face_sizes_slice_view = face_sizes_slice
@@ -214,9 +226,11 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
 
         for group in mesh_groups:
             for obj in group:
+                eval_obj = obj.evaluated_get(depsgraph)
+                eval_mesh = eval_obj.data
                 obj_vertex_count = face_vert_counts_view[obj_idx]
                 if obj_vertex_count > 0:
-                    obj.data.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
+                    eval_mesh.polygons.foreach_get("vertices", shm_faces_buf[faces_offset:faces_offset + obj_vertex_count])
                     faces_offset += obj_vertex_count
                 obj_idx += 1
 
