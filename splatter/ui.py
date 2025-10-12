@@ -52,7 +52,7 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         # Objects Collection selector
         row = layout.row()
         row.prop(bpy.context.scene.splatter, "objects_collection")
-        
+
         if license_type == LICENSE_PRO:
             self._draw_pro_ui(layout, obj)
         else:
@@ -74,7 +74,7 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         
         
         # Object classification controls (if applicable)
-        self._draw_object_controls(layout, obj)
+        # self._draw_object_controls(layout, obj)
         
         layout.separator()
         
@@ -86,17 +86,17 @@ class Splatter_PT_Main_Panel(bpy.types.Panel):
         # Organization button
         layout.operator(Splatter_OT_Organize_Classified_Objects.bl_idname)
     
-    def _draw_object_controls(self, layout, obj):
-        """Draw object-specific classification controls."""
-        if not obj:
-            return
+    # def _draw_object_controls(self, layout, obj):
+    #     """Draw object-specific classification controls."""
+    #     if not obj:
+    #         return
             
-        try:
-            c = obj.classification
-            if not c.group_name:
-                layout.label(text="Classify object first")
-            else:
-                row = layout.row()
-                row.prop(c, "surface_type")
-        except (AttributeError, ReferenceError, MemoryError) as e:
-            layout.label(text="Classification data not available")
+    #     try:
+    #         c = obj.classification
+    #         if not c.group_name:
+    #             layout.label(text="Classify object first")
+    #         else:
+    #             row = layout.row()
+    #             row.prop(c, "surface_type")
+    #     except (AttributeError, ReferenceError, MemoryError) as e:
+    #         layout.label(text="Classification data not available")

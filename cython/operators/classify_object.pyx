@@ -199,36 +199,21 @@ def classify_and_apply_objects(list selected_objects, collection):
 
 
     if edition_utils.is_pro_edition():
+        from splatter.property_manager import get_property_manager
+        prop_manager = get_property_manager()
+
         for i, group in enumerate(full_groups):
+            if not group:
+                continue
+
             surface_type_value = surface_type[i]
             group_name = group_names[i]
-            
-            # Since the engine is the source of truth, update each object without sending commands back to engine
-            if group:  # Make sure group is not empty
-                from splatter.property_manager import get_property_manager
-            prop_manager = get_property_manager()
-            
-            # Create pivot collection if it doesn't exist
-            pivot_collection = bpy.data.collections.get("pivot")
-            if pivot_collection is None:
-                pivot_collection = bpy.data.collections.new("pivot")
-                bpy.context.scene.collection.children.link(pivot_collection)
-            
-            # # Create category collection under pivot
-            category = str(surface_type_value)
-            sub_collection = bpy.data.collections.get(category)
-            if sub_collection is None:
-                sub_collection = bpy.data.collections.new(category)
-                pivot_collection.children.link(sub_collection)
-            
-            # Set group names and surface types for all objects in the group
+
             for obj in group:
-                if hasattr(obj, "classification"):
-                    prop_manager.set_group_name(obj, group_name)
-                    prop_manager.set_attribute(obj, 'surface_type', surface_type_value, update_group=False, update_engine=False)
-                    # Add object to the category collection
-                    if sub_collection not in obj.users_collection:
-                        sub_collection.objects.link(obj)
+                if not hasattr(obj, "classification"):
+                    continue
+                prop_manager.set_group_name(obj, group_name, collection)
+                prop_manager.set_attribute(obj, 'surface_type', surface_type_value, update_group=False, update_engine=False)
 
     end_apply = time.perf_counter()
     
