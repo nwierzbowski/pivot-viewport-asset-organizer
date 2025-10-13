@@ -9,6 +9,7 @@ from ..constants import (
 )
 
 from .. import engine
+from ..property_manager import get_property_manager
 from ..engine_state import get_engine_has_groups_cached, get_engine_parent_groups
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
@@ -24,6 +25,13 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     def execute(self, context):
         start_total = time.perf_counter()
         try:
+            prop_manager = get_property_manager()
+            classifications = prop_manager.collect_group_classifications()
+            if classifications:
+                sync_ok = prop_manager.sync_group_classifications(classifications)
+                if not sync_ok:
+                    self.report({"WARNING"}, "Failed to sync classifications to engine; results may be outdated")
+
             # Call the engine to organize objects
             start_engine = time.perf_counter()
             engine_comm = engine.get_engine_communicator()

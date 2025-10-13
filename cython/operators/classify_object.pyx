@@ -201,6 +201,7 @@ def classify_and_apply_objects(list selected_objects, collection):
     if edition_utils.is_pro_edition():
         from splatter.property_manager import get_property_manager
         prop_manager = get_property_manager()
+        # group_surface_updates = {}
 
         for i, group in enumerate(full_groups):
             if not group:
@@ -214,6 +215,9 @@ def classify_and_apply_objects(list selected_objects, collection):
                     continue
                 prop_manager.set_group_name(obj, group_name, collection)
                 prop_manager.set_attribute(obj, 'surface_type', surface_type_value, update_group=False, update_engine=False)
+
+            # group_surface_updates[group_name] = surface_type_value
+
 
     end_apply = time.perf_counter()
     

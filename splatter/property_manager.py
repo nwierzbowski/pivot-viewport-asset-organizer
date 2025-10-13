@@ -9,13 +9,14 @@ Separation of concerns:
 """
 
 import bpy
-from typing import Any, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from . import engine_state
 
 # Command IDs for engine communication
 COMMAND_SET_GROUP_ATTR = 2
 COMMAND_SYNC_OBJECT = 3
+COMMAND_SET_GROUP_CLASSIFICATIONS = 4
 
 
 GROUP_COLLECTION_PROP = "splatter_group_name"
@@ -251,6 +252,31 @@ class PropertyManager:
             if children.find(group_collection.name) != -1:
                 children.unlink(group_collection)
 
+    def collect_group_classifications(self) -> Dict[str, int]:
+        """Collect current group -> surface classification mapping from Blender collections."""
+        result: Dict[str, int] = {}
+        pivot_root = bpy.data.collections.get(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        if pivot_root is None:
+            return result
+
+        for surface_coll in getattr(pivot_root, "children", []) or []:
+            surface_value = surface_coll.get(CLASSIFICATION_COLLECTION_PROP)
+            if surface_value is None:
+                continue
+
+            try:
+                surface_int = int(surface_value)
+            except (TypeError, ValueError):
+                continue
+
+            for group_coll in getattr(surface_coll, "children", []) or []:
+                group_name = group_coll.get(GROUP_COLLECTION_PROP)
+                if not group_name:
+                    continue
+                result[group_name] = surface_int
+
+        return result
+
     def set_attribute(self, obj: Any, attr_name: str, value: Any, update_group: bool = True, update_engine: bool = True) -> bool:
         """Set an attribute for an object with optional group and engine updates.
 
@@ -305,6 +331,50 @@ class PropertyManager:
             return True
         except Exception as e:
             print(f"Error updating engine group {attr_name}: {e}")
+            return False
+
+    def sync_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
+        """Send a batch classification update to the engine."""
+        if not group_surface_map:
+            return True
+
+        engine = self._get_engine_communicator()
+        if not engine:
+            return False
+
+        classifications_payload = []
+        normalized_map: Dict[str, int] = {}
+        for name, value in group_surface_map.items():
+            try:
+                surface_int = int(value)
+            except (TypeError, ValueError):
+                continue
+            classifications_payload.append({
+                "group_name": name,
+                "surface_type": surface_int
+            })
+            normalized_map[name] = surface_int
+
+        if not classifications_payload:
+            return True
+
+        try:
+            command = {
+                "id": COMMAND_SET_GROUP_CLASSIFICATIONS,
+                "op": "set_group_classifications",
+                "classifications": classifications_payload
+            }
+            response = engine.send_command(command)
+            if not response.get("ok", False):
+                error = response.get("error", "Unknown error")
+                print(f"Failed to update group classifications: {error}")
+                return False
+
+            for group_name, surface_int in normalized_map.items():
+                self._update_engine_state(group_name, "surface_type", surface_int)
+            return True
+        except Exception as exc:
+            print(f"Error sending group classifications: {exc}")
             return False
 
     def set_group_name(self, obj: Any, group_name: str, root_collection: Optional[Any] = None) -> bool:
