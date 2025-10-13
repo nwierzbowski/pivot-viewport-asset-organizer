@@ -10,7 +10,7 @@ from ..constants import (
 
 from .. import engine
 from ..property_manager import get_property_manager
-from ..engine_state import get_engine_has_groups_cached, get_engine_parent_groups
+from ..engine_state import get_engine_has_groups_cached
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = PRE.lower() + ".organize_classified_objects"
@@ -42,24 +42,20 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
             if "positions" in response:
                 positions = response["positions"]
                 
-                # Get the cached parent groups dictionary
-                parent_groups = get_engine_parent_groups()
-                
-                # Apply positions to each group
+                # Apply positions to each group using collection-based tracking
                 organized_count = 0
                 for group_name, pos in positions.items():
-                    if group_name in parent_groups:
+                    objects_in_group = prop_manager._iter_group_objects(group_name)
+                    if objects_in_group:
                         target_pos = Vector((pos[0], pos[1], pos[2]))
                         
-                        # Get all parent objects in this group (these are the ones that need to be moved)
-                        group_data = parent_groups[group_name]
-                        parent_objects = group_data['objects']
-                        offsets = group_data['offsets']
-
-                        # Apply positions to each parent object using its offset + target position
-                        for i, obj in enumerate(parent_objects):
-                            obj_offset = Vector(offsets[i]) if i < len(offsets) else Vector((0, 0, 0))
-                            obj.location = target_pos + obj_offset
+                        # Calculate current center of the group to preserve relative positions
+                        current_center = sum((obj.location for obj in objects_in_group), Vector((0, 0, 0))) / len(objects_in_group)
+                        delta = target_pos - current_center
+                        
+                        # Move all objects in the group by the delta
+                        for obj in objects_in_group:
+                            obj.location += delta
                         
                         organized_count += 1
                 

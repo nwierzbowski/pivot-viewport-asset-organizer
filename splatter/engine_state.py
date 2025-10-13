@@ -8,13 +8,11 @@
 # Track the expected engine state for each group (what the engine thinks attributes should be)
 # Key: group name (str), Value: dict of {attr_name: value}
 # Only includes groups that have been processed by align_to_axes
-_engine_expected_state = {}
+# _engine_expected_state = {}
 
 # Cache whether the engine has any groups stored (once true, stays true since groups are never deleted)
 _engine_has_groups_cached = False
 
-# Cache the current parent groups dictionary (group_name -> list of parent objects)
-_engine_parent_groups = {}
 _engine_license_mode = "UNKNOWN"
 
 
@@ -31,21 +29,6 @@ def set_engine_has_groups_cached(has_groups: bool) -> None:
     global _engine_has_groups_cached
     if has_groups:
         _engine_has_groups_cached = True
-
-
-def get_engine_parent_groups() -> dict:
-    """Get the cached parent groups dictionary."""
-    return _engine_parent_groups
-
-
-def set_engine_parent_groups(parent_groups: dict) -> None:
-    """Set the cached parent groups dictionary.
-    
-    This should be called after classification to store the current group structure.
-    Merges with existing groups, overwriting old entries by the same name and adding new ones.
-    """
-    global _engine_parent_groups
-    _engine_parent_groups.update(parent_groups)
 
 
 def set_engine_license_status(engine_mode: str) -> None:

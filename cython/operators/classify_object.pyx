@@ -84,7 +84,6 @@ def classify_and_apply_objects(list selected_objects, collection):
     }
 
     from splatter.engine import get_engine_communicator
-    from splatter.engine_state import set_engine_parent_groups
     engine = get_engine_communicator()
 
     
@@ -164,10 +163,6 @@ def classify_and_apply_objects(list selected_objects, collection):
         rz = <float> ref_vec.z
         for j in range(len(group)):
             locs.append((rx + rotated_flat[j * 3], ry + rotated_flat[j * 3 + 1], rz + rotated_flat[j * 3 + 2]))
-
-    # Store parent groups globally for later positioning work
-    cdef dict parent_groups_dict = {group_names[i]: {'objects': parent_groups[i], 'offsets': all_rotated_offsets[i]} for i in range(len(group_names))}
-    set_engine_parent_groups(parent_groups_dict)
 
     # Close shared memory handles in parent process; let engine manage unlinking since it may hold longer
     for shm in shm_objects:
