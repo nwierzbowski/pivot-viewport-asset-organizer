@@ -30,16 +30,18 @@ def on_depsgraph_update_fast(scene, depsgraph):
 
     # Iterate through all updates in the dependency graph.
     for update in depsgraph.updates:
-        # Check if the geometry was flagged as updated.
-        if update.is_updated_geometry:
+        # Check if the geometry or transform was flagged as updated.
+        if update.is_updated_geometry or update.is_updated_transform:
             for obj in selected_objects:
-                # Check if the update is for this object's data block.
-                if update.id.original == obj.data:
+                # Check if the update is for this object's data block (for geometry) or the object itself (for transform).
+                if update.id.original == obj.data or update.id.original == obj:
                     from .property_manager import get_property_manager
                     pm = get_property_manager()
                     group_name = pm.get_group_name(obj)
                     if group_name:
-                        pm.mark_group_unsynced(group_name)
+                        should_mark_unsynced = update.is_updated_geometry or (update.is_updated_transform and len(list(pm._iter_group_objects(group_name))) > 1)
+                        if should_mark_unsynced:
+                            pm.mark_group_unsynced(group_name)
                     break  # Found the object for this update, move to next update
 
 
