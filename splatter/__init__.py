@@ -34,8 +34,11 @@ def on_depsgraph_update_fast(scene, depsgraph):
         # Check if the update is for the active object's data block
         # and if the geometry was flagged as updated.
         if (update.id.original == obj.data) and update.is_updated_geometry:
-            print(f"Geometry update detected for active object: '{obj.name}'")
-            # You can place your custom logic here
+            from .property_manager import get_property_manager
+            pm = get_property_manager()
+            group_name = pm.get_group_name(obj)
+            if group_name:
+                pm.mark_group_unsynced(group_name)
             break  # Exit the loop once the first matching update is found.
 
 
