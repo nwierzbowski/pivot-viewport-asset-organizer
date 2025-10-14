@@ -3,7 +3,6 @@ import time
 
 from ..constants import PRE, FINISHED
 from ..lib import classify_object
-from ..engine_state import set_engine_has_groups_cached
 
 
 def get_all_mesh_objects_in_collection(coll):
@@ -83,9 +82,6 @@ def perform_classification(objects, objects_collection):
     endCPP = time.perf_counter()
     elapsedCPP = endCPP - startCPP
     print(f"Total time elapsed: {(elapsedCPP) * 1000:.2f}ms")
-    
-    # Mark that we now have classified objects/groups
-    set_engine_has_groups_cached(True)
 
 
 class Splatter_OT_Classify_Selected(bpy.types.Operator):

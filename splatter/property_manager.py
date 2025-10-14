@@ -162,8 +162,8 @@ class PropertyManager:
         if root_collection is None:
             return None
 
-        # Reuse any existing child collection tagged with this group.
-        for coll in self._iter_child_collections(root_collection):
+        # Reuse any existing direct child collection tagged with this group.
+        for coll in getattr(root_collection, "children", []) or []:
             if coll.get(GROUP_COLLECTION_PROP) == group_name:
                 return coll
 
@@ -274,6 +274,14 @@ class PropertyManager:
                 result[group_name] = surface_int
 
         return result
+
+    def has_existing_groups(self) -> bool:
+        """Check if there are any existing groups by looking at collection metadata."""
+        # Check if there are any collections with GROUP_COLLECTION_PROP set
+        for coll in bpy.data.collections:
+            if coll.get(GROUP_COLLECTION_PROP):
+                return True
+        return False
 
     def sync_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
         """Send a batch classification update to the engine."""

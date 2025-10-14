@@ -10,7 +10,6 @@ from ..constants import (
 
 from .. import engine
 from ..property_manager import get_property_manager
-from ..engine_state import get_engine_has_groups_cached
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = PRE.lower() + ".organize_classified_objects"
@@ -19,8 +18,9 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        # Return true if we have successfully classified objects (cached)
-        return get_engine_has_groups_cached()
+        # Return true if we have existing groups (checked via collection metadata)
+        prop_manager = get_property_manager()
+        return prop_manager.has_existing_groups()
 
     def execute(self, context):
         start_total = time.perf_counter()
