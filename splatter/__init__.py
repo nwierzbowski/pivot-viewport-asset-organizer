@@ -19,6 +19,9 @@ from .operators.classification import (
 from .ui import Splatter_PT_Main_Panel
 from . import engine
 
+# Global state for previous scales
+_previous_scales = {}
+
 @persistent
 def on_depsgraph_update_fast(scene, depsgraph):
     """
@@ -39,9 +42,20 @@ def on_depsgraph_update_fast(scene, depsgraph):
                     pm = get_property_manager()
                     group_name = pm.get_group_name(obj)
                     if group_name:
-                        should_mark_unsynced = update.is_updated_geometry or (update.is_updated_transform and len(list(pm._iter_group_objects(group_name))) > 1)
+                        # Check if scale changed (always mark unsynced)
+                        current_scale = tuple(obj.scale)
+                        prev_scale = _previous_scales.get(obj.name)
+                        scale_changed = prev_scale is not None and current_scale != prev_scale
+                        
+                        # Mark unsynced if geometry changed, scale changed, or transform changed and group has >1 object
+                        should_mark_unsynced = (update.is_updated_geometry or 
+                                                scale_changed or 
+                                                (update.is_updated_transform and len(list(pm._iter_group_objects(group_name))) > 1))
                         if should_mark_unsynced:
                             pm.mark_group_unsynced(group_name)
+                        
+                        # Update previous scale
+                        _previous_scales[obj.name] = current_scale
                     break  # Found the object for this update, move to next update
 
 
