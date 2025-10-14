@@ -2,7 +2,6 @@ import bpy
 import os
 import stat
 import sys
-import hashlib
 
 from bpy.app.handlers import persistent
 
@@ -23,23 +22,25 @@ from . import engine
 @persistent
 def on_depsgraph_update_fast(scene, depsgraph):
     """
-    Checks for geometry updates on the active object using the depsgraph.updates collection.
+    Checks for geometry updates on selected mesh objects using the depsgraph.updates collection.
     """
-    obj = bpy.context.active_object
-    if not obj or obj.type != 'MESH':
+    selected_objects = [o for o in bpy.context.selected_objects if o.type == 'MESH']
+    if not selected_objects:
         return
 
     # Iterate through all updates in the dependency graph.
     for update in depsgraph.updates:
-        # Check if the update is for the active object's data block
-        # and if the geometry was flagged as updated.
-        if (update.id.original == obj.data) and update.is_updated_geometry:
-            from .property_manager import get_property_manager
-            pm = get_property_manager()
-            group_name = pm.get_group_name(obj)
-            if group_name:
-                pm.mark_group_unsynced(group_name)
-            break  # Exit the loop once the first matching update is found.
+        # Check if the geometry was flagged as updated.
+        if update.is_updated_geometry:
+            for obj in selected_objects:
+                # Check if the update is for this object's data block.
+                if update.id.original == obj.data:
+                    from .property_manager import get_property_manager
+                    pm = get_property_manager()
+                    group_name = pm.get_group_name(obj)
+                    if group_name:
+                        pm.mark_group_unsynced(group_name)
+                    break  # Found the object for this update, move to next update
 
 
 bl_info = {
@@ -100,19 +101,6 @@ def register():
     
     # Register edit mode hook
     bpy.app.handlers.depsgraph_update_post.append(on_depsgraph_update_fast)
-    
-    # Example: Add addon preferences (if you create an AddonPreferences class)
-    # bpy.utils.register_class(MyAddonPreferences)
-
-    # Example: Add custom properties to Blender's scene or objects
-    # bpy.types.Scene.my_addon_property = bpy.props.StringProperty(...)
-
-    # TODO: Add logic here or call a utility function to:
-    # 1. Check if Python virtual environments for DL models exist.
-    # 2. If not, inform the user or provide a button (in the UI registered above)
-    #    to trigger their creation and dependency installation.
-    #    This setup should ideally only run once or when needed, not every time
-    #    Blender starts and the addon is enabled. You might use a flag in addon prefs.
 
 
 def unregister():
@@ -137,12 +125,6 @@ def unregister():
 
     # Unregister edit mode hook
     bpy.app.handlers.depsgraph_update_post.remove(on_depsgraph_update_fast)
-
-    # Example: Remove addon preferences
-    # bpy.utils.unregister_class(MyAddonPreferences)
-
-    # Example: Delete custom properties
-    # del bpy.types.Scene.my_addon_property
 
 
 if __name__ == "__main__":
