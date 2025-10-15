@@ -218,8 +218,9 @@ def classify_and_apply_objects(list selected_objects, collection):
                 prop_manager._assign_surface_collection(obj, surface_type_value)
 
             prop_manager.mark_group_synced(group_name)
-
-    engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
+        engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
+    
+    
 
 
     end_apply = time.perf_counter()

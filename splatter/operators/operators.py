@@ -54,9 +54,10 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                             current_center = sum((obj.location for obj in objects_in_group), Vector((0, 0, 0))) / len(objects_in_group)
                             delta = target_pos - current_center
                             
-                            # Move all objects in the group by the delta
+                            # Move only parent objects in the group by the delta
                             for obj in objects_in_group:
-                                obj.location += delta
+                                if obj.parent is None:
+                                    obj.location += delta
                             
                             organized_count += 1
                         except Exception as e:
