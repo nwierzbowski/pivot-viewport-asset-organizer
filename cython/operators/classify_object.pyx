@@ -25,15 +25,8 @@ def set_origin_and_preserve_children(obj, new_origin_world):
         print(f"Warning: Object '{obj.name}' has no transformable data.")
         return
 
-    # Ensure the new origin is a Vector for math operations
-    if not isinstance(new_origin_world, Vector):
-        new_origin_world = Vector(new_origin_world)
-
-    # 1. Store the parent's original world matrix
     old_matrix_world = obj.matrix_world.copy()
 
-    # 2. Calculate the local translation offset needed for the mesh data
-    # This part correctly transforms the world offset into the object's local space
     inv_matrix = obj.matrix_world.to_3x3().inverted()
     world_translation_offset = new_origin_world - old_matrix_world.translation
     local_translation_offset = inv_matrix @ world_translation_offset
@@ -41,8 +34,10 @@ def set_origin_and_preserve_children(obj, new_origin_world):
     # 3. Transform the mesh data in local space
     obj.data.transform(Matrix.Translation(-local_translation_offset))
 
-    # 4. Move the parent object's origin
-    obj.matrix_world.translation = new_origin_world
+    # 4. Move the parent object's origin while preserving rotation
+    new_matrix = obj.matrix_world.copy()
+    new_matrix.translation = new_origin_world
+    obj.matrix_world = new_matrix
 
     correction_matrix = obj.matrix_world.inverted() @ old_matrix_world
 
@@ -225,32 +220,22 @@ def classify_and_apply_objects(list selected_objects, collection):
         delta_quat = rots[i]
         first_obj = group[0]
         first_world_translation = first_obj.matrix_world.translation.copy()
-        target_origin = Vector(origin[i]) + first_world_translation
-        cursor_loc = target_origin.copy()
-
-        
+        target_origin = Vector(origin[i]) + first_world_translation            
 
         for obj in group:
             local_quat = all_original_rots[obj_idx]
             loc = locs[obj_idx]
             
-            obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
             obj.location = Vector(loc)
+            set_origin_and_preserve_children(obj, target_origin)
+            obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
             obj_idx += 1
 
-        for obj in group:
-            set_origin_and_preserve_children(obj, target_origin)
-
-        bpy.context.scene.cursor.location = cursor_loc
-        # bpy.ops.object.select_all(action='DESELECT')
-        # for obj in group:
-        #     obj.select_set(True)
-        # bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+        bpy.context.scene.cursor.location = target_origin
 
     if edition_utils.is_pro_edition():
         from splatter.property_manager import get_property_manager
         prop_manager = get_property_manager()
-        # group_surface_updates = {}
 
         for i, group in enumerate(full_groups):
             if not group:
