@@ -13,7 +13,6 @@ from .collection_manager import get_collection_manager
 
 # Property keys for collection metadata
 GROUP_COLLECTION_PROP = "splatter_group_name"
-GROUP_COLLECTION_SYNC_PROP = "splatter_group_in_sync"
 
 if TYPE_CHECKING:  # pragma: no cover - Blender types only exist at runtime.
     from bpy.types import Collection, Object
@@ -36,12 +35,6 @@ class GroupManager:
         """Yield all collections tagged as group collections."""
         for coll in bpy.data.collections:
             if coll.get(GROUP_COLLECTION_PROP):
-                yield coll
-
-    def iter_unsynced_group_collections(self) -> Iterator[Any]:
-        """Yield group collections that are out of sync."""
-        for coll in self.iter_group_collections():
-            if not coll.get(GROUP_COLLECTION_SYNC_PROP, True):
                 yield coll
 
     def get_managed_group_names(self) -> list[str]:
@@ -119,14 +112,12 @@ class GroupManager:
     def _tag_group_collection(self, coll: Any, group_name: str) -> None:
         """Tag a collection with group metadata."""
         coll[GROUP_COLLECTION_PROP] = group_name
-        if GROUP_COLLECTION_SYNC_PROP not in coll:
-            coll[GROUP_COLLECTION_SYNC_PROP] = True
 
-    def _clear_group_collection_metadata(self, coll: Any) -> None:
-        """Remove all group metadata from a collection."""
-        for key in (GROUP_COLLECTION_PROP, GROUP_COLLECTION_SYNC_PROP):
-            coll.pop(key, None)
-        coll.color_tag = 'COLOR_NONE'
+    def set_group_colors(self, group_names: list[str], color: str = 'COLOR_04') -> None:
+        """Set the color tag for collections of the specified group names."""
+        for coll in self.iter_group_collections():
+            if coll.get(GROUP_COLLECTION_PROP) in group_names:
+                coll.color_tag = color
 
     def _unlink_other_group_collections(self, obj: Any, keep: Optional[Any]) -> None:
         """Unlink object from other group collections."""
@@ -165,10 +156,6 @@ class GroupManager:
     def get_group_collections(self) -> list[Any]:
         """Return all group collections as a list."""
         return list(self.iter_group_collections())
-
-    def get_unsynced_group_collections(self) -> list[Any]:
-        """Return unsynced group collections as a list."""
-        return list(self.iter_unsynced_group_collections())
 
     def create_or_get_group_collection(self, objects: list[Any], group_name: str, root_collection: Optional[Any] = None) -> Optional[Any]:
         """Create or get a group collection and assign all objects to it.

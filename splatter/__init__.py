@@ -20,7 +20,7 @@ from .ui import Splatter_PT_Main_Panel
 from . import engine
 from .group_manager import get_group_manager
 from .surface_manager import get_surface_manager
-from .sync_manager import get_sync_manager
+from .lib.sync_manager import get_sync_manager
 from . import engine_state
 
 # Cache of each object's last-known scale to detect transform-only edits quickly.
@@ -37,6 +37,39 @@ def _record_object_scales(object_names: set[str]) -> None:
 def _forget_object_scales(object_names: set[str]) -> None:
     for name in object_names:
         _previous_scales.pop(name, None)
+
+
+def _mark_group_unsynced(group_name: str) -> None:
+    """Mark a group as unsynced and update its collection metadata."""
+    group_manager = get_group_manager()
+    sync_manager = get_sync_manager()
+    
+    sync_manager.set_group_unsynced(group_name)
+    
+    # Update collection metadata
+    for coll in group_manager.iter_group_collections():
+        if coll.get("splatter_group_name") == group_name:
+            coll["splatter_group_in_sync"] = False
+            coll.color_tag = 'COLOR_03'
+            break
+
+
+def _cleanup_empty_group_collections() -> list[str]:
+    """Remove metadata from empty group collections."""
+    group_manager = get_group_manager()
+    cleared = []
+    
+    for coll in list(group_manager.iter_group_collections()):
+        if not getattr(coll, "objects", []):
+            if group_name := coll.get("splatter_group_name"):
+                cleared.append(group_name)
+            
+            # Clear metadata
+            for key in ("splatter_group_name", "splatter_group_in_sync"):
+                coll.pop(key, None)
+            coll.color_tag = 'COLOR_NONE'
+    
+    return cleared
 
 
 @persistent
@@ -58,7 +91,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
 
         if expected_members is None:
             if current_members:
-                sync_manager.mark_group_unsynced(group_name)
+                _mark_group_unsynced(group_name)
                 _record_object_scales(current_members)
             continue
 
@@ -71,7 +104,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
         print(
             f"[Splatter] Collection membership change detected for '{group_name}': prev={expected_members}, curr={current_members}"
         )
-        sync_manager.mark_group_unsynced(group_name)
+        _mark_group_unsynced(group_name)
 
         removed = expected_members - current_members
         added = current_members - expected_members
@@ -79,8 +112,13 @@ def on_depsgraph_update_fast(scene, depsgraph):
         _record_object_scales(added)
 
     # Keep unsynced highlighting alive even if Blender undo rewinds the property flag.
-    for group_name in engine_state.get_unsynced_groups():
-        sync_manager.mark_group_unsynced(group_name)
+    for group_name in sync_manager.get_unsynced_groups():
+        # Reapply unsynced marking to maintain visual indicator
+        for coll in group_manager.iter_group_collections():
+            if coll.get("splatter_group_name") == group_name:
+                coll["splatter_group_in_sync"] = False
+                coll.color_tag = 'COLOR_03'
+                break
 
     selected_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
     if selected_objects:
@@ -112,12 +150,12 @@ def on_depsgraph_update_fast(scene, depsgraph):
                 )
 
                 if should_mark_unsynced:
-                    sync_manager.mark_group_unsynced(group_name)
+                    _mark_group_unsynced(group_name)
 
                 _previous_scales[obj.name] = current_scale
                 break
 
-    cleared_groups = sync_manager.cleanup_empty_group_collections()
+    cleared_groups = _cleanup_empty_group_collections()
     if cleared_groups:
         engine_state.drop_groups_from_snapshot(cleared_groups)
 

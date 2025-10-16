@@ -11,9 +11,6 @@ _engine_license_mode = "UNKNOWN"
 # Membership snapshot returned by the engine: group name -> set of object names.
 _group_membership_snapshot: Dict[str, Set[str]] = {}
 
-# Groups that Blender has marked dirty since the last successful engine sync.
-_unsynced_groups: Set[str] = set()
-
 
 # ---------------------------------------------------------------------------
 # License helpers
@@ -51,7 +48,6 @@ def update_group_membership_snapshot(snapshot: Mapping[str, Iterable[str]], *, r
     for name, members in snapshot.items():
         member_set = set(members)
         _group_membership_snapshot[name] = member_set
-        _unsynced_groups.discard(name)
 
 
 def build_group_membership_snapshot(full_groups, group_names):
@@ -81,25 +77,4 @@ def drop_groups_from_snapshot(group_names: Iterable[str]) -> None:
     """Remove groups that are no longer managed by Pivot."""
     for name in group_names:
         _group_membership_snapshot.pop(name, None)
-        _unsynced_groups.discard(name)
-
-
-# ---------------------------------------------------------------------------
-# Unsynced bookkeeping
-# ---------------------------------------------------------------------------
-
-def flag_group_unsynced(group_name: str) -> None:
-    """Remember that a group needs a round-trip to the engine."""
-    if group_name:
-        _unsynced_groups.add(group_name)
-
-
-def clear_group_unsynced(group_name: str) -> None:
-    """Mark a group as freshly synced with the engine."""
-    _unsynced_groups.discard(group_name)
-
-
-def get_unsynced_groups() -> Set[str]:
-    """Return a copy so callers can't mutate the real set."""
-    return set(_unsynced_groups)
 

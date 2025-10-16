@@ -18,7 +18,6 @@ from splatter import engine_state
 
 # Collection metadata keys
 GROUP_COLLECTION_PROP = "splatter_group_name"
-GROUP_COLLECTION_SYNC_PROP = "splatter_group_in_sync"
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot"
 CLASSIFICATION_COLLECTION_PROP = "splatter_surface_type"
 
@@ -155,11 +154,13 @@ def _organize_groups_into_surfaces(full_groups, group_names, surface_types, pare
     """Organize groups into surface collections from raw classification data."""
     from splatter.surface_manager import get_surface_manager
     from splatter.group_manager import get_group_manager
+    from . import sync_manager
     
     surface_manager = get_surface_manager()
     group_manager = get_group_manager()
+    sync_manager = sync_manager.get_sync_manager()
     
-    # Build mapping of group collections
+    # Build mapping of group collections and surface assignments
     group_collections = {}
     group_surface_map = {}
     
@@ -170,14 +171,37 @@ def _organize_groups_into_surfaces(full_groups, group_names, surface_types, pare
         group_name = group_names[idx]
         surface_key = str(surface_types[idx])
         
-        # Get/create group collection
+        # Create group collection
         group_coll = group_manager.create_or_get_group_collection(group, group_name, parent_collection)
         if group_coll:
             group_collections[group_name] = group_coll
             group_surface_map[group_name] = surface_key
     
-    # Delegate surface organization
-    surface_manager.organize_groups_into_surfaces(group_collections, group_surface_map)
+    # Mark groups as synced after successful creation
+    for group_name in group_collections.keys():
+        sync_manager.set_group_synced(group_name)
+    
+    # Organize into surface hierarchy and apply metadata
+    for group_name, group_coll in group_collections.items():
+        if not group_coll:
+            continue
+        
+        surface_key = group_surface_map.get(group_name)
+        if not surface_key:
+            continue
+        
+        # Organize into surface collection
+        surface_manager.organize_group_into_surface(group_coll, surface_key)
+        
+        # # Update metadata
+        
+        # # Clear from sync tracking
+        # sync_manager.clear_group_unsynced(group_name)
+    
+    # Set colors for all created groups
+    group_manager.set_group_colors(list(group_collections.keys()))
+    
+    
 
 
 def classify_and_apply_objects(list selected_objects, collection):

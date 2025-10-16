@@ -13,6 +13,7 @@ set(CYTHON_MODULE_SOURCES
     shared/edition_utils.pyx
     shared/selection_utils.pyx
     shared/shm_utils.pyx
+    shared/sync_manager.pyx
     shared/transform_utils.pyx
 )
 
