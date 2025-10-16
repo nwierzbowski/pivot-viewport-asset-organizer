@@ -18,7 +18,9 @@ from .operators.classification import (
 )
 from .ui import Splatter_PT_Main_Panel
 from . import engine
-from .property_manager import GROUP_COLLECTION_PROP, get_property_manager
+from .group_manager import get_group_manager
+from .surface_manager import get_surface_manager
+from .sync_manager import get_sync_manager
 from . import engine_state
 
 # Cache of each object's last-known scale to detect transform-only edits quickly.
@@ -40,9 +42,10 @@ def _forget_object_scales(object_names: set[str]) -> None:
 @persistent
 def on_depsgraph_update_fast(scene, depsgraph):
     """Detect local changes and mark groups as out-of-sync with the engine."""
-    pm = get_property_manager()
+    group_manager = get_group_manager()
+    sync_manager = get_sync_manager()
 
-    current_snapshot = pm.get_group_membership_snapshot()
+    current_snapshot = group_manager.get_group_membership_snapshot()
     expected_snapshot = engine_state.get_group_membership_snapshot()
     all_groups = set(expected_snapshot) | set(current_snapshot)
 
@@ -55,7 +58,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
 
         if expected_members is None:
             if current_members:
-                pm.mark_group_unsynced(group_name)
+                sync_manager.mark_group_unsynced(group_name)
                 _record_object_scales(current_members)
             continue
 
@@ -68,7 +71,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
         print(
             f"[Splatter] Collection membership change detected for '{group_name}': prev={expected_members}, curr={current_members}"
         )
-        pm.mark_group_unsynced(group_name)
+        sync_manager.mark_group_unsynced(group_name)
 
         removed = expected_members - current_members
         added = current_members - expected_members
@@ -77,7 +80,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
 
     # Keep unsynced highlighting alive even if Blender undo rewinds the property flag.
     for group_name in engine_state.get_unsynced_groups():
-        pm.mark_group_unsynced(group_name)
+        sync_manager.mark_group_unsynced(group_name)
 
     selected_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
     if selected_objects:
@@ -89,7 +92,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
                 if update.id.original not in (obj, obj.data):
                     continue
 
-                group_name = pm.get_group_name(obj)
+                group_name = group_manager.get_group_name(obj)
                 if not group_name:
                     break
 
@@ -109,12 +112,12 @@ def on_depsgraph_update_fast(scene, depsgraph):
                 )
 
                 if should_mark_unsynced:
-                    pm.mark_group_unsynced(group_name)
+                    sync_manager.mark_group_unsynced(group_name)
 
                 _previous_scales[obj.name] = current_scale
                 break
 
-    cleared_groups = pm.cleanup_empty_group_collections()
+    cleared_groups = sync_manager.cleanup_empty_group_collections()
     if cleared_groups:
         engine_state.drop_groups_from_snapshot(cleared_groups)
 
@@ -191,10 +194,10 @@ def unregister():
 
     # Sync group classifications to engine before stopping
     try:
-        pm = get_property_manager()
-        classifications = pm.collect_group_classifications()
+        surface_manager = get_surface_manager()
+        classifications = surface_manager.collect_group_classifications()
         if classifications:
-            pm.sync_group_classifications(classifications)
+            surface_manager.sync_group_classifications(classifications)
     except Exception as e:
         print(f"Failed to sync classifications before closing: {e}")
 

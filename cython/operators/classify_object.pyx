@@ -10,11 +10,12 @@ import bpy
 
 from . import selection_utils, shm_utils, transform_utils, edition_utils
 from splatter import engine_state
-from splatter.property_manager import (
-    GROUP_COLLECTION_PROP,
-    CLASSIFICATION_ROOT_COLLECTION_NAME,
-    CLASSIFICATION_COLLECTION_PROP
-)
+
+# Property keys for collection metadata
+GROUP_COLLECTION_PROP = "splatter_group_name"
+GROUP_COLLECTION_SYNC_PROP = "splatter_group_in_sync"
+CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot"
+CLASSIFICATION_COLLECTION_PROP = "splatter_surface_type"
 
 
 
@@ -244,9 +245,8 @@ def classify_and_apply_objects(list selected_objects, collection):
         bpy.context.scene.cursor.location = target_origin
 
     if edition_utils.is_pro_edition():
-        from splatter.property_manager import get_property_manager
-        prop_manager = get_property_manager()
-
+        # Use the existing self-contained logic - the assign_surface_collection function
+        # is implemented locally in this file for performance
         for i, group in enumerate(full_groups):
             if not group:
                 continue
@@ -255,10 +255,33 @@ def classify_and_apply_objects(list selected_objects, collection):
             group_name = group_names[i]
 
             for obj in group:
-                prop_manager.set_group_name(obj, group_name, collection)
+                # Set group name using inline logic (performance critical)
+                # Find or create group collection
+                group_collection = None
+                for coll in bpy.data.collections:
+                    if coll.get(GROUP_COLLECTION_PROP) == group_name:
+                        group_collection = coll
+                        break
+                
+                if not group_collection:
+                    group_collection = bpy.data.collections.new(group_name)
+                    group_collection[GROUP_COLLECTION_PROP] = group_name
+                    group_collection[GROUP_COLLECTION_SYNC_PROP] = True
+                    if collection and collection.children.find(group_collection.name) == -1:
+                        collection.children.link(group_collection)
+                
+                if group_collection not in obj.users_collection:
+                    group_collection.objects.link(obj)
+                
                 assign_surface_collection(obj, surface_type_value)
 
-            prop_manager.mark_group_synced(group_name)
+            # Mark as synced inline
+            for coll in bpy.data.collections:
+                if coll.get(GROUP_COLLECTION_PROP) == group_name:
+                    coll[GROUP_COLLECTION_SYNC_PROP] = True
+                    coll.color_tag = 'COLOR_04'
+                    break
+                    
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
     
     

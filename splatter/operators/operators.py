@@ -9,7 +9,8 @@ from ..constants import (
 )
 
 from .. import engine
-from ..property_manager import get_property_manager
+from ..group_manager import get_group_manager
+from ..surface_manager import get_surface_manager
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = PRE.lower() + ".organize_classified_objects"
@@ -19,16 +20,18 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         # Return true if we have existing groups (checked via collection metadata)
-        prop_manager = get_property_manager()
-        return prop_manager.has_existing_groups()
+        group_manager = get_group_manager()
+        return group_manager.has_existing_groups()
 
     def execute(self, context):
         start_total = time.perf_counter()
         try:
-            prop_manager = get_property_manager()
-            classifications = prop_manager.collect_group_classifications()
+            group_manager = get_group_manager()
+            surface_manager = get_surface_manager()
+            
+            classifications = surface_manager.collect_group_classifications()
             if classifications:
-                sync_ok = prop_manager.sync_group_classifications(classifications)
+                sync_ok = surface_manager.sync_group_classifications(classifications)
                 if not sync_ok:
                     self.report({"WARNING"}, "Failed to sync classifications to engine; results may be outdated")
 
@@ -45,7 +48,7 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                 # Apply positions to each group using collection-based tracking
                 organized_count = 0
                 for group_name, pos in positions.items():
-                    objects_in_group = list(prop_manager._iter_group_objects(group_name))
+                    objects_in_group = list(group_manager.iter_group_objects(group_name))
                     if objects_in_group:
                         try:
                             target_pos = Vector((pos[0], pos[1], pos[2]))
