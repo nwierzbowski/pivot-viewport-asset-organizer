@@ -64,7 +64,7 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef uint32_t obj_edge_count
     cdef uint32_t vert_offset
     cdef uint32_t edge_offset
-    cdef object ref_trans
+    # cdef object ref_trans
 
     for group in mesh_groups:
         vert_offset = 0

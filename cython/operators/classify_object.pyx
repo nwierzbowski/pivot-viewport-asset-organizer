@@ -1,4 +1,9 @@
-# classify_object.pyx - Main classification operator
+# classify_object.pyx - Classifies and applies transformations to Blender objects.
+#
+# This module handles:
+# - Communicating with the C++ engine to compute object classifications
+# - Computing and applying new world-space transforms based on engine output
+# - Managing collection hierarchy for surface type classification (Pro edition)
 
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
@@ -11,7 +16,7 @@ import bpy
 from . import selection_utils, shm_utils, transform_utils, edition_utils
 from splatter import engine_state
 
-# Property keys for collection metadata
+# Collection metadata keys
 GROUP_COLLECTION_PROP = "splatter_group_name"
 GROUP_COLLECTION_SYNC_PROP = "splatter_group_in_sync"
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot"
@@ -20,111 +25,39 @@ CLASSIFICATION_COLLECTION_PROP = "splatter_surface_type"
 
 
 def set_origin_and_preserve_children(obj, new_origin_world):
-    """
-    Sets the origin of an object to a new world-space location while keeping
-    its mesh and all of its children visually stationary.
+    """Move object origin to new_origin_world while preserving visual placement of mesh and children."""
+    old_matrix = obj.matrix_world.copy()
+    inv_matrix = old_matrix.to_3x3().inverted()
+    world_offset = new_origin_world - old_matrix.translation
+    local_offset = inv_matrix @ world_offset
+    correction = Matrix.Translation(-local_offset)
 
-    """
-    old_matrix_world = obj.matrix_world.copy()
+    # Apply correction to mesh if it exists
+    if hasattr(obj, 'data') and hasattr(obj.data, 'transform'):
+        obj.data.transform(correction)
 
-    if not hasattr(obj, 'data') or not hasattr(obj.data, 'transform'):
-        # For empties (objects without mesh data), move directly to the origin while keeping children stationary
-        new_matrix = obj.matrix_world.copy()
-        new_matrix.translation = new_origin_world
-        obj.matrix_world = new_matrix
+    # Update world location and fix children parenting
+    obj.matrix_world.translation = new_origin_world
+    for child in obj.children:
+        child.matrix_parent_inverse = correction @ child.matrix_parent_inverse
 
-        correction_matrix = obj.matrix_world.inverted() @ old_matrix_world
 
-        if obj.children:
-            for child in obj.children:
-                child.matrix_parent_inverse = correction_matrix @ child.matrix_parent_inverse
-        return
 
-    inv_matrix = obj.matrix_world.to_3x3().inverted()
-    world_translation_offset = new_origin_world - old_matrix_world.translation
-    local_translation_offset = inv_matrix @ world_translation_offset
-
-    obj.data.transform(Matrix.Translation(-local_translation_offset))
-
-    new_matrix = obj.matrix_world.copy()
-    new_matrix.translation = new_origin_world
-    obj.matrix_world = new_matrix
-
-    correction_matrix = obj.matrix_world.inverted() @ old_matrix_world
-
-    if obj.children:
-        for child in obj.children:
-            # The new parent_inverse is the correction applied to the old one.
-            child.matrix_parent_inverse = correction_matrix @ child.matrix_parent_inverse
-
-def classify_and_apply_objects(list selected_objects, collection):
-    cdef double start_prep = time.perf_counter()
-    cdef double end_prep, start_processing, end_processing, start_alignment, end_alignment
-    cdef double face_prep_start, face_prep_end, classify_wait_start, classify_wait_end
-    cdef double faces_send_start, faces_send_end, faces_wait_start, faces_wait_end
-    cdef double start_apply, end_apply, total_face_pipeline_start, total_face_pipeline_end
-
-    cdef list all_original_rots = []
-
-    # Collect selection into groups and individuals and precompute totals
-    cdef list mesh_groups
-    cdef list parent_groups
-    cdef list full_groups
-    cdef list group_names
-    cdef int total_verts
-    cdef int total_edges
-    cdef int total_objects
-    cdef uint32_t[::1] vert_counts_mv
-    cdef uint32_t[::1] edge_counts_mv
-    cdef uint32_t[::1] object_counts_mv
-    cdef list group
-    mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects = selection_utils.aggregate_object_groups(selected_objects, collection)
-
-    group_membership_snapshot = {}
-    for idx in range(len(full_groups)):
+def _build_group_membership_snapshot(full_groups, group_names):
+    """Create a mapping of group names to object names for state tracking."""
+    snapshot = {}
+    for idx, group in enumerate(full_groups):
         group_name = group_names[idx]
-        group = full_groups[idx]
-        if group_name is None:
-            continue
-        group_membership_snapshot[group_name] = [obj.name for obj in group if obj is not None]
+        if group_name is not None:
+            snapshot[group_name] = [obj.name for obj in group if obj is not None]
+    return snapshot
 
-    # Create shared memory segments and numpy arrays for verts/edges only
-    shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(total_verts, total_edges, total_objects, mesh_groups)
 
-    verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
-    vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv = count_memory_views
-
-    start_processing = time.perf_counter()
-
-    cdef size_t current_offset_idx = 0
-    cdef size_t group_size
-    cdef size_t group_offset_size
-    cdef float[::1] group_offsets_slice
-    cdef object first_obj
-
-    cdef Py_ssize_t group_idx
-    cdef list all_parent_offsets = []
-
-    for group_idx in range(len(parent_groups)):
-        group = parent_groups[group_idx]
-        mesh_group = mesh_groups[group_idx]
-        group_size = len(mesh_group)
-        group_offset_size = group_size * 3  # 3 floats per object (x,y,z)
-        group_offsets_slice = offsets_mv[current_offset_idx:current_offset_idx + group_offset_size]
-        
-        parent_offsets = transform_utils.compute_offset_transforms(group, mesh_group, group_offsets_slice)
-        all_parent_offsets.append(parent_offsets)
-
-        for obj in group:
-            obj.rotation_mode = 'QUATERNION' 
-            all_original_rots.append(obj.rotation_quaternion)
-        
-        current_offset_idx += group_offset_size
-
-    
-
-    # Send classify op to engine
-    cdef dict command = {
+def _build_classify_command(verts_shm_name, edges_shm_name, rotations_shm_name,
+                           scales_shm_name, offsets_shm_name, vert_counts_mv,
+                           edge_counts_mv, object_counts_mv, group_names):
+    """Construct the classify operation command for the engine."""
+    return {
         "id": 1,
         "op": "classify",
         "shm_verts": verts_shm_name,
@@ -138,222 +71,247 @@ def classify_and_apply_objects(list selected_objects, collection):
         "group_names": group_names
     }
 
-    from splatter.engine import get_engine_communicator
-    engine = get_engine_communicator()
 
+def _prepare_object_transforms(parent_groups, mesh_groups, offsets_mv):
+    """
+    Extract offset transforms and rotation modes for all groups.
+    Returns: (all_parent_offsets, all_original_rots)
+    """
+    all_parent_offsets = []
+    all_original_rots = []
     
+    cdef size_t current_offset_idx = 0
+    cdef size_t group_offset_size
     
-    # Send classify command and wait for response
-    engine.send_command_async(command)
-    end_processing = time.perf_counter()
-    print(f"Preparation time elapsed: {(end_processing - start_prep) * 1000:.2f}ms")
-
-    # start_alignment = time.perf_counter()
-    classify_wait_start = time.perf_counter()
-    # face_shm_objects, face_shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv, total_faces_count, total_faces = shm_utils.prepare_face_data(total_objects, mesh_groups)
-    # faces_shm_name, face_sizes_shm_name = face_shm_names
-
-    # print(f"Time to prepare face data for sending to engine: {(time.perf_counter() - classify_wait_start) * 1000:.2f}ms")
-
-    final_response = engine.wait_for_response(1)  # Wait for response with id=1
-    classify_wait_end = time.perf_counter()
-    print(f"Time for engine to return classify response: {(classify_wait_end - classify_wait_start) * 1000:.2f}ms")
-    
-    cdef double post_classify_start = time.perf_counter()
-    # if total_faces > 0:
-    #     faces_send_start = time.perf_counter()
-    #     faces_command = {
-    #         "id": 2,
-    #         "op": "send_faces",
-    #         "shm_faces": faces_shm_name,
-    #         "shm_face_sizes": face_sizes_shm_name,
-    #         "face_counts": list(face_counts_mv),
-    #         "vert_counts": list(vert_counts_mv),
-    #         "group_names": group_names,
-    #         "object_counts": list(object_counts_mv)
-    #     }
+    for group_idx in range(len(parent_groups)):
+        parent_group = parent_groups[group_idx]
+        mesh_group = mesh_groups[group_idx]
+        group_offset_size = len(mesh_group) * 3  # x, y, z per object
         
-    #     engine.send_command_async(faces_command)
-    #     faces_send_end = time.perf_counter()
-    #     total_face_pipeline_start = faces_send_start
+        group_offsets_slice = offsets_mv[current_offset_idx:current_offset_idx + group_offset_size]
+        parent_offsets = transform_utils.compute_offset_transforms(parent_group, mesh_group, group_offsets_slice)
+        all_parent_offsets.append(parent_offsets)
         
-    #     faces_response = engine.wait_for_response(2)
+        for obj in parent_group:
+            obj.rotation_mode = 'QUATERNION'
+            all_original_rots.append(obj.rotation_quaternion)
+        
+        current_offset_idx += group_offset_size
     
-    # Now it's safe to close face shared memory handles
-    # for shm in face_shm_objects:
-    #     shm.close()
-    
-    cdef dict groups = final_response["groups"]
-    cdef list rots = [Quaternion(groups[name]["rot"]) for name in group_names]
-    cdef list surface_type = []
-    if edition_utils.is_pro_edition():
-        surface_type = [groups[name]["surface_type"] for name in group_names]
-    cdef list origin = [tuple(groups[name]["origin"]) for name in group_names]
+    return all_parent_offsets, all_original_rots
 
-    # Compute new locations for each object using Cython rotation of offsets, then add ref location
-    cdef list locs = []
+
+def _compute_object_locations(parent_groups, rots, all_parent_offsets):
+    """Compute new world locations for all objects after rotation."""
+    locations = []
+    
     cdef Py_ssize_t i, j
-    cdef float rx, ry, rz
-    cdef list parent_offsets_mv
-    cdef list all_rotated_offsets = []
-
+    
     for i in range(len(parent_groups)):
-        # Rotate this group's offsets in-place using numpy for speed
-        group = parent_groups[i]
-        group_size = <uint32_t> len(group)
-        parent_offsets_mv = all_parent_offsets[i]
+        parent_group = parent_groups[i]
+        
+        # Rotate offsets by group rotation
         rot_matrix = np.array(rots[i].to_matrix())
-        offsets_array = np.asarray(parent_offsets_mv).reshape(group_size, 3)
-        rotated_offsets = offsets_array @ rot_matrix.T
-        rotated_flat = rotated_offsets.flatten()
+        offsets = np.asarray(all_parent_offsets[i])
+        rotated_offsets = offsets @ rot_matrix.T
+        
+        # Compute world-space locations
+        ref_location = parent_group[0].matrix_world.translation
+        for j in range(len(parent_group)):
+            loc = (
+                ref_location.x + rotated_offsets[j, 0],
+                ref_location.y + rotated_offsets[j, 1],
+                ref_location.z + rotated_offsets[j, 2]
+            )
+            locations.append(loc)
+    
+    return locations
 
-        # Convert to list for storage
-        rotated_offsets_list = [(rotated_flat[j * 3], rotated_flat[j * 3 + 1], rotated_flat[j * 3 + 2]) for j in range(group_size)]
-        all_rotated_offsets.append(rotated_offsets_list)
 
-        # Add the engine's origin offset to the reference location for each rotated offset and collect as tuples
-        ref_vec = parent_groups[i][0].matrix_world.translation
-        origin_vec = Vector(origin[i])
-        rx = <float> (ref_vec.x + origin_vec.x)
-        ry = <float> (ref_vec.y + origin_vec.y)
-        rz = <float> (ref_vec.z + origin_vec.z)
-        for j in range(len(group)):
-            locs.append((rx + rotated_flat[j * 3], ry + rotated_flat[j * 3 + 1], rz + rotated_flat[j * 3 + 2]))
-
-    # Close shared memory handles in parent process; let engine manage unlinking since it may hold longer
-    for shm in shm_objects:
-        shm.close()
-
-    # Apply results
+def _apply_object_transforms(parent_groups, all_original_rots, rots, locations, origins):
+    """Apply computed rotations and locations to objects in the scene."""
     cdef int obj_idx = 0
-    cdef tuple loc
-    for i, group in enumerate(parent_groups):
+    cdef Py_ssize_t i, j
+    
+    for i, parent_group in enumerate(parent_groups):
         delta_quat = rots[i]
-        first_obj = group[0]
-        first_world_translation = first_obj.matrix_world.translation.copy()
-        target_origin = Vector(origin[i]) + first_world_translation            
-
-        for obj in group:
+        first_world_loc = parent_group[0].matrix_world.translation.copy()
+        target_origin = Vector(origins[i]) + first_world_loc
+        
+        for obj in parent_group:
             local_quat = all_original_rots[obj_idx]
-            loc = locs[obj_idx]
+            location = locations[obj_idx]
             
-            obj.location = Vector(loc)
+            # Compose new rotation and preserve existing scale
+            new_rotation = (delta_quat @ local_quat).normalized()
+            new_location = Vector(location)
+            current_scale = obj.matrix_world.to_scale()
+            
+            # Build world matrix: Translation * Rotation * Scale
+            scale_matrix = Matrix.Diagonal(current_scale).to_4x4()
+            rotation_matrix = new_rotation.to_matrix().to_4x4()
+            translation_matrix = Matrix.Translation(new_location)
+            obj.matrix_world = translation_matrix @ rotation_matrix @ scale_matrix
+            
+            # Adjust origin to target while preserving visual placement
             set_origin_and_preserve_children(obj, target_origin)
-            obj.rotation_quaternion = (delta_quat @ local_quat).normalized()
             obj_idx += 1
-
+        
+        # Update scene cursor for feedback
         bpy.context.scene.cursor.location = target_origin
 
-    if edition_utils.is_pro_edition():
-        # Use the existing self-contained logic - the assign_surface_collection function
-        # is implemented locally in this file for performance
-        for i, group in enumerate(full_groups):
-            if not group:
-                continue
 
-            surface_type_value = surface_type[i]
-            group_name = group_names[i]
-
-            for obj in group:
-                # Set group name using inline logic (performance critical)
-                # Find or create group collection
-                group_collection = None
-                for coll in bpy.data.collections:
-                    if coll.get(GROUP_COLLECTION_PROP) == group_name:
-                        group_collection = coll
-                        break
-                
-                if not group_collection:
-                    group_collection = bpy.data.collections.new(group_name)
-                    group_collection[GROUP_COLLECTION_PROP] = group_name
-                    group_collection[GROUP_COLLECTION_SYNC_PROP] = True
-                    if collection and collection.children.find(group_collection.name) == -1:
-                        collection.children.link(group_collection)
-                
-                if group_collection not in obj.users_collection:
-                    group_collection.objects.link(obj)
-                
-                assign_surface_collection(obj, surface_type_value)
-
-            # Mark as synced inline
-            for coll in bpy.data.collections:
-                if coll.get(GROUP_COLLECTION_PROP) == group_name:
-                    coll[GROUP_COLLECTION_SYNC_PROP] = True
-                    coll.color_tag = 'COLOR_04'
-                    break
-                    
-        engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
+def _get_or_create_group_collection(group, group_name, parent_collection):
+    """
+    Get or create a collection for the group using GroupManager.
+    Returns the collection, or None if group is empty.
+    """
+    if not group:
+        return None
     
+    from splatter.group_manager import get_group_manager
+    group_manager = get_group_manager()
     
-
-
-    end_apply = time.perf_counter()
-    
-    cdef double post_classify_end = end_apply
-    print(f"Post-classification processing time: {(post_classify_end - post_classify_start) * 1000:.2f}ms")
-
-def assign_surface_collection(obj, surface_value):
-    """Assign an object to a surface classification collection."""
-    surface_key = str(surface_value)
-    
-    # Get or create pivot root collection
-    scene = bpy.context.scene
-    pivot_root = bpy.data.collections.get(CLASSIFICATION_ROOT_COLLECTION_NAME)
-    if not pivot_root:
-        pivot_root = bpy.data.collections.new(CLASSIFICATION_ROOT_COLLECTION_NAME)
-        if scene.collection.children.find(pivot_root.name) == -1:
-            scene.collection.children.link(pivot_root)
-    
-    # Get group name for object
-    group_name = None
-    for coll in obj.users_collection:
-        if coll.get(GROUP_COLLECTION_PROP):
-            group_name = coll.get(GROUP_COLLECTION_PROP)
-            break
-    
-    if not group_name:
-        return
-    
-    # Find or create group collection
-    group_collection = None
-    for coll in bpy.data.collections:
-        if coll.get(GROUP_COLLECTION_PROP) == group_name:
-            group_collection = coll
-            break
+    # Use the internal method to get the collection object
+    first_obj = group[0]
+    group_collection = group_manager._get_or_create_group_collection(first_obj, group_name, parent_collection)
     
     if not group_collection:
+        return None
+    
+    # Assign all objects to this group collection
+    for obj in group:
+        group_manager.set_group_name(obj, group_name, parent_collection)
+    
+    return group_collection
+
+
+def _get_or_create_surface_collection(surface_key):
+    """Get or create surface classification collection using SurfaceManager."""
+    from splatter.surface_manager import get_surface_manager, CLASSIFICATION_ROOT_COLLECTION_NAME
+    from splatter.collection_manager import get_collection_manager
+    
+    surface_manager = get_surface_manager()
+    collection_manager = get_collection_manager()
+    
+    pivot_root = collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+    surface_coll = surface_manager.get_or_create_surface_collection(pivot_root, surface_key)
+    
+    return pivot_root, surface_coll
+
+
+def _organize_into_surface_groups(full_groups, group_names, surface_types, parent_collection):
+    """Organize groups into surface type collections using managers (Pro edition)."""
+    from splatter.surface_manager import get_surface_manager, CLASSIFICATION_ROOT_COLLECTION_NAME
+    from splatter.collection_manager import get_collection_manager
+    
+    surface_manager = get_surface_manager()
+    collection_manager = get_collection_manager()
+    
+    pivot_root = collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+    if not pivot_root:
         return
     
-    # Get or create surface collection
-    surface_collection = None
-    for coll in pivot_root.children:
-        if coll.get(CLASSIFICATION_COLLECTION_PROP) == surface_key:
-            surface_collection = coll
-            break
-    
-    if not surface_collection:
-        # Try to reuse existing collection
-        existing = bpy.data.collections.get(surface_key)
-        if existing:
-            if pivot_root.children.find(existing.name) == -1:
-                pivot_root.children.link(existing)
-            existing[CLASSIFICATION_COLLECTION_PROP] = surface_key
-            surface_collection = existing
-        else:
-            surface_collection = bpy.data.collections.new(surface_key)
-            surface_collection[CLASSIFICATION_COLLECTION_PROP] = surface_key
-            pivot_root.children.link(surface_collection)
-    
-    # Link group collection to surface collection
-    if surface_collection.children.find(group_collection.name) == -1:
-        surface_collection.children.link(group_collection)
-    
-    # Set metadata
-    group_collection[CLASSIFICATION_COLLECTION_PROP] = surface_key
-    
-    # Unlink from other surface containers
-    for coll in pivot_root.children:
-        if coll is surface_collection:
+    for idx, group in enumerate(full_groups):
+        if not group:
             continue
-        if coll.children.find(group_collection.name) != -1:
-            coll.children.unlink(group_collection)
+        
+        group_name = group_names[idx]
+        surface_key = str(surface_types[idx])
+        
+        # Get/create group collection via manager
+        group_coll = _get_or_create_group_collection(group, group_name, parent_collection)
+        if not group_coll:
+            continue
+        
+        # Get/create surface collection via manager
+        surface_coll = surface_manager.get_or_create_surface_collection(pivot_root, surface_key)
+        if not surface_coll:
+            continue
+        
+        # Link group to surface collection
+        collection_manager.ensure_collection_link(surface_coll, group_coll)
+        
+        # Update metadata
+        group_coll[CLASSIFICATION_COLLECTION_PROP] = surface_key
+        group_coll[GROUP_COLLECTION_SYNC_PROP] = True
+        group_coll.color_tag = 'COLOR_04'
+        
+        # Unlink from other surface containers
+        for other_coll in pivot_root.children:
+            if other_coll is not surface_coll:
+                other_children = getattr(other_coll, "children", None)
+                if other_children and other_children.find(group_coll.name) != -1:
+                    other_children.unlink(group_coll)
+
+
+def classify_and_apply_objects(list selected_objects, collection):
+    """
+    Main pipeline: classify objects via engine, apply transformations, and organize into
+    surface type collections (Pro edition only).
+    
+    Process:
+    1. Aggregate objects into groups
+    2. Marshal mesh data into shared memory
+    3. Send classify command to engine
+    4. Compute new transforms from engine response
+    5. Apply transforms to objects
+    6. Organize into surface classifications (Pro)
+    """
+    from splatter.engine import get_engine_communicator
+    
+    start_time = time.perf_counter()
+    
+    # --- Aggregation phase ---
+    mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects = \
+        selection_utils.aggregate_object_groups(selected_objects, collection)
+    
+    # --- Shared memory setup ---
+    shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(
+        total_verts, total_edges, total_objects, mesh_groups)
+    
+    verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
+    vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv = count_memory_views
+    
+    # --- Extract transforms and rotation modes ---
+    all_parent_offsets, all_original_rots = _prepare_object_transforms(
+        parent_groups, mesh_groups, offsets_mv)
+    
+    prep_time = time.perf_counter() - start_time
+    
+    # --- Engine communication ---
+    command = _build_classify_command(
+        verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
+        vert_counts_mv, edge_counts_mv, object_counts_mv, group_names)
+    
+    engine = get_engine_communicator()
+    engine.send_command_async(command)
+    
+    engine_start = time.perf_counter()
+    final_response = engine.wait_for_response(1)
+    engine_time = time.perf_counter() - engine_start
+    
+    # Close shared memory in parent process
+    for shm in shm_objects:
+        shm.close()
+    
+    # --- Extract engine results ---
+    groups = final_response["groups"]
+    rots = [Quaternion(groups[name]["rot"]) for name in group_names]
+    origins = [tuple(groups[name]["origin"]) for name in group_names]
+    surface_types = None
+    if edition_utils.is_pro_edition():
+        surface_types = [groups[name]["surface_type"] for name in group_names]
+    
+    # --- Compute and apply transforms ---
+    locations = _compute_object_locations(parent_groups, rots, all_parent_offsets)
+    _apply_object_transforms(parent_groups, all_original_rots, rots, locations, origins)
+    
+    # --- Pro edition: organize into surface collections ---
+    if edition_utils.is_pro_edition():
+        _organize_into_surface_groups(full_groups, group_names, surface_types, collection)
+        group_membership_snapshot = _build_group_membership_snapshot(full_groups, group_names)
+        engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
+    
+    total_time = time.perf_counter() - start_time
+    print(f"classify_and_apply_objects: prep={prep_time*1000:.1f}ms, engine={engine_time*1000:.1f}ms, total={total_time*1000:.1f}ms")
