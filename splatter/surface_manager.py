@@ -10,7 +10,7 @@ import bpy
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from .collection_manager import get_collection_manager
-from .group_manager import get_group_manager, GROUP_COLLECTION_PROP
+from .group_manager import get_group_manager, GROUP_COLLECTION_PROP, GROUP_COLLECTION_SYNC_PROP
 
 # Property keys for collection metadata
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot"
@@ -101,6 +101,45 @@ class SurfaceManager:
             children = getattr(coll, "children", None)
             if children and children.find(group_collection.name) != -1:
                 children.unlink(group_collection)
+
+    def organize_groups_into_surfaces(self, group_collections: Dict[str, Any], group_surface_map: Dict[str, str]) -> None:
+        """Organize group collections into surface type hierarchy.
+        
+        Args:
+            group_collections: Dict mapping group_name -> group_collection object
+            group_surface_map: Dict mapping group_name -> surface_key (str)
+        """
+        pivot_root = self._collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        if not pivot_root:
+            return
+        
+        for group_name, group_coll in group_collections.items():
+            if not group_coll:
+                continue
+            
+            surface_key = group_surface_map.get(group_name)
+            if not surface_key:
+                continue
+            
+            # Get/create surface collection
+            surface_coll = self.get_or_create_surface_collection(pivot_root, surface_key)
+            if not surface_coll:
+                continue
+            
+            # Link group to surface collection
+            self._collection_manager.ensure_collection_link(surface_coll, group_coll)
+            
+            # Update metadata
+            group_coll[CLASSIFICATION_COLLECTION_PROP] = surface_key
+            group_coll[GROUP_COLLECTION_SYNC_PROP] = True
+            group_coll.color_tag = 'COLOR_04'
+            
+            # Unlink from other surface containers
+            for other_coll in pivot_root.children:
+                if other_coll is not surface_coll:
+                    other_children = getattr(other_coll, "children", None)
+                    if other_children and other_children.find(group_coll.name) != -1:
+                        other_children.unlink(group_coll)
 
 
 # Global instance

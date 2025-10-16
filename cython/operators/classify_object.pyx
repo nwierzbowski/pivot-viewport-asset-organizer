@@ -43,16 +43,6 @@ def set_origin_and_preserve_children(obj, new_origin_world):
 
 
 
-def _build_group_membership_snapshot(full_groups, group_names):
-    """Create a mapping of group names to object names for state tracking."""
-    snapshot = {}
-    for idx, group in enumerate(full_groups):
-        group_name = group_names[idx]
-        if group_name is not None:
-            snapshot[group_name] = [obj.name for obj in group if obj is not None]
-    return snapshot
-
-
 def _build_classify_command(verts_shm_name, edges_shm_name, rotations_shm_name,
                            scales_shm_name, offsets_shm_name, vert_counts_mv,
                            edge_counts_mv, object_counts_mv, group_names):
@@ -161,56 +151,17 @@ def _apply_object_transforms(parent_groups, all_original_rots, rots, locations, 
         bpy.context.scene.cursor.location = target_origin
 
 
-def _get_or_create_group_collection(group, group_name, parent_collection):
-    """
-    Get or create a collection for the group using GroupManager.
-    Returns the collection, or None if group is empty.
-    """
-    if not group:
-        return None
-    
+def _organize_groups_into_surfaces(full_groups, group_names, surface_types, parent_collection):
+    """Organize groups into surface collections from raw classification data."""
+    from splatter.surface_manager import get_surface_manager
     from splatter.group_manager import get_group_manager
+    
+    surface_manager = get_surface_manager()
     group_manager = get_group_manager()
     
-    # Use the internal method to get the collection object
-    first_obj = group[0]
-    group_collection = group_manager._get_or_create_group_collection(first_obj, group_name, parent_collection)
-    
-    if not group_collection:
-        return None
-    
-    # Assign all objects to this group collection
-    for obj in group:
-        group_manager.set_group_name(obj, group_name, parent_collection)
-    
-    return group_collection
-
-
-def _get_or_create_surface_collection(surface_key):
-    """Get or create surface classification collection using SurfaceManager."""
-    from splatter.surface_manager import get_surface_manager, CLASSIFICATION_ROOT_COLLECTION_NAME
-    from splatter.collection_manager import get_collection_manager
-    
-    surface_manager = get_surface_manager()
-    collection_manager = get_collection_manager()
-    
-    pivot_root = collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
-    surface_coll = surface_manager.get_or_create_surface_collection(pivot_root, surface_key)
-    
-    return pivot_root, surface_coll
-
-
-def _organize_into_surface_groups(full_groups, group_names, surface_types, parent_collection):
-    """Organize groups into surface type collections using managers (Pro edition)."""
-    from splatter.surface_manager import get_surface_manager, CLASSIFICATION_ROOT_COLLECTION_NAME
-    from splatter.collection_manager import get_collection_manager
-    
-    surface_manager = get_surface_manager()
-    collection_manager = get_collection_manager()
-    
-    pivot_root = collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
-    if not pivot_root:
-        return
+    # Build mapping of group collections
+    group_collections = {}
+    group_surface_map = {}
     
     for idx, group in enumerate(full_groups):
         if not group:
@@ -219,30 +170,14 @@ def _organize_into_surface_groups(full_groups, group_names, surface_types, paren
         group_name = group_names[idx]
         surface_key = str(surface_types[idx])
         
-        # Get/create group collection via manager
-        group_coll = _get_or_create_group_collection(group, group_name, parent_collection)
-        if not group_coll:
-            continue
-        
-        # Get/create surface collection via manager
-        surface_coll = surface_manager.get_or_create_surface_collection(pivot_root, surface_key)
-        if not surface_coll:
-            continue
-        
-        # Link group to surface collection
-        collection_manager.ensure_collection_link(surface_coll, group_coll)
-        
-        # Update metadata
-        group_coll[CLASSIFICATION_COLLECTION_PROP] = surface_key
-        group_coll[GROUP_COLLECTION_SYNC_PROP] = True
-        group_coll.color_tag = 'COLOR_04'
-        
-        # Unlink from other surface containers
-        for other_coll in pivot_root.children:
-            if other_coll is not surface_coll:
-                other_children = getattr(other_coll, "children", None)
-                if other_children and other_children.find(group_coll.name) != -1:
-                    other_children.unlink(group_coll)
+        # Get/create group collection
+        group_coll = group_manager.create_or_get_group_collection(group, group_name, parent_collection)
+        if group_coll:
+            group_collections[group_name] = group_coll
+            group_surface_map[group_name] = surface_key
+    
+    # Delegate surface organization
+    surface_manager.organize_groups_into_surfaces(group_collections, group_surface_map)
 
 
 def classify_and_apply_objects(list selected_objects, collection):
@@ -309,8 +244,8 @@ def classify_and_apply_objects(list selected_objects, collection):
     
     # --- Pro edition: organize into surface collections ---
     if edition_utils.is_pro_edition():
-        _organize_into_surface_groups(full_groups, group_names, surface_types, collection)
-        group_membership_snapshot = _build_group_membership_snapshot(full_groups, group_names)
+        _organize_groups_into_surfaces(full_groups, group_names, surface_types, collection)
+        group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
     
     total_time = time.perf_counter() - start_time

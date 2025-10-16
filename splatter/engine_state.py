@@ -54,6 +54,24 @@ def update_group_membership_snapshot(snapshot: Mapping[str, Iterable[str]], *, r
         _unsynced_groups.discard(name)
 
 
+def build_group_membership_snapshot(full_groups, group_names):
+    """Create a mapping of group names to object names for state tracking.
+    
+    Args:
+        full_groups: List of object groups
+        group_names: Parallel list of group names
+        
+    Returns:
+        Dict mapping group name -> list of object names
+    """
+    snapshot = {}
+    for idx, group in enumerate(full_groups):
+        group_name = group_names[idx]
+        if group_name is not None:
+            snapshot[group_name] = [obj.name for obj in group if obj is not None]
+    return snapshot
+
+
 def get_group_membership_snapshot() -> Dict[str, Set[str]]:
     """Return a deep copy of the engine membership snapshot."""
     return {name: set(members) for name, members in _group_membership_snapshot.items()}

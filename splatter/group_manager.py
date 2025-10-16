@@ -170,6 +170,25 @@ class GroupManager:
         """Return unsynced group collections as a list."""
         return list(self.iter_unsynced_group_collections())
 
+    def create_or_get_group_collection(self, objects: list[Any], group_name: str, root_collection: Optional[Any] = None) -> Optional[Any]:
+        """Create or get a group collection and assign all objects to it.
+        
+        Returns the group collection object, or None if failed.
+        """
+        if not objects or not root_collection:
+            return None
+        
+        # Get the collection
+        group_collection = self._get_or_create_group_collection(objects[0], group_name, root_collection)
+        if not group_collection:
+            return None
+        
+        # Assign all objects to it
+        for obj in objects:
+            self.set_group_name(obj, group_name, root_collection)
+        
+        return group_collection
+
 
 # Global instance
 _group_manager = GroupManager()
