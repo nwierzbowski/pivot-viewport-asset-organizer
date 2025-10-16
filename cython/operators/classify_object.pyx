@@ -10,6 +10,11 @@ import bpy
 
 from . import selection_utils, shm_utils, transform_utils, edition_utils
 from splatter import engine_state
+from splatter.property_manager import (
+    GROUP_COLLECTION_PROP,
+    CLASSIFICATION_ROOT_COLLECTION_NAME,
+    CLASSIFICATION_COLLECTION_PROP
+)
 
 
 
@@ -251,7 +256,7 @@ def classify_and_apply_objects(list selected_objects, collection):
 
             for obj in group:
                 prop_manager.set_group_name(obj, group_name, collection)
-                prop_manager._assign_surface_collection(obj, surface_type_value)
+                assign_surface_collection(obj, surface_type_value)
 
             prop_manager.mark_group_synced(group_name)
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
@@ -263,3 +268,69 @@ def classify_and_apply_objects(list selected_objects, collection):
     
     cdef double post_classify_end = end_apply
     print(f"Post-classification processing time: {(post_classify_end - post_classify_start) * 1000:.2f}ms")
+
+def assign_surface_collection(obj, surface_value):
+    """Assign an object to a surface classification collection."""
+    surface_key = str(surface_value)
+    
+    # Get or create pivot root collection
+    scene = bpy.context.scene
+    pivot_root = bpy.data.collections.get(CLASSIFICATION_ROOT_COLLECTION_NAME)
+    if not pivot_root:
+        pivot_root = bpy.data.collections.new(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        if scene.collection.children.find(pivot_root.name) == -1:
+            scene.collection.children.link(pivot_root)
+    
+    # Get group name for object
+    group_name = None
+    for coll in obj.users_collection:
+        if coll.get(GROUP_COLLECTION_PROP):
+            group_name = coll.get(GROUP_COLLECTION_PROP)
+            break
+    
+    if not group_name:
+        return
+    
+    # Find or create group collection
+    group_collection = None
+    for coll in bpy.data.collections:
+        if coll.get(GROUP_COLLECTION_PROP) == group_name:
+            group_collection = coll
+            break
+    
+    if not group_collection:
+        return
+    
+    # Get or create surface collection
+    surface_collection = None
+    for coll in pivot_root.children:
+        if coll.get(CLASSIFICATION_COLLECTION_PROP) == surface_key:
+            surface_collection = coll
+            break
+    
+    if not surface_collection:
+        # Try to reuse existing collection
+        existing = bpy.data.collections.get(surface_key)
+        if existing:
+            if pivot_root.children.find(existing.name) == -1:
+                pivot_root.children.link(existing)
+            existing[CLASSIFICATION_COLLECTION_PROP] = surface_key
+            surface_collection = existing
+        else:
+            surface_collection = bpy.data.collections.new(surface_key)
+            surface_collection[CLASSIFICATION_COLLECTION_PROP] = surface_key
+            pivot_root.children.link(surface_collection)
+    
+    # Link group collection to surface collection
+    if surface_collection.children.find(group_collection.name) == -1:
+        surface_collection.children.link(group_collection)
+    
+    # Set metadata
+    group_collection[CLASSIFICATION_COLLECTION_PROP] = surface_key
+    
+    # Unlink from other surface containers
+    for coll in pivot_root.children:
+        if coll is surface_collection:
+            continue
+        if coll.children.find(group_collection.name) != -1:
+            coll.children.unlink(group_collection)

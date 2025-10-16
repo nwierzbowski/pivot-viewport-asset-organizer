@@ -11,9 +11,6 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, Iterator, Optional, Set
 
 from . import engine_state
 
-# Command IDs for engine communication
-COMMAND_SET_GROUP_CLASSIFICATIONS = 4
-
 # Property keys for collection metadata
 GROUP_COLLECTION_PROP = "splatter_group_name"
 GROUP_COLLECTION_SYNC_PROP = "splatter_group_in_sync"
@@ -24,64 +21,11 @@ if TYPE_CHECKING:  # pragma: no cover - Blender types only exist at runtime.
     from bpy.types import Collection, Object
 
 
-class EngineCommunicator:
-    """Handles communication with the C++ engine."""
-
-    def __init__(self) -> None:
-        self._communicator: Optional[Any] = None
-
-    def get_communicator(self) -> Optional[Any]:
-        """Lazy-initialize and cache the engine communicator."""
-        if self._communicator is None:
-            try:
-                from .engine import get_engine_communicator
-                self._communicator = get_engine_communicator()
-            except RuntimeError:
-                self._communicator = None
-        return self._communicator
-
-    def send_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
-        """Send a batch classification update to the engine."""
-        if not group_surface_map:
-            return True
-
-        communicator = self.get_communicator()
-        if not communicator:
-            return False
-
-        payload = []
-        for name, value in group_surface_map.items():
-            try:
-                surface_int = int(value)
-            except (TypeError, ValueError):
-                continue
-            payload.append({"group_name": name, "surface_type": surface_int})
-
-        if not payload:
-            return True
-
-        try:
-            command = {
-                "id": COMMAND_SET_GROUP_CLASSIFICATIONS,
-                "op": "set_group_classifications",
-                "classifications": payload
-            }
-            response = communicator.send_command(command)
-            if not response.get("ok", False):
-                error = response.get("error", "Unknown error")
-                print(f"Failed to update group classifications: {error}")
-                return False
-            return True
-        except Exception as exc:
-            print(f"Error sending group classifications: {exc}")
-            return False
-
-
 class PropertyManager:
     """Centralized manager for object properties that handles engine synchronization."""
 
     def __init__(self) -> None:
-        self._engine_comm = EngineCommunicator()
+        pass
 
     # --- Group and Object Queries -------------------------------------------
 
@@ -121,6 +65,14 @@ class PropertyManager:
                 objects = getattr(coll, "objects", None) or []
                 snapshot[group_name] = {obj.name for obj in objects}
         return snapshot
+
+    def _iter_group_objects(self, group_name: str) -> Iterator[Any]:
+        """Iterate over objects in collections tagged with the given group name."""
+        for coll in self.iter_group_collections():
+            if coll.get(GROUP_COLLECTION_PROP) == group_name:
+                # Return objects from the first matching collection (groups assumed unique)
+                return iter(coll.objects)
+        return iter([])
 
     # --- Collection Management ---------------------------------------------
 
@@ -272,7 +224,60 @@ class PropertyManager:
 
     def sync_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
         """Sync classifications with the engine."""
-        return self._engine_comm.send_group_classifications(group_surface_map)
+        try:
+            from .engine import get_engine_communicator
+            engine = get_engine_communicator()
+            return engine.send_group_classifications(group_surface_map)
+        except RuntimeError:
+            return False
+
+    def assign_surface_collection(self, obj: Any, surface_value: Any) -> None:
+        """Assign an object to a surface classification collection."""
+        surface_key = str(surface_value)
+        pivot_root = self._get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        if not pivot_root:
+            return
+
+        group_name = self.get_group_name(obj)
+        group_collection = self._ensure_group_collection(obj, group_name, group_name or surface_key)
+
+        surface_collection = self._get_or_create_surface_collection(pivot_root, surface_key)
+        if not surface_collection:
+            return
+
+        self._ensure_collection_link(surface_collection, group_collection)
+        group_collection[CLASSIFICATION_COLLECTION_PROP] = surface_key
+
+        # Unlink from other surface containers
+        for coll in pivot_root.children:
+            if coll is surface_collection:
+                continue
+            children = getattr(coll, "children", None)
+            if children and children.find(group_collection.name) != -1:
+                children.unlink(group_collection)
+
+    def _get_group_collection_for_object(self, obj: Any, group_name: Optional[str]) -> Optional[Any]:
+        """Find the group collection for an object."""
+        if not group_name:
+            return None
+        for coll in getattr(obj, "users_collection", []) or []:
+            if coll.get(GROUP_COLLECTION_PROP) == group_name:
+                return coll
+        return None
+
+    def _ensure_group_collection(self, obj: Any, group_name: Optional[str], fallback_name: str) -> Optional[Any]:
+        """Ensure the object has a group collection."""
+        group_collection = self._get_group_collection_for_object(obj, group_name)
+        if group_collection is not None:
+            return group_collection
+
+        group_collection = bpy.data.collections.get(fallback_name)
+        if group_collection is None:
+            group_collection = bpy.data.collections.new(fallback_name)
+        if group_collection not in obj.users_collection:
+            group_collection.objects.link(obj)
+        self._tag_group_collection(group_collection, group_name or fallback_name)
+        return group_collection
 
     # --- Sync Management ---------------------------------------------------
 

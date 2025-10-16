@@ -19,6 +19,9 @@ import json
 import select
 from typing import Dict, Any, Optional, Tuple
 
+# Command IDs for engine communication
+COMMAND_SET_GROUP_CLASSIFICATIONS = 4
+
 
 class SplatterEngine:
     """Unified interface for the C++ splatter engine subprocess.
@@ -205,13 +208,40 @@ class SplatterEngine:
         except Exception as e:
             raise RuntimeError(f"Communication error: {e}")
 
-    def get_process_info(self) -> Dict[str, Any]:
-        """Get information about the current engine process."""
-        return {
-            "is_running": self.is_running(),
-            "pid": self._process.pid if self._process else None,
-            "returncode": self._process.returncode if self._process else None
-        }
+    def send_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
+        """Send a batch classification update to the engine."""
+        if not group_surface_map:
+            return True
+
+        if not self.is_running():
+            return False
+
+        payload = []
+        for name, value in group_surface_map.items():
+            try:
+                surface_int = int(value)
+            except (TypeError, ValueError):
+                continue
+            payload.append({"group_name": name, "surface_type": surface_int})
+
+        if not payload:
+            return True
+
+        try:
+            command = {
+                "id": COMMAND_SET_GROUP_CLASSIFICATIONS,
+                "op": "set_group_classifications",
+                "classifications": payload
+            }
+            response = self.send_command(command)
+            if not response.get("ok", False):
+                error = response.get("error", "Unknown error")
+                print(f"Failed to update group classifications: {error}")
+                return False
+            return True
+        except Exception as exc:
+            print(f"Error sending group classifications: {exc}")
+            return False
 
 
 # Global engine instance
@@ -259,27 +289,6 @@ def sync_license_mode() -> str:
     response = engine_comm.send_command(payload)
     engine_mode = str(response.get("engine_edition", "UNKNOWN")).upper()
     return engine_mode
-
-
-def test_engine_communication() -> bool:
-    """Test function to demonstrate subprocess communication."""
-    try:
-        engine = get_engine_communicator()
-
-        # Example command - this would be replaced with actual geometry processing
-        command = {
-            "command": "echo",
-            "message": "Hello from Python!"
-        }
-
-        response = engine.send_command(command)
-        print(f"Engine response: {response}")
-        return True
-
-    except Exception as e:
-        print(f"Engine communication test failed: {e}")
-        return False
-
 
 # Register cleanup function to run on Python exit
 atexit.register(stop_engine)
