@@ -42,7 +42,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
     """Detect local changes and mark groups as out-of-sync with the engine."""
     pm = get_property_manager()
 
-    current_snapshot = _snapshot_group_memberships(pm)
+    current_snapshot = pm.get_group_membership_snapshot()
     expected_snapshot = engine_state.get_group_membership_snapshot()
     all_groups = set(expected_snapshot) | set(current_snapshot)
 
@@ -209,19 +209,6 @@ def unregister():
 
     global _previous_scales
     _previous_scales.clear()
-
-def _snapshot_group_memberships(pm) -> dict[str, set[str]]:
-    snapshot: dict[str, set[str]] = {}
-    for coll in pm.iter_group_collections():
-        group_name = coll.get(GROUP_COLLECTION_PROP)
-        if not group_name:
-            continue
-        objects = getattr(coll, "objects", None)
-        if objects is None:
-            snapshot[group_name] = set()
-            continue
-        snapshot[group_name] = {obj.name for obj in objects}
-    return snapshot
 
 
 if __name__ == "__main__":
