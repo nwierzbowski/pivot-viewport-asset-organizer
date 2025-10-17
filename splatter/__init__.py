@@ -27,36 +27,29 @@ from . import engine_state
 _previous_scales: dict[str, tuple[float, float, float]] = {}
 
 @persistent
-def on_depsgraph_update_fast(scene, depsgraph):
-    """Detect local changes and mark groups as out-of-sync with the engine."""
+def on_depsgraph_update(scene, depsgraph):
+    """Orchestrate all depsgraph update handlers in guaranteed order."""
+    if engine_state._is_performing_classification:
+        engine_state._is_performing_classification = False
+    else:
+        detect_collection_hierarchy_changes(scene, depsgraph)
+        unsync_mesh_changes(scene, depsgraph)
+    enforce_colors(scene, depsgraph)
+
+
+def detect_collection_hierarchy_changes(scene, depsgraph):
+    """Detect changes in collection hierarchy and mark affected groups as out-of-sync with the engine."""
     group_mgr = get_group_manager()
     sync_mgr = sync_manager.get_sync_manager()
 
     current_snapshot = group_mgr.get_group_membership_snapshot()
     expected_snapshot = engine_state.get_group_membership_snapshot()
-    all_groups = set(expected_snapshot) | set(current_snapshot)
-
-    for group_name in all_groups:
-        if not group_name:
-            continue
-
+    for group_name, expected_members in expected_snapshot.items():
         current_members = current_snapshot.get(group_name, set())
-        expected_members = expected_snapshot.get(group_name)
+        if expected_members != current_members:
+            sync_mgr.set_group_unsynced(group_name)
 
-        if expected_members is None:
-            if current_members:
-                sync_mgr.set_group_unsynced(group_name)
-            continue
 
-        if expected_members == current_members:
-            continue
-
-        print(
-            f"[Splatter] Collection membership change detected for '{group_name}': prev={expected_members}, curr={current_members}"
-        )
-        sync_mgr.set_group_unsynced(group_name)
-
-@persistent
 def enforce_colors(scene, depsgraph):
     """Enforce correct color tags for group collections based on sync state."""
     sync_mgr = sync_manager.get_sync_manager()
@@ -64,12 +57,7 @@ def enforce_colors(scene, depsgraph):
     group_mgr.update_colors(sync_mgr.get_sync_state())
 
 
-@persistent
 def unsync_mesh_changes(scene, depsgraph):
-
-    if (engine_state._is_performing_classification):
-        engine_state._is_performing_classification = False  # Reset after skipping
-        return
 
     sync_mgr = sync_manager.get_sync_manager()
     group_mgr = get_group_manager()
@@ -173,10 +161,8 @@ def register():
     _previous_scales.clear()
     engine_state.update_group_membership_snapshot({}, replace=True)
 
-    if unsync_mesh_changes not in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.append(unsync_mesh_changes)
-    if enforce_colors not in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.append(enforce_colors)
+    if on_depsgraph_update not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(on_depsgraph_update)
 
 
 def unregister():
@@ -199,10 +185,8 @@ def unregister():
     engine.stop_engine()
 
     # Unregister edit mode hook
-    if unsync_mesh_changes in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.remove(unsync_mesh_changes)
-    if enforce_colors in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.remove(enforce_colors)
+    if on_depsgraph_update in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(on_depsgraph_update)
 
     engine_state.update_group_membership_snapshot({}, replace=True)
 

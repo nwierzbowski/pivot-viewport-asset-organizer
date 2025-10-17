@@ -219,7 +219,7 @@ def classify_and_apply_objects(list selected_objects):
     # --- Pro edition: organize into surface collections ---
     if edition_utils.is_pro_edition():
 
-        sync_manager.get_sync_manager().set_groups_synced(full_groups, group_names)
+        sync_manager.get_sync_manager().set_groups_synced(group_names)
         # Create group collections
         get_group_manager().ensure_group_collections(full_groups, group_names)
         
@@ -228,7 +228,7 @@ def classify_and_apply_objects(list selected_objects):
         get_surface_manager().organize_groups_into_surfaces(group_names, surface_types)
         
         group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)
-        engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)
+        engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=False)
     
     total_time = time.perf_counter() - start_time
     print(f"classify_and_apply_objects: prep={prep_time*1000:.1f}ms, engine={engine_time*1000:.1f}ms, total={total_time*1000:.1f}ms")
