@@ -7,6 +7,7 @@ from bpy.app.handlers import persistent
 
 from .classes import SceneAttributes
 from bpy.props import PointerProperty
+from . import constants
 
 from .operators.operators import (
     Splatter_OT_Organize_Classified_Objects,
@@ -66,6 +67,11 @@ def enforce_colors(scene, depsgraph):
 
 @persistent
 def unsync_mesh_changes(scene, depsgraph):
+
+    if (constants._is_performing_classification):
+        constants._is_performing_classification = False  # Reset after skipping
+        return
+
     sync_mgr = sync_manager.get_sync_manager()
     group_mgr = get_group_manager()
     expected_snapshot = engine_state.get_group_membership_snapshot()
@@ -74,6 +80,8 @@ def unsync_mesh_changes(scene, depsgraph):
     selected_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
     if selected_objects:
         for update in depsgraph.updates:
+            
+
             if not (update.is_updated_geometry or update.is_updated_transform):
                 continue
 
@@ -95,7 +103,7 @@ def unsync_mesh_changes(scene, depsgraph):
 
                 should_mark_unsynced = (
                     expected_members is None
-                    or update.is_updated_geometry
+                    or (update.is_updated_geometry)
                     or scale_changed
                     or (update.is_updated_transform and not scale_changed and member_count > 1)
                 )
