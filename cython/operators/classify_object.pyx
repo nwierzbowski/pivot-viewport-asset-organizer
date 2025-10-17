@@ -224,8 +224,7 @@ def classify_and_apply_objects(list selected_objects):
         
         # Organize into surface hierarchy
         from splatter.surface_manager import get_surface_manager
-        surface_manager = get_surface_manager()
-        surface_manager.organize_groups_into_surfaces(group_names, surface_types)
+        get_surface_manager().organize_groups_into_surfaces(group_names, surface_types)
         
         group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=True)

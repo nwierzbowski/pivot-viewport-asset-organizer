@@ -35,8 +35,9 @@ class GroupManager:
         return None
 
     def iter_group_collections(self) -> Iterator[Any]:
-        """Yield all collections tagged as group collections."""
-        for coll in bpy.data.collections:
+        """Yield all collections tagged as group collections within the objects collection."""
+        
+        for coll in self.get_objects_collection().children:
             if coll.get(GROUP_COLLECTION_PROP):
                 yield coll
 
