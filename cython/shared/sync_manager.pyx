@@ -27,45 +27,26 @@ cdef class SyncManager:
         """Remember that a group needs a round-trip to the engine."""
         if group_name:
             self._sync_state[group_name] = False
-
-    cpdef void set_group_synced(self, str group_name):
-        """Mark a group as synced with the engine."""
-        if group_name:
-            self._sync_state[group_name] = True
-    
-    cpdef void set_groups_synced(self, object group_names):
-        """Mark multiple groups as synced with the engine."""
-        cdef str name
-        for name in group_names:
-            if name:
-                self._sync_state[name] = True
         
     cpdef set get_unsynced_groups(self):
         """Return a set of group names that are out of sync."""
         return {name for name, synced in self._sync_state.items() if not synced}
 
-    cpdef dict organize_groups_into_surfaces(self, list full_groups, list group_names, list surface_types, object parent_collection):
-        """Create group collections, set colors, and mark as synced. Returns group_collections for further processing."""
+    cpdef void set_groups_synced(self, list full_groups, list group_names, object parent_collection):
+        """Create group collections, set colors, and mark as synced."""
         group_manager = get_group_manager()
         
-        # Build mapping of group collections and surface assignments
-        group_collections = {}
-        
-        for idx, group in enumerate(full_groups):
-            group_name = group_names[idx]
-            
-            # Create group collection
-            group_coll = group_manager.create_or_get_group_collection(group, group_name, parent_collection)
-            if group_coll:
-                group_collections[group_name] = group_coll
+        # Create group collections
+        group_manager.create_or_get_group_collections(full_groups, group_names, parent_collection)
         
         # Set colors for all created groups
-        group_manager.set_group_colors(list(group_collections.keys()))
+        group_manager.set_group_colors(group_names)
         
         # Mark groups as synced after successful creation
-        self.set_groups_synced(group_names)
-        
-        return group_collections
+        cdef str name
+        for name in group_names:
+            if name:
+                self._sync_state[name] = True
 
 
 # Global instance

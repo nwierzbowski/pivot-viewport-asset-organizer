@@ -157,6 +157,15 @@ class GroupManager:
         
         return group_collection
 
+    def create_or_get_group_collections(self, groups: list[list[Any]], group_names: list[str], root_collection: Optional[Any] = None) -> None:
+        """Create or get multiple group collections and assign objects to them."""
+        for objects, group_name in zip(groups, group_names):
+            self.create_or_get_group_collection(objects, group_name, root_collection)
+
+    def get_group_collections_dict(self) -> Dict[str, Any]:
+        """Get a dict of group_name -> collection for all current group collections."""
+        return {coll.get(GROUP_COLLECTION_PROP): coll for coll in self.iter_group_collections() if coll.get(GROUP_COLLECTION_PROP)}
+
 
 # Global instance
 _group_manager = GroupManager()
