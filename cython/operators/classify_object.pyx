@@ -169,8 +169,6 @@ def classify_and_apply_objects(list selected_objects):
     from splatter.engine import get_engine_communicator
     from . import sync_manager
     
-    sync_manager = sync_manager.get_sync_manager()
-    
     start_time = time.perf_counter()
     
     # --- Aggregation phase ---
@@ -220,7 +218,10 @@ def classify_and_apply_objects(list selected_objects):
     
     # --- Pro edition: organize into surface collections ---
     if edition_utils.is_pro_edition():
-        sync_manager.set_groups_synced(full_groups, group_names)
+
+        sync_manager.get_sync_manager().set_groups_synced(full_groups, group_names)
+        # Create group collections
+        get_group_manager().ensure_group_collections(full_groups, group_names)
         
         # Organize into surface hierarchy
         from splatter.surface_manager import get_surface_manager

@@ -34,13 +34,8 @@ cdef class SyncManager:
         """Return a copy of the full sync state dict (group_name -> synced bool)."""
         return self._sync_state.copy()
 
-    cpdef void set_groups_synced(self, list full_groups, list group_names):
-        """Create group collections, set colors, and mark as synced."""
-        
-        # Create group collections and set colors
-        get_group_manager().ensure_group_collections(full_groups, group_names)
-        
-        # Mark groups as synced after successful creation
+    cpdef void set_groups_synced(self, list group_names):
+        """Mark groups as synced."""
         cdef str name
         for name in group_names:
             if name:
