@@ -26,59 +26,13 @@ from . import engine_state
 # Cache of each object's last-known scale to detect transform-only edits quickly.
 _previous_scales: dict[str, tuple[float, float, float]] = {}
 
-
-def _record_object_scales(object_names: set[str]) -> None:
-    for name in object_names:
-        obj = bpy.data.objects.get(name)
-        if obj:
-            _previous_scales[name] = tuple(obj.scale)
-
-
-def _forget_object_scales(object_names: set[str]) -> None:
-    for name in object_names:
-        _previous_scales.pop(name, None)
-
-
-def _mark_group_unsynced(group_name: str) -> None:
-    """Mark a group as unsynced and update its collection metadata."""
-    group_manager = get_group_manager()
-    sync_mgr = sync_manager.get_sync_manager()
-    
-    sync_mgr.set_group_unsynced(group_name)
-    
-    # Update collection metadata
-    for coll in group_manager.iter_group_collections():
-        if coll.get("splatter_group_name") == group_name:
-            coll["splatter_group_in_sync"] = False
-            coll.color_tag = 'COLOR_03'
-            break
-
-
-def _cleanup_empty_group_collections() -> list[str]:
-    """Remove metadata from empty group collections."""
-    group_manager = get_group_manager()
-    cleared = []
-    
-    for coll in list(group_manager.iter_group_collections()):
-        if not getattr(coll, "objects", []):
-            if group_name := coll.get("splatter_group_name"):
-                cleared.append(group_name)
-            
-            # Clear metadata
-            for key in ("splatter_group_name", "splatter_group_in_sync"):
-                coll.pop(key, None)
-            coll.color_tag = 'COLOR_NONE'
-    
-    return cleared
-
-
 @persistent
 def on_depsgraph_update_fast(scene, depsgraph):
     """Detect local changes and mark groups as out-of-sync with the engine."""
-    group_manager = get_group_manager()
+    group_mgr = get_group_manager()
     sync_mgr = sync_manager.get_sync_manager()
 
-    current_snapshot = group_manager.get_group_membership_snapshot()
+    current_snapshot = group_mgr.get_group_membership_snapshot()
     expected_snapshot = engine_state.get_group_membership_snapshot()
     all_groups = set(expected_snapshot) | set(current_snapshot)
 
@@ -91,34 +45,31 @@ def on_depsgraph_update_fast(scene, depsgraph):
 
         if expected_members is None:
             if current_members:
-                _mark_group_unsynced(group_name)
-                _record_object_scales(current_members)
+                sync_mgr.set_group_unsynced(group_name)
             continue
 
         if expected_members == current_members:
-            missing_scales = {name for name in current_members if name not in _previous_scales}
-            if missing_scales:
-                _record_object_scales(missing_scales)
             continue
 
         print(
             f"[Splatter] Collection membership change detected for '{group_name}': prev={expected_members}, curr={current_members}"
         )
-        _mark_group_unsynced(group_name)
+        sync_mgr.set_group_unsynced(group_name)
 
-        removed = expected_members - current_members
-        added = current_members - expected_members
-        _forget_object_scales(removed)
-        _record_object_scales(added)
+@persistent
+def enforce_colors(scene, depsgraph):
+    """Enforce correct color tags for group collections based on sync state."""
+    sync_mgr = sync_manager.get_sync_manager()
+    group_mgr = get_group_manager()
+    group_mgr.update_colors(sync_mgr.get_sync_state())
 
-    # Keep unsynced highlighting alive even if Blender undo rewinds the property flag.
-    for group_name in sync_mgr.get_unsynced_groups():
-        # Reapply unsynced marking to maintain visual indicator
-        for coll in group_manager.iter_group_collections():
-            if coll.get("splatter_group_name") == group_name:
-                coll["splatter_group_in_sync"] = False
-                coll.color_tag = 'COLOR_03'
-                break
+
+@persistent
+def unsync_mesh_changes(scene, depsgraph):
+    sync_mgr = sync_manager.get_sync_manager()
+    group_mgr = get_group_manager()
+    expected_snapshot = engine_state.get_group_membership_snapshot()
+    current_snapshot = group_mgr.get_group_membership_snapshot()
 
     selected_objects = [obj for obj in bpy.context.selected_objects if obj.type == 'MESH']
     if selected_objects:
@@ -130,7 +81,7 @@ def on_depsgraph_update_fast(scene, depsgraph):
                 if update.id.original not in (obj, obj.data):
                     continue
 
-                group_name = group_manager.get_group_name(obj)
+                group_name = group_mgr.get_group_name(obj)
                 if not group_name:
                     break
 
@@ -150,19 +101,15 @@ def on_depsgraph_update_fast(scene, depsgraph):
                 )
 
                 if should_mark_unsynced:
-                    _mark_group_unsynced(group_name)
+                    sync_mgr.set_group_unsynced(group_name)
 
                 _previous_scales[obj.name] = current_scale
                 break
 
-    cleared_groups = _cleanup_empty_group_collections()
-    if cleared_groups:
-        engine_state.drop_groups_from_snapshot(cleared_groups)
-
 bl_info = {
     "name": "Splatter: AI Powered Object Scattering",
     "author": "Nick Wierzbowski",
-    "version": (0, 1, 0),
+    "version": (1, 0, 0),
     "blender": (4, 4, 0),  # Minimum Blender version
     "location": "View3D > Sidebar > Splatter",
     "description": "Performs scene segmentation, object classification, and intelligent scattering.",
@@ -219,8 +166,10 @@ def register():
     _previous_scales.clear()
     engine_state.update_group_membership_snapshot({}, replace=True)
 
-    if on_depsgraph_update_fast not in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.append(on_depsgraph_update_fast)
+    if unsync_mesh_changes not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(unsync_mesh_changes)
+    if enforce_colors not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(enforce_colors)
 
 
 def unregister():
@@ -243,8 +192,10 @@ def unregister():
     engine.stop_engine()
 
     # Unregister edit mode hook
-    if on_depsgraph_update_fast in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.remove(on_depsgraph_update_fast)
+    if unsync_mesh_changes in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(unsync_mesh_changes)
+    if enforce_colors in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(enforce_colors)
 
     engine_state.update_group_membership_snapshot({}, replace=True)
 

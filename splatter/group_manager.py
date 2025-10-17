@@ -92,11 +92,19 @@ class GroupManager:
         """Tag a collection with group metadata."""
         coll[GROUP_COLLECTION_PROP] = group_name
 
-    def set_group_colors(self, group_names: list[str], color: str = 'COLOR_04') -> None:
-        """Set the color tag for collections of the specified group names."""
+    def update_colors(self, sync_state: Dict[str, bool]) -> None:
+        """Update color tags for collections based on sync state."""
         for coll in self.iter_group_collections():
-            if coll.get(GROUP_COLLECTION_PROP) in group_names:
-                coll.color_tag = color
+            if group_name := coll.get(GROUP_COLLECTION_PROP):
+                synced = sync_state.get(group_name, True)
+                
+                # 1. Determine the color that it *should* be.
+                correct_color = 'COLOR_04' if synced else 'COLOR_03'
+                
+                # 2. Check if the collection's current color is already correct.
+                if coll.color_tag != correct_color:
+                    # 3. Only perform the expensive write operation if it's wrong.
+                    coll.color_tag = correct_color
 
     def iter_group_objects(self, group_name: str) -> Iterator[Any]:
         """Iterate over objects in collections tagged with the given group name."""
@@ -110,13 +118,13 @@ class GroupManager:
         """Drop a group from being managed: reset color and remove group tag."""
         for coll in self.iter_group_collections():
             if coll.get(GROUP_COLLECTION_PROP) == group_name:
-                coll.color_tag = 'NONE'
+                # coll.color_tag = 'NONE'
                 del coll[GROUP_COLLECTION_PROP]
                 break
 
     # --- Convenience Methods ----------------------------------------------
 
-    def ensure_group_collections(self, groups: list[list[Any]], group_names: list[str], color: str = 'COLOR_04') -> None:
+    def ensure_group_collections(self, groups: list[list[Any]], group_names: list[str]) -> None:
         """Ensure group collections exist and assign objects to them with the specified color."""
         for objects, group_name in zip(groups, group_names):
             if not objects:
@@ -126,9 +134,6 @@ class GroupManager:
             group_collection = self._get_or_create_group_collection(objects[0], group_name)
             if not group_collection:
                 continue
-            
-            # Set the color for the group collection
-            group_collection.color_tag = color
             
             # Assign all objects to the collection
             self._assign_objects_to_collection(objects, group_collection)

@@ -24,13 +24,15 @@ cdef class SyncManager:
         self._sync_state = {}
 
     cpdef void set_group_unsynced(self, str group_name):
-        """Remember that a group needs a round-trip to the engine."""
-        if group_name:
-            self._sync_state[group_name] = False
+        """Mark a group as unsynced and update its visual representation."""
+        if not group_name:
+            return
         
-    cpdef set get_unsynced_groups(self):
-        """Return a set of group names that are out of sync."""
-        return {name for name, synced in self._sync_state.items() if not synced}
+        self._sync_state[group_name] = False
+        
+    cpdef dict get_sync_state(self):
+        """Return a copy of the full sync state dict (group_name -> synced bool)."""
+        return self._sync_state.copy()
 
     cpdef void set_groups_synced(self, list full_groups, list group_names):
         """Create group collections, set colors, and mark as synced."""
