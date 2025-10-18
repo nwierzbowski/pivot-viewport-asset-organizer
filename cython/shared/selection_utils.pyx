@@ -29,6 +29,23 @@ cpdef tuple get_mesh_and_all_descendants(object root, object depsgraph):
     return meshes, descendants
 
 
+cpdef bint has_mesh_with_vertices(object root, object depsgraph):
+    cdef list stack = [root]
+    cdef object current
+    cdef object eval_obj
+    cdef object eval_mesh
+    while stack:
+        current = stack.pop()
+        if current.type == 'MESH':
+            eval_obj = current.evaluated_get(depsgraph)
+            eval_mesh = eval_obj.data
+            if len(eval_mesh.vertices) > 0:
+                return True
+        for child in current.children:
+            stack.append(child)
+    return False
+
+
 cpdef list get_all_root_objects(object coll):
     cdef list roots = []
     cdef object obj
@@ -106,6 +123,8 @@ def aggregate_object_groups(list selected_objects):
     # First pass: accumulate collections to process, creating new ones where needed.
     collections_to_process = set()
     for root_obj in root_objects:
+        if not has_mesh_with_vertices(root_obj, depsgraph):
+            continue
         for coll in root_obj.users_collection:
             if coll == scene_coll:
                 new_coll = bpy.data.collections.new(root_obj.name)
@@ -127,13 +146,12 @@ def aggregate_object_groups(list selected_objects):
             descendants.extend(root_descendants)
         group_verts = sum(len(m.evaluated_get(depsgraph).data.vertices) for m in meshes)
         group_edges = sum(len(m.evaluated_get(depsgraph).data.edges) for m in meshes)
-        if group_verts > 0:
-            mesh_groups.append(meshes)
-            parent_groups.append(top_roots)
-            full_groups.append(descendants)
-            group_names.append(processed_coll.name)
-            total_verts += group_verts
-            total_edges += group_edges
-            total_objects += len(meshes)
+        mesh_groups.append(meshes)
+        parent_groups.append(top_roots)
+        full_groups.append(descendants)
+        group_names.append(processed_coll.name)
+        total_verts += group_verts
+        total_edges += group_edges
+        total_objects += len(meshes)
 
     return mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects
