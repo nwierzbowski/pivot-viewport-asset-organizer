@@ -69,9 +69,6 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                         organized_count += 1
                     except Exception as e:
                         print(f"[Splatter] Failed to organize group '{group_name}': {e}")
-                        # print(f"  Raw position data: {pos} (type: {type(pos)})")
-                        # print(f"  Full positions response: {positions}")
-                        # print(f"  Full engine response: {response}")
                         # Continue to next group instead of failing the whole operation
                 
                 self.report({"INFO"}, f"Organized {organized_count} object groups")
