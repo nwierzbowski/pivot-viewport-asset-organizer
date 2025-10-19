@@ -6,8 +6,7 @@ import bpy
 from bpy.app.handlers import persistent
 
 from . import engine_state
-from .group_manager import get_group_manager
-from .lib import sync_manager
+from .lib import group_manager
 
 # Cache of each object's last-known scale to detect transform-only edits quickly.
 _previous_scales: dict[str, tuple[float, float, float]] = {}
@@ -26,29 +25,26 @@ def on_depsgraph_update(scene, depsgraph):
 
 def detect_collection_hierarchy_changes(scene, depsgraph):
     """Detect changes in collection hierarchy and mark affected groups as out-of-sync with the engine."""
-    group_mgr = get_group_manager()
-    sync_mgr = sync_manager.get_sync_manager()
-
+    group_mgr = group_manager.get_group_manager()
+    
     current_snapshot = group_mgr.get_group_membership_snapshot()
     expected_snapshot = engine_state.get_group_membership_snapshot()
     for group_name, expected_members in expected_snapshot.items():
         current_members = current_snapshot.get(group_name, set())
         if expected_members != current_members:
-            sync_mgr.set_group_unsynced(group_name)
+            group_mgr.set_group_unsynced(group_name)
 
 
 def enforce_colors(scene, depsgraph):
     """Enforce correct color tags for group collections based on sync state."""
-    sync_mgr = sync_manager.get_sync_manager()
-    group_mgr = get_group_manager()
+    group_mgr = group_manager.get_group_manager()
     group_mgr.update_orphaned_groups()
-    group_mgr.update_colors(sync_mgr.get_sync_state())
+    group_mgr.update_colors()
 
 
 def unsync_mesh_changes(scene, depsgraph):
     """Detect mesh and transform changes on selected objects and mark groups as unsynced."""
-    sync_mgr = sync_manager.get_sync_manager()
-    group_mgr = get_group_manager()
+    group_mgr = group_manager.get_group_manager()
     expected_snapshot = engine_state.get_group_membership_snapshot()
     current_snapshot = group_mgr.get_group_membership_snapshot()
 
@@ -82,7 +78,7 @@ def unsync_mesh_changes(scene, depsgraph):
                 )
 
                 if should_mark_unsynced:
-                    sync_mgr.set_group_unsynced(group_name)
+                    group_mgr.set_group_unsynced(group_name)
 
 def clear_previous_scales():
     """Clear the scale cache used for detecting transform changes."""

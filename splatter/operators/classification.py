@@ -3,8 +3,9 @@ import time
 
 from ..constants import PRE, FINISHED
 from ..lib import classify_object
-from ..group_manager import get_group_manager
+from ..lib import group_manager
 from .. import engine_state
+from .. import sync_manager
 
 
 def get_all_mesh_objects_in_collection(coll):
@@ -96,11 +97,11 @@ class Splatter_OT_Classify_Selected(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         sel = getattr(context, "selected_objects", None) or []
-        objects_collection = get_group_manager().get_objects_collection()
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         return bool(get_qualifying_objects_for_selected(sel, objects_collection))
 
     def execute(self, context):
-        objects_collection = get_group_manager().get_objects_collection()
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         objects = get_qualifying_objects_for_selected(context.selected_objects, objects_collection)
         perform_classification(objects)
         return {FINISHED}
@@ -115,11 +116,11 @@ class Splatter_OT_Classify_Active_Object(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         obj = context.active_object
-        objects_collection = get_group_manager().get_objects_collection()
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         return obj and obj in get_qualifying_objects_for_selected([obj], objects_collection)
 
     def execute(self, context):
-        objects_collection = get_group_manager().get_objects_collection()
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         objects = get_qualifying_objects_for_selected([context.active_object], objects_collection)
         perform_classification(objects)
         return {FINISHED}
@@ -133,11 +134,12 @@ class Splatter_OT_Classify_All_Objects_In_Collection(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        objects_collection = get_group_manager().get_objects_collection()
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         return bool(get_all_mesh_objects_in_collection(objects_collection))
 
     def execute(self, context):
-        objects_collection = get_group_manager().get_objects_collection()
+        sync_manager.cleanup_orphaned_groups()
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         objects = get_all_mesh_objects_in_collection(objects_collection)
         perform_classification(objects)
         return {FINISHED}

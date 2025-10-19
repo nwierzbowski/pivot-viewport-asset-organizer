@@ -11,9 +11,9 @@ set(CYTHON_MODULE_SOURCES
     operators/classify_object.pyx
     shared/classification.pyx
     shared/edition_utils.pyx
+    shared/group_manager.pyx
     shared/selection_utils.pyx
     shared/shm_utils.pyx
-    shared/sync_manager.pyx
     shared/transform_utils.pyx
 )
 

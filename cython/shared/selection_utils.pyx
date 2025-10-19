@@ -84,8 +84,8 @@ def aggregate_object_groups(list selected_objects):
     cdef object processed_coll
     cdef set collections_to_process
     # Get the configured objects collection
-    from splatter.group_manager import get_group_manager
-    scene_coll = get_group_manager().get_objects_collection()
+    from . import group_manager
+    scene_coll = group_manager.get_group_manager().get_objects_collection()
     depsgraph = bpy.context.evaluated_depsgraph_get()
 
     # Build a lookup that points every nested collection back to its top-level owner.

@@ -9,7 +9,7 @@ import bpy
 from typing import Any, Dict, Optional
 
 from .collection_manager import get_collection_manager
-from .group_manager import get_group_manager
+from .lib import group_manager
 
 # Property keys for collection metadata
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot"
@@ -21,7 +21,7 @@ class SurfaceManager:
 
     def __init__(self) -> None:
         self._collection_manager = get_collection_manager()
-        self._group_manager = get_group_manager()
+        self._group_manager = group_manager.get_group_manager()
 
     def get_or_create_surface_collection(self, pivot_root: Any, surface_key: str) -> Optional[Any]:
         """Get or create a surface classification collection."""

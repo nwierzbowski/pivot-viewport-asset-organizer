@@ -9,8 +9,7 @@ from ..constants import (
 )
 
 from .. import engine
-from ..group_manager import get_group_manager
-from ..surface_manager import get_surface_manager
+from ..lib import group_manager
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = PRE.lower() + ".organize_classified_objects"
@@ -20,18 +19,17 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         # Return true if we have existing groups (checked via collection metadata)
-        group_manager = get_group_manager()
-        return group_manager.has_existing_groups()
+        group_mgr = group_manager.get_group_manager()
+        return group_mgr.has_existing_groups()
 
     def execute(self, context):
         start_total = time.perf_counter()
         try:
-            group_manager = get_group_manager()
-            surface_manager = get_surface_manager()
+            group_mgr = group_manager.get_group_manager()
             
-            classifications = surface_manager.collect_group_classifications()
+            classifications = group_mgr.collect_group_classifications()
             if classifications:
-                sync_ok = surface_manager.sync_group_classifications(classifications)
+                sync_ok = group_mgr.sync_group_classifications(classifications)
                 if not sync_ok:
                     self.report({"WARNING"}, "Failed to sync classifications to engine; results may be outdated")
 

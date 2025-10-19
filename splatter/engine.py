@@ -21,6 +21,7 @@ from typing import Dict, Any, Optional, Tuple
 
 # Command IDs for engine communication
 COMMAND_SET_GROUP_CLASSIFICATIONS = 4
+COMMAND_DROP_GROUPS = 5
 
 
 class SplatterEngine:
@@ -242,6 +243,38 @@ class SplatterEngine:
         except Exception as exc:
             print(f"Error sending group classifications: {exc}")
             return False
+
+    def drop_groups(self, group_names: list[str]) -> int:
+        """Drop groups from the engine cache.
+
+        Args:
+            group_names: List of group names to drop from the cache
+
+        Returns:
+            int: Number of groups actually dropped, or -1 on error
+        """
+        if not group_names:
+            return 0
+
+        if not self.is_running():
+            return -1
+
+        try:
+            command = {
+                "id": COMMAND_DROP_GROUPS,
+                "op": "drop_groups",
+                "group_names": group_names
+            }
+            response = self.send_command(command)
+            if not response.get("ok", False):
+                error = response.get("error", "Unknown error")
+                print(f"Failed to drop groups from engine: {error}")
+                return -1
+            dropped_count = response.get("dropped_count", 0)
+            return dropped_count
+        except Exception as exc:
+            print(f"Error dropping groups from engine: {exc}")
+            return -1
 
 
 # Global engine instance
