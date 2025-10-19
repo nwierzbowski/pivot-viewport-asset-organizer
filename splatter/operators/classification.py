@@ -101,6 +101,7 @@ class Splatter_OT_Classify_Selected(bpy.types.Operator):
         return bool(get_qualifying_objects_for_selected(sel, objects_collection))
 
     def execute(self, context):
+        sync_manager.cleanup_orphaned_groups()
         objects_collection = group_manager.get_group_manager().get_objects_collection()
         objects = get_qualifying_objects_for_selected(context.selected_objects, objects_collection)
         perform_classification(objects)

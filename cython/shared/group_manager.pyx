@@ -13,16 +13,11 @@ from typing import Any, Dict, Iterator, Optional, Set
 cdef class GroupManager:
     """Manages group collections and their metadata with integrated sync state."""
 
-    cdef dict _managed_collection_names
     cdef dict _sync_state
     cdef set _orphaned_groups
 
     def __init__(self) -> None:
-        # Set of managed group names
-        self._managed_collection_names = {}
-        # Maps group_name -> bool (True = synced, False = unsynced)
         self._sync_state = {}
-        # Set of orphaned group names
         self._orphaned_groups = set()
 
     # ==================== Blender API ====================
@@ -35,13 +30,13 @@ cdef class GroupManager:
     def get_group_name(self, obj: Any) -> Optional[str]:
         """Get the group name for an object from its collections."""
         for coll in getattr(obj, "users_collection", []) or []:
-            if coll.name in self._managed_collection_names:
+            if coll.name in self._sync_state:
                 return coll.name
         return None
 
     def iter_group_collections(self) -> Iterator[Any]:
         """Yield all collections that are in the managed collections set."""
-        for coll_name in self._managed_collection_names:
+        for coll_name in self._sync_state:
             if coll_name in bpy.data.collections:
                 yield bpy.data.collections[coll_name]
 
@@ -83,7 +78,7 @@ cdef class GroupManager:
         """Update the set of orphaned groups by accumulating new orphans."""
         objects_collection = self.get_objects_collection()
         
-        for coll_name in list(self._managed_collection_names.keys()):
+        for coll_name in list(self._sync_state.keys()):
             if coll_name in self._orphaned_groups:
                 continue  # Already marked as orphaned
             if coll_name not in bpy.data.collections:
@@ -99,27 +94,27 @@ cdef class GroupManager:
         """Update the set of managed collection names by merging with existing names."""
         cdef str name
         for name in group_names:
-            if name:
-                self._managed_collection_names[name] = True
+            if name and name not in self._sync_state:
+                self._sync_state[name] = True
 
-    cpdef dict get_managed_group_names_set(self):
+    cpdef set get_managed_group_names_set(self):
         """Return the set of all managed collection names."""
-        return dict(self._managed_collection_names)
+        return set(self._sync_state.keys())
 
     cpdef bint has_existing_groups(self):
         """Check if any groups exist."""
-        return bool(self._managed_collection_names)
+        return bool(self._sync_state)
 
     cpdef void drop_groups(self, list group_names):
         """Drop multiple groups from being managed: remove from managed set."""
         cdef str name
         for name in group_names:
-            if name in self._managed_collection_names:
-                del self._managed_collection_names[name]
+            if name in self._sync_state:
+                del self._sync_state[name]
 
     cpdef bint is_managed_collection(self, str collection_name):
         """Check if the given collection name is managed."""
-        return collection_name in self._managed_collection_names
+        return collection_name in self._sync_state
 
     # ==================== Sync State ====================
 
@@ -175,12 +170,6 @@ cdef class GroupManager:
 
         # Remove from managed set locally
         self.drop_groups(orphans)
-        
-        # Remove from sync state
-        cdef str name
-        for name in orphans:
-            if name in self._sync_state:
-                del self._sync_state[name]
         
         # Clear the orphaned groups set
         self.clear_orphaned_groups()
