@@ -3,7 +3,7 @@ import time
 
 from mathutils import Vector
 
-from splatter import sync_manager
+from splatter import engine_state, sync_manager
 from ..constants import (
     CANCELLED,
     FINISHED,
@@ -73,6 +73,7 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
                         # Continue to next group instead of failing the whole operation
                 
                 self.report({"INFO"}, f"Organized {organized_count} object groups")
+                engine_state._is_performing_classification = True
             else:
                 self.report({"WARNING"}, "No positions returned from engine")
             end_post = time.perf_counter()
