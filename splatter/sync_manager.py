@@ -22,7 +22,7 @@ def cleanup_orphaned_groups():
     try:
         # Drop from engine cache
         engine_comm = engine.get_engine_communicator()
-        dropped_count = engine_comm.drop_groups(orphans)
+        dropped_count = engine_comm.drop_groups(list(orphans))
         if dropped_count < 0:
             print(f"[Splatter] Failed to drop orphaned groups from engine cache")
             return None
