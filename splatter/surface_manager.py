@@ -58,8 +58,6 @@ class SurfaceManager:
             self._collection_manager.ensure_collection_link(pivot_root, existing)
             existing[CLASSIFICATION_COLLECTION_PROP] = surface_key
             existing[CLASSIFICATION_MARKER_PROP] = True
-            # Ensure root is marked
-            pivot_root[CLASSIFICATION_ROOT_MARKER_PROP] = True
             return existing
 
         # Create new
@@ -67,8 +65,6 @@ class SurfaceManager:
         surface_coll[CLASSIFICATION_COLLECTION_PROP] = surface_key
         surface_coll[CLASSIFICATION_MARKER_PROP] = True
         pivot_root.children.link(surface_coll)
-        # Ensure root is marked
-        pivot_root[CLASSIFICATION_ROOT_MARKER_PROP] = True
         return surface_coll
 
     def collect_group_classifications(self) -> Dict[str, int]:
@@ -113,22 +109,22 @@ class SurfaceManager:
         
         # Mark root as classification root collection
         pivot_root[CLASSIFICATION_ROOT_MARKER_PROP] = True
-        pivot_root[CLASSIFICATION_MARKER_PROP] = True
         
         # Get/create surface collection
         surface_coll = self.get_or_create_surface_collection(pivot_root, surface_key)
         if not surface_coll:
             return
         
-        # Link group to surface collection
-        self._collection_manager.ensure_collection_link(surface_coll, group_collection)
-        
-        # Unlink from other surface containers
+        # Unlink from other surface containers FIRST
         for other_coll in pivot_root.children:
             if other_coll is not surface_coll:
                 other_children = getattr(other_coll, "children", None)
                 if other_children and other_children.find(group_collection.name) != -1:
                     other_children.unlink(group_collection)
+        
+        # Link group to surface collection (only if not already linked)
+        if surface_coll.children.find(group_collection.name) == -1:
+            self._collection_manager.ensure_collection_link(surface_coll, group_collection)
 
     def organize_groups_into_surfaces(self, group_names: list[str], surface_types: list[int]) -> None:
         """Organize multiple group collections into the surface hierarchy using parallel lists."""

@@ -32,8 +32,17 @@ class CollectionManager:
 
     def ensure_collection_link(self, parent: Any, child: Any) -> None:
         """Ensure child is linked to parent."""
-        if parent and child and parent.children.find(child.name) == -1:
+        if not parent or not child:
+            return
+        
+        # Check if already linked
+        if parent.children.find(child.name) != -1:
+            return
+        
+        try:
             parent.children.link(child)
+        except RuntimeError as e:
+            print(f"[ERROR] Failed to link {child.name} to {parent.name}: {e}")
 
 
 

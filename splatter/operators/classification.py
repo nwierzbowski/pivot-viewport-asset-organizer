@@ -37,6 +37,7 @@ def get_qualifying_objects_for_selected(selected_objects, objects_collection):
             qualifying.append(obj)
 
     # Build a map of every nested collection to its top-level (direct child of scene_root)
+    # BUT: exclude the classification root from being considered a "top"
     coll_to_top = {}
 
     def traverse(current_coll, current_top):
@@ -44,7 +45,10 @@ def get_qualifying_objects_for_selected(selected_objects, objects_collection):
             coll_to_top[child] = current_top
             traverse(child, current_top)
 
+    # Only consider collections that are NOT classification roots as valid tops
     for top in scene_root.children:
+        if top.get(CLASSIFICATION_ROOT_MARKER_PROP, False):
+            continue
         coll_to_top[top] = top
         traverse(top, top)
 
