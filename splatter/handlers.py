@@ -141,4 +141,35 @@ def clear_previous_scales():
     """Clear the scale and rotation caches used for detecting transform changes."""
     global _previous_scales, _previous_rotations
     _previous_scales.clear()
+
+
+def on_group_name_changed(collection, group_mgr):
+    """Callback for when a managed group's name changes.
+    
+    Args:
+        collection: The collection whose name changed
+        group_mgr: The GroupManager instance
+    """
+    name_tracker = group_mgr.get_name_tracker()
+    sync_state = group_mgr.get_sync_state_dict()
+    orphaned_groups = group_mgr.get_orphaned_groups_set()
+    
+    old_name = name_tracker.get(collection)
+    new_name = collection.name
+
+    if old_name and old_name != new_name:
+        print(f"[Splatter] Group '{old_name}' renamed to '{new_name}'")
+        
+        # Update sync state to reflect the new name
+        if old_name in sync_state:
+            synced = sync_state.pop(old_name)
+            sync_state[new_name] = synced
+        
+        # Update orphaned groups set if needed
+        if old_name in orphaned_groups:
+            orphaned_groups.discard(old_name)
+            orphaned_groups.add(new_name)
+    
+    # Update the tracker with the new name
+    name_tracker[collection] = new_name
     _previous_rotations.clear()

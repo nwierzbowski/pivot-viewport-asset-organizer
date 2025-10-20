@@ -5,20 +5,25 @@ Responsibilities:
 - Track sync status of groups with the C++ engine
 - Handle group membership operations
 - Provide group-related queries and utilities
+- Track name changes for managed groups
 """
 
 import bpy
-from typing import Any, Dict, Iterator, Optional, Set
+from typing import Any, Callable, Dict, Iterator, Optional, Set
 
 cdef class GroupManager:
     """Manages group collections and their metadata with integrated sync state."""
 
     cdef dict _sync_state
     cdef set _orphaned_groups
+    cdef dict _name_tracker
+    cdef object _subscription_owner
 
     def __init__(self) -> None:
         self._sync_state = {}
         self._orphaned_groups = set()
+        self._name_tracker = {}
+        self._subscription_owner = object()  # Owner object for msgbus subscriptions
 
     # ==================== Blender API ====================
 
@@ -93,14 +98,66 @@ cdef class GroupManager:
             if coll_name not in objects_collection.children or not self._has_mesh_objects(coll):
                 self._orphaned_groups.add(coll_name)
 
+    # ==================== Name Change Tracking ====================
+
+    def _subscribe_to_group(self, collection: Any) -> None:
+        """Subscribe to name changes for a collection."""
+        try:
+            if not collection:
+                print(f"[Splatter] Collection is None")
+                return
+            
+            if not hasattr(collection, 'name'):
+                print(f"[Splatter] Collection has no name attribute")
+                return
+                
+            collection_name = collection.name
+            subscribe_to = collection.path_resolve("name", False)
+            
+            from splatter.handlers import on_group_name_changed
+            
+            bpy.msgbus.subscribe_rna(
+                key=subscribe_to,
+                owner=self._subscription_owner,
+                args=(collection, self),
+                notify=on_group_name_changed,
+            )
+            
+            self._name_tracker[collection] = collection_name
+            print(f"[Splatter] Successfully subscribed to '{collection_name}'")
+            
+        except Exception as e:
+            print(f"[Splatter] Failed to subscribe to name changes: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _unsubscribe_group(self, group_name: str) -> None:
+        """Unsubscribe from name changes for a specific group name."""
+        # Find and remove the collection from tracker by name
+        collections_to_remove = []
+        for collection, tracked_name in list(self._name_tracker.items()):
+            if tracked_name == group_name:
+                collections_to_remove.append(collection)
+        
+        for collection in collections_to_remove:
+            del self._name_tracker[collection]
+
     # ==================== Managed Groups ====================
 
     cpdef void update_managed_group_names(self, list group_names):
-        """Update the set of managed collection names by merging with existing names."""
+        """Update the set of managed collection names by merging with existing names.
+        
+        When new groups are added, subscribe to their name changes.
+        """
         cdef str name
         for name in group_names:
             if name and name not in self._sync_state:
                 self._sync_state[name] = True
+                
+                # Subscribe to name changes when group is added
+                if name in bpy.data.collections:
+                    collection = bpy.data.collections[name]
+                    self._subscribe_to_group(collection)
 
     cpdef set get_managed_group_names_set(self):
         """Return the set of all managed collection names."""
@@ -111,11 +168,13 @@ cdef class GroupManager:
         return bool(self._sync_state)
 
     cpdef void drop_groups(self, list group_names):
-        """Drop multiple groups from being managed: remove from managed set."""
+        """Drop multiple groups from being managed and unsubscribe from name changes."""
         cdef str name
         for name in group_names:
             if name in self._sync_state:
                 del self._sync_state[name]
+                # Unsubscribe when group is dropped
+                self._unsubscribe_group(name)
 
     cpdef bint is_managed_collection(self, str collection_name):
         """Check if the given collection name is managed."""
@@ -170,6 +229,18 @@ cdef class GroupManager:
     cdef bint _is_orphaned_internal(self, str group_name):
         """Internal fast check if a group is orphaned (for Cython code)."""
         return group_name in self._orphaned_groups
+
+    cpdef dict get_name_tracker(self):
+        """Get the name tracker dictionary."""
+        return self._name_tracker
+
+    cpdef dict get_sync_state_dict(self):
+        """Get the sync state dictionary."""
+        return self._sync_state
+
+    cpdef set get_orphaned_groups_set(self):
+        """Get the orphaned groups set."""
+        return self._orphaned_groups
 
     cpdef get_sync_state_keys(self):
         """Get the keys of the sync state dict (managed group names)."""
