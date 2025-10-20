@@ -3,6 +3,7 @@
 import bpy
 from . import edition_utils
 import time
+from collections import defaultdict
 
 
 cpdef object get_root_object(object obj):
@@ -66,7 +67,7 @@ def aggregate_object_groups(list selected_objects):
 
     cdef object depsgraph
     cdef object scene_coll
-    cdef dict coll_to_top_map
+    cdef object coll_to_top_map
     cdef object top_coll
     cdef object child_coll
     cdef list stack
@@ -89,15 +90,17 @@ def aggregate_object_groups(list selected_objects):
     depsgraph = bpy.context.evaluated_depsgraph_get()
 
     # Build a lookup that points every nested collection back to its top-level owner.
-    coll_to_top_map = {}
+    coll_to_top_map = defaultdict(list)
     stack = []
     for top_coll in scene_coll.children:
-        coll_to_top_map[top_coll] = top_coll
+        if top_coll.name == "Pivot":
+            continue
+        coll_to_top_map[top_coll].append(top_coll)
         stack = [(top_coll, top_coll)]
         while stack:
             current_coll, current_top = stack.pop()
             for child_coll in current_coll.children:
-                coll_to_top_map[child_coll] = current_top
+                coll_to_top_map[child_coll].append(current_top)
                 stack.append((child_coll, current_top))
 
     root_objects = set()
@@ -134,7 +137,8 @@ def aggregate_object_groups(list selected_objects):
                 new_coll.objects.link(root_obj)
                 collections_to_process.add(new_coll)
             elif coll in coll_to_top_map:
-                collections_to_process.add(coll_to_top_map[coll])
+                for top in coll_to_top_map[coll]:
+                    collections_to_process.add(top)
 
     # Second pass: build groups for each collection.
     for processed_coll in collections_to_process:
