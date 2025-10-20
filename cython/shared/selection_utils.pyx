@@ -2,8 +2,7 @@
 
 import bpy
 from . import edition_utils
-from splatter.surface_manager import CLASSIFICATION_ROOT_COLLECTION_NAME
-import time
+from splatter.surface_manager import CLASSIFICATION_MARKER_PROP
 from collections import defaultdict
 
 
@@ -94,7 +93,7 @@ def aggregate_object_groups(list selected_objects):
     coll_to_top_map = defaultdict(list)
     stack = []
     for top_coll in scene_coll.children:
-        if top_coll.name == CLASSIFICATION_ROOT_COLLECTION_NAME:
+        if top_coll.get(CLASSIFICATION_MARKER_PROP, False):
             continue
         coll_to_top_map[top_coll].append(top_coll)
         stack = [(top_coll, top_coll)]

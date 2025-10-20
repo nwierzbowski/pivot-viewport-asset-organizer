@@ -14,6 +14,7 @@ from .lib import classification
 
 # Property keys for collection metadata
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot Classifications"
+CLASSIFICATION_ROOT_MARKER_PROP = "splatter_is_classification_root"
 CLASSIFICATION_COLLECTION_PROP = "splatter_surface_type"
 CLASSIFICATION_MARKER_PROP = "splatter_is_classification_collection"
 
@@ -29,6 +30,16 @@ class SurfaceManager:
     def _get_surface_display_name(self, surface_key: str) -> str:
         """Get the display name for a surface key."""
         return classification.SURFACE_TYPE_NAMES.get(surface_key, surface_key)
+
+    def _find_or_create_root_collection(self) -> Optional[Any]:
+        """Find the root classification collection by marker, or create it if needed."""
+        # First try to find existing root by marker property
+        for coll in bpy.data.collections:
+            if coll.get(CLASSIFICATION_ROOT_MARKER_PROP, False):
+                return coll
+        
+        # If not found, create or get by name and mark it
+        return self._collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
 
     def get_or_create_surface_collection(self, pivot_root: Any, surface_key: str) -> Optional[Any]:
         """Get or create a surface classification collection."""
@@ -47,6 +58,8 @@ class SurfaceManager:
             self._collection_manager.ensure_collection_link(pivot_root, existing)
             existing[CLASSIFICATION_COLLECTION_PROP] = surface_key
             existing[CLASSIFICATION_MARKER_PROP] = True
+            # Ensure root is marked
+            pivot_root[CLASSIFICATION_ROOT_MARKER_PROP] = True
             return existing
 
         # Create new
@@ -54,12 +67,14 @@ class SurfaceManager:
         surface_coll[CLASSIFICATION_COLLECTION_PROP] = surface_key
         surface_coll[CLASSIFICATION_MARKER_PROP] = True
         pivot_root.children.link(surface_coll)
+        # Ensure root is marked
+        pivot_root[CLASSIFICATION_ROOT_MARKER_PROP] = True
         return surface_coll
 
     def collect_group_classifications(self) -> Dict[str, int]:
         """Collect group -> surface type mappings."""
         result = {}
-        pivot_root = bpy.data.collections.get(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        pivot_root = self._find_or_create_root_collection()
         if not pivot_root:
             return result
 
@@ -92,11 +107,12 @@ class SurfaceManager:
             group_collection: The group collection to organize
             surface_key: The surface type key (str)
         """
-        pivot_root = self._collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        pivot_root = self._find_or_create_root_collection()
         if not pivot_root:
             return
         
-        # Mark root as classification collection
+        # Mark root as classification root collection
+        pivot_root[CLASSIFICATION_ROOT_MARKER_PROP] = True
         pivot_root[CLASSIFICATION_MARKER_PROP] = True
         
         # Get/create surface collection
@@ -124,6 +140,18 @@ class SurfaceManager:
             
             surface_key = str(surface_types[idx])
             self.organize_group_into_surface(group_coll, surface_key)
+
+    def is_classification_collection(self, collection: Any) -> bool:
+        """Check if a collection is a classification collection."""
+        if not collection:
+            return False
+        return collection.get(CLASSIFICATION_MARKER_PROP, False)
+
+    def is_classification_root_collection(self, collection: Any) -> bool:
+        """Check if a collection is the classification root collection."""
+        if not collection:
+            return False
+        return collection.get(CLASSIFICATION_ROOT_MARKER_PROP, False)
 
 
 # Global instance

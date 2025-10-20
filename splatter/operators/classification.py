@@ -5,6 +5,7 @@ from ..constants import PRE, FINISHED
 from ..lib import classify_object
 from ..lib import group_manager
 from .. import engine_state
+from ..surface_manager import CLASSIFICATION_ROOT_MARKER_PROP
 
 
 def get_all_mesh_objects_in_collection(coll):
@@ -66,7 +67,7 @@ def get_qualifying_objects_for_selected(selected_objects, objects_collection):
             if coll is scene_root:
                 continue
             top = coll_to_top.get(coll)
-            if not top:
+            if not top or top.get(CLASSIFICATION_ROOT_MARKER_PROP, False):
                 continue
             if top not in top_has_mesh_cache:
                 top_has_mesh_cache[top] = coll_has_mesh(top)
