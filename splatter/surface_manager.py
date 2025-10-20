@@ -24,11 +24,10 @@ class SurfaceManager:
         self._collection_manager = get_collection_manager()
         self._group_manager = group_manager.get_group_manager()
         # Build a mapping from surface key to display name
-        self._surface_key_to_name = SURFACE_TYPE_NAMES
 
     def _get_surface_display_name(self, surface_key: str) -> str:
         """Get the display name for a surface key."""
-        return self._surface_key_to_name.get(surface_key, surface_key)
+        return SURFACE_TYPE_NAMES.get(surface_key, surface_key)
 
     def get_or_create_surface_collection(self, pivot_root: Any, surface_key: str) -> Optional[Any]:
         """Get or create a surface classification collection."""

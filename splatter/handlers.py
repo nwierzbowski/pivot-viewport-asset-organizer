@@ -192,10 +192,6 @@ def on_load_pre(scene):
     # Stop the splatter engine
     engine.stop_engine()
     
-    # Clear engine state tracking
-    engine_state.update_group_membership_snapshot({}, replace=True)
-    clear_previous_scales()
-    
 
 @persistent
 def on_load_post(scene):
@@ -203,6 +199,9 @@ def on_load_post(scene):
     
     Starts the engine up again for the new scene and initializes local tracked state.
     """
+    # Reset GroupManager state for the new scene
+    group_manager.get_group_manager().reset_state()
+    
     # Initialize engine state for the new scene
     engine_state.update_group_membership_snapshot({}, replace=True)
     clear_previous_scales()

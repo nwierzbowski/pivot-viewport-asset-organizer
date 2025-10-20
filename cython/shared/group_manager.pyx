@@ -25,6 +25,17 @@ cdef class GroupManager:
         self._name_tracker = {}
         self._subscription_owner = object()  # Owner object for msgbus subscriptions
 
+    def reset_state(self) -> None:
+        """Reset all state to initial values, as if the GroupManager was just created.
+        
+        This is called when loading a new file to ensure clean state.
+        Note: Keeps the same subscription_owner to avoid memory leaks from orphaned subscriptions.
+        """
+        self._sync_state.clear()
+        self._orphaned_groups.clear()
+        self._name_tracker.clear()
+        # Keep the same subscription_owner to avoid memory leaks from orphaned msgbus subscriptions
+
     # ==================== Blender API ====================
 
     def get_objects_collection(self) -> Optional[Any]:
