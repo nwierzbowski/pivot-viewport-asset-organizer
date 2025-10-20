@@ -175,7 +175,7 @@ cdef class GroupManager:
 
     cpdef bint has_existing_groups(self):
         """Check if any groups exist."""
-        return len(self._sync_state) > 0
+        return bool(self._sync_state)
 
     cpdef void drop_groups(self, list group_names):
         """Drop multiple groups from being managed and unsubscribe from name changes."""
@@ -196,15 +196,15 @@ cdef class GroupManager:
     # ==================== Sync State ====================
 
     cpdef void set_group_unsynced(self, str group_name):
-        """Mark a group as unsynced."""
-        if group_name:
+        """Mark a group as unsynced (only if it already exists in sync state)."""
+        if group_name and group_name in self._sync_state:
             self._sync_state[group_name] = False
 
     cpdef void set_groups_synced(self, list group_names):
-        """Mark groups as synced."""
+        """Mark groups as synced (only if they already exist in sync state)."""
         cdef str name
         for name in group_names:
-            if name:
+            if name and name in self._sync_state:
                 self._sync_state[name] = True
 
     cpdef dict get_sync_state(self):

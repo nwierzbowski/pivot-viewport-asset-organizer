@@ -181,14 +181,8 @@ def on_group_name_changed(collection, group_mgr):
     new_name = collection.name
 
     if old_name and old_name != new_name:
-        # Set the collection color to none to indicate it's orphaned
-        print(f"[Splatter] Group renamed from '{old_name}' to '{new_name}'; marking as orphaned")
+        # Mark the collection as orphaned - enforce_colors will handle cleanup
         collection.color_tag = 'NONE'
-        
-        # Drop the old group from sync state and unsubscribe
-        # Treat the old name as a new orphaned group to be cleaned up
-        # group_mgr.drop_groups([old_name])
-        # group_mgr._unsubscribe_group(old_name)
 
 
 # File Load Handlers
