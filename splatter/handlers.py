@@ -48,9 +48,31 @@ def detect_collection_hierarchy_changes(scene, depsgraph):
 
 
 def enforce_colors(scene, depsgraph):
-    """Enforce correct color tags for group collections based on sync state."""
+    """Enforce correct color tags for group collections based on sync state.
+    
+    Also immediately handles orphaned groups by dropping them from engine,
+    sync state, and clearing their colors.
+    """
     group_mgr = group_manager.get_group_manager()
-    group_mgr.update_orphaned_groups()
+    orphaned_groups = group_mgr.update_orphaned_groups()
+    
+    # Immediately handle orphaned groups
+    if orphaned_groups:
+        try:
+            # Drop from engine
+            engine_comm = engine.get_engine_communicator()
+            dropped_count = engine_comm.drop_groups(orphaned_groups)
+            if dropped_count >= 0:
+                # Clear their colors and remove from sync state
+                for coll_name in orphaned_groups:
+                    if coll_name in bpy.data.collections:
+                        bpy.data.collections[coll_name].color_tag = 'NONE'
+                group_mgr.drop_groups(orphaned_groups)
+                print(f"[Splatter] Dropped {dropped_count} orphaned groups from engine")
+        except Exception as e:
+            print(f"[Splatter] Error handling orphaned groups: {e}")
+    
+    # Update colors for remaining managed groups
     group_mgr.update_colors()
 
 
@@ -68,17 +90,13 @@ def unsync_mesh_changes(scene, depsgraph):
         return  # No selected objects, nothing to do
     
     # Get managed collections info (fast, no full snapshot yet)
-    orphaned_groups = set(group_mgr.get_orphaned_groups())  # Convert to set for O(1) lookups
-    managed_group_names = group_mgr.get_sync_state_keys()  # Already returns a set
+    managed_group_names = group_mgr.get_sync_state_keys()  # Returns a set
     
     selected_objects = []
     obj_to_group = {}
     
     # Iterate managed collections to find selected objects (avoids checking all 220 objects)
     for group_name in managed_group_names:
-        if group_name in orphaned_groups:
-            continue
-        
         # Get the collection
         coll = bpy.data.collections.get(group_name)
         if not coll:
@@ -164,10 +182,13 @@ def on_group_name_changed(collection, group_mgr):
 
     if old_name and old_name != new_name:
         # Set the collection color to none to indicate it's orphaned
+        print(f"[Splatter] Group renamed from '{old_name}' to '{new_name}'; marking as orphaned")
         collection.color_tag = 'NONE'
-    
-    # Update the tracker with the new name
-    name_tracker[collection] = new_name
+        
+        # Drop the old group from sync state and unsubscribe
+        # Treat the old name as a new orphaned group to be cleaned up
+        # group_mgr.drop_groups([old_name])
+        # group_mgr._unsubscribe_group(old_name)
 
 
 # File Load Handlers

@@ -9,19 +9,17 @@ Responsibilities:
 """
 
 import bpy
-from typing import Any, Callable, Dict, Iterator, Optional, Set
+from typing import Any, Dict, Iterator, Optional, Set
 
 cdef class GroupManager:
     """Manages group collections and their metadata with integrated sync state."""
 
     cdef dict _sync_state
-    cdef set _orphaned_groups
     cdef dict _name_tracker
     cdef object _subscription_owner
 
     def __init__(self) -> None:
         self._sync_state = {}
-        self._orphaned_groups = set()
         self._name_tracker = {}
         self._subscription_owner = object()  # Owner object for msgbus subscriptions
 
@@ -32,7 +30,6 @@ cdef class GroupManager:
         Note: Keeps the same subscription_owner to avoid memory leaks from orphaned subscriptions.
         """
         self._sync_state.clear()
-        self._orphaned_groups.clear()
         self._name_tracker.clear()
         # Keep the same subscription_owner to avoid memory leaks from orphaned msgbus subscriptions
 
@@ -82,9 +79,6 @@ cdef class GroupManager:
     def update_colors(self) -> None:
         """Update color tags for collections based on sync state."""
         for coll in self.iter_group_collections():
-            if self._is_orphaned_internal(coll.name):
-                coll.color_tag = "NONE"
-                continue
             synced = self._sync_state.get(coll.name)
 
             # 1. Determine the color that it *should* be.
@@ -96,18 +90,23 @@ cdef class GroupManager:
                 coll.color_tag = correct_color
 
     def update_orphaned_groups(self) -> None:
-        """Update the set of orphaned groups by accumulating new orphans."""
+        """Detect and immediately handle orphaned groups.
+        
+        Returns a list of orphaned group names that should be deleted from the engine.
+        Orphaned groups are: collections that were deleted or moved outside Objects.
+        """
+        orphaned = []
         objects_collection = self.get_objects_collection()
         
         for coll_name in list(self._sync_state.keys()):
-            if coll_name in self._orphaned_groups:
-                continue  # Already marked as orphaned
             if coll_name not in bpy.data.collections:
-                self._orphaned_groups.add(coll_name)
+                orphaned.append(coll_name)
                 continue
             coll = bpy.data.collections[coll_name]
             if coll_name not in objects_collection.children or not self._has_mesh_objects(coll):
-                self._orphaned_groups.add(coll_name)
+                orphaned.append(coll_name)
+        
+        return orphaned
 
     # ==================== Name Change Tracking ====================
 
@@ -175,17 +174,20 @@ cdef class GroupManager:
         return set(self._sync_state.keys())
 
     cpdef bint has_existing_groups(self):
-        """Check if any non-orphaned groups exist."""
-        return len(self._sync_state) > len(self._orphaned_groups)
+        """Check if any groups exist."""
+        return len(self._sync_state) > 0
 
     cpdef void drop_groups(self, list group_names):
         """Drop multiple groups from being managed and unsubscribe from name changes."""
         cdef str name
+        print("Dropping groups:")
+        print(group_names)
         for name in group_names:
             if name in self._sync_state:
                 del self._sync_state[name]
                 # Unsubscribe when group is dropped
                 self._unsubscribe_group(name)
+        print("Remaining state",self._sync_state)
 
     cpdef bint is_managed_collection(self, str collection_name):
         """Check if the given collection name is managed."""
@@ -209,38 +211,6 @@ cdef class GroupManager:
         """Return a copy of the full sync state dict (group_name -> synced bool)."""
         return dict(self._sync_state)
 
-    # ==================== Orphaned Groups ====================
-
-    cpdef set get_orphaned_groups(self):
-        """Get the current set of orphaned groups."""
-        return self._orphaned_groups
-
-    cpdef void clear_orphaned_groups(self):
-        """Clean up orphaned groups locally: remove from managed set and clear orphans.
-
-        This should be called after dropping from the engine to keep state consistent.
-        """
-        cdef list orphans = list(self._orphaned_groups)
-        if not orphans:
-            return
-
-        cdef int count = len(orphans)
-        self.drop_groups(orphans)
-        self._orphaned_groups.clear()
-
-    cpdef void add_orphaned_group(self, str group_name):
-        """Add a group to the orphaned set."""
-        if group_name:
-            self._orphaned_groups.add(group_name)
-
-    cpdef bint is_orphaned(self, str group_name):
-        """Check if a group is orphaned."""
-        return group_name in self._orphaned_groups
-
-    cdef bint _is_orphaned_internal(self, str group_name):
-        """Internal fast check if a group is orphaned (for Cython code)."""
-        return group_name in self._orphaned_groups
-
     cpdef dict get_name_tracker(self):
         """Get the name tracker dictionary."""
         return self._name_tracker
@@ -248,10 +218,6 @@ cdef class GroupManager:
     cpdef dict get_sync_state_dict(self):
         """Get the sync state dictionary."""
         return self._sync_state
-
-    cpdef set get_orphaned_groups_set(self):
-        """Get the orphaned groups set."""
-        return self._orphaned_groups
 
     cpdef get_sync_state_keys(self):
         """Get the keys of the sync state dict (managed group names)."""

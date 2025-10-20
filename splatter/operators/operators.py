@@ -3,7 +3,7 @@ import time
 
 from mathutils import Vector
 
-from splatter import engine_state, sync_manager
+from splatter import engine_state
 from ..constants import (
     CANCELLED,
     FINISHED,
@@ -26,7 +26,6 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
         return group_mgr.has_existing_groups()
 
     def execute(self, context):
-        sync_manager.cleanup_orphaned_groups()
         start_total = time.perf_counter()
         try:
             surface_manager = get_surface_manager()

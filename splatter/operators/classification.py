@@ -5,7 +5,6 @@ from ..constants import PRE, FINISHED
 from ..lib import classify_object
 from ..lib import group_manager
 from .. import engine_state
-from .. import sync_manager
 
 
 def get_all_mesh_objects_in_collection(coll):
@@ -105,7 +104,6 @@ class Splatter_OT_Classify_Selected(bpy.types.Operator):
         return bool(get_qualifying_objects_for_selected(sel, objects_collection))
 
     def execute(self, context):
-        sync_manager.cleanup_orphaned_groups()
         objects_collection = group_manager.get_group_manager().get_objects_collection()
         objects = get_qualifying_objects_for_selected(context.selected_objects, objects_collection)
         perform_classification(objects)
