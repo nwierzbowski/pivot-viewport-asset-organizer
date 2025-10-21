@@ -168,11 +168,12 @@ def classify_and_apply_objects(list selected_objects):
     """
     
     
-    start_time = time.perf_counter()
-    
     # --- Aggregation phase ---
     mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects = \
         selection_utils.aggregate_object_groups(selected_objects)
+    
+    if not group_names:
+        return
     
     # --- Shared memory setup ---
     shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(
@@ -185,7 +186,6 @@ def classify_and_apply_objects(list selected_objects):
     all_parent_offsets, all_original_rots = _prepare_object_transforms(
         parent_groups, mesh_groups, offsets_mv)
     
-    prep_time = time.perf_counter() - start_time
     
     # --- Engine communication ---
     command = _build_classify_command(
@@ -195,11 +195,9 @@ def classify_and_apply_objects(list selected_objects):
     engine = get_engine_communicator()
     engine.send_command_async(command)
     
-    engine_start = time.perf_counter()
-    final_response = engine.wait_for_response(1)
-    engine_time = time.perf_counter() - engine_start
     
-    apply_start = time.perf_counter()
+    final_response = engine.wait_for_response(1)
+    
     
     # Close shared memory in parent process
     for shm in shm_objects:
@@ -230,8 +228,3 @@ def classify_and_apply_objects(list selected_objects):
         
         group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=False)
-    
-    apply_time = time.perf_counter() - apply_start
-    
-    total_time = time.perf_counter() - start_time
-    print(f"classify_and_apply_objects: prep={prep_time*1000:.1f}ms, engine={engine_time*1000:.1f}ms, apply={apply_time*1000:.1f}ms, total={total_time*1000:.1f}ms")

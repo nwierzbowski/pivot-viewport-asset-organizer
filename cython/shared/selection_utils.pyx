@@ -138,7 +138,8 @@ def aggregate_object_groups(list selected_objects):
                 collections_to_process.add(new_coll)
             elif coll in coll_to_top_map:
                 for top in coll_to_top_map[coll]:
-                    collections_to_process.add(top)
+                    if not group_manager.get_group_manager().get_sync_state().get(top.name, False):
+                        collections_to_process.add(top)
 
     # Second pass: build groups for each collection.
     for processed_coll in collections_to_process:
