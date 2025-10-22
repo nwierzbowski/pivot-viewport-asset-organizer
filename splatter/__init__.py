@@ -7,12 +7,13 @@ from bpy.props import PointerProperty
 
 from .operators.operators import (
     Splatter_OT_Organize_Classified_Objects,
+    Splatter_OT_Upgrade_To_Pro,
 )
 from .operators.classification import (
     Splatter_OT_Classify_Selected,
     Splatter_OT_Classify_Active_Object,
 )
-from .ui import Splatter_PT_Main_Panel
+from .ui import Splatter_PT_Main_Panel, Splatter_PT_Pro_Panel
 from . import handlers
 
 bl_info = {
@@ -30,9 +31,11 @@ bl_info = {
 classesToRegister = (
     SceneAttributes,
     Splatter_PT_Main_Panel,
+    Splatter_PT_Pro_Panel,
     Splatter_OT_Classify_Selected,
     Splatter_OT_Classify_Active_Object,
     Splatter_OT_Organize_Classified_Objects,
+    Splatter_OT_Upgrade_To_Pro,
 )
 
 

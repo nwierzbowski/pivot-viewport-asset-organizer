@@ -7,6 +7,7 @@ from splatter import engine_state
 from ..constants import (
     CANCELLED,
     FINISHED,
+    LICENSE_PRO,
     PRE,
 )
 
@@ -16,7 +17,9 @@ from ..lib import group_manager
 
 class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = PRE.lower() + ".organize_classified_objects"
+    license_type = engine_state.get_engine_license_status()
     bl_label = "Organize Classified Objects"
+    bl_description = "Organize classified objects"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -86,4 +89,14 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
         end_total = time.perf_counter()
         print(f"Organize objects - Engine call: {(end_engine - start_engine) * 1000:.2f}ms, Post-processing: {(end_post - start_post) * 1000:.2f}ms, Total: {(end_total - start_total) * 1000:.2f}ms")
             
+        return {FINISHED}
+
+
+class Splatter_OT_Upgrade_To_Pro(bpy.types.Operator):
+    bl_idname = PRE.lower() + ".upgrade_to_pro"
+    bl_label = "Upgrade to Pro"
+    bl_description = "Visit our website!"
+
+    def execute(self, context):
+        bpy.ops.wm.url_open(url="https://elbo.studio")
         return {FINISHED}
