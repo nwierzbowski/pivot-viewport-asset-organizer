@@ -25,7 +25,8 @@ class Splatter_PT_Pro_Panel(bpy.types.Panel):
 
     def draw_header(self, context):
         row = self.layout.row()
-        row.label(text="", icon='LOCKED')
+        if get_engine_license_status() != LICENSE_PRO:
+            row.label(text="", icon='LOCKED')
 
     def draw(self, context):
         layout = self.layout
