@@ -13,7 +13,7 @@ from .operators.classification import (
     Splatter_OT_Classify_Selected,
     Splatter_OT_Classify_Active_Object,
 )
-from .ui import Splatter_PT_Standard_Panel, Splatter_PT_Pro_Panel
+from .ui import Splatter_PT_Standard_Panel, Splatter_PT_Pro_Panel, Splatter_PT_Status_Panel
 from . import handlers
 
 bl_info = {
@@ -30,6 +30,7 @@ bl_info = {
 
 classesToRegister = (
     SceneAttributes,
+    Splatter_PT_Status_Panel,
     Splatter_PT_Standard_Panel,
     Splatter_PT_Pro_Panel,
     Splatter_OT_Classify_Selected,

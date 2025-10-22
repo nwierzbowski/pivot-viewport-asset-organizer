@@ -16,6 +16,36 @@ from .engine_state import get_engine_license_status, set_engine_license_status
 from . import engine
 
 
+class Splatter_PT_Status_Panel(bpy.types.Panel):
+    bl_label = "Pivot Status"
+    bl_idname = PRE + "_PT_status_panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = CATEGORY  # Tab name in the N-Panel
+    bl_order = 0  # Make it appear at the top
+
+    def draw(self, context):
+        layout = self.layout
+        
+        # Get license_type from cached engine status, sync if needed
+        license_type = get_engine_license_status()
+        if license_type == "UNKNOWN":
+            try:
+                license_type = engine.sync_license_mode()
+                set_engine_license_status(license_type)
+            except Exception as e:
+                print(f"[Splatter] Failed to sync license: {e}")
+                license_type = "UNKNOWN"
+        
+        # Show license selector
+        self._draw_license_selector(layout, license_type)
+    
+    def _draw_license_selector(self, layout, license_type):
+        """Draw the license type display (read-only)."""
+        row = layout.row()
+        row.label(text=f"License: {license_type}")
+
+
 class Splatter_PT_Pro_Panel(bpy.types.Panel):
     bl_label = "Pivot Pro Operations"
     bl_idname = PRE + "_PT_pro_panel"
@@ -81,25 +111,7 @@ class Splatter_PT_Standard_Panel(bpy.types.Panel):
         obj = context.active_object
         layout = self.layout
         
-        # Get license_type from cached engine status, sync if needed
-        license_type = get_engine_license_status()
-        if license_type == "UNKNOWN":
-            try:
-                license_type = engine.sync_license_mode()
-                set_engine_license_status(license_type)
-            except Exception as e:
-                print(f"[Splatter] Failed to sync license: {e}")
-                license_type = "UNKNOWN"
-        
-        # Always show license selector
-        self._draw_license_selector(layout, license_type)
-        
         # Classification buttons
         row = layout.row()
         row.operator(Splatter_OT_Classify_Active_Object.bl_idname)
-    
-    def _draw_license_selector(self, layout, license_type):
-        """Draw the license type display (read-only)."""
-        row = layout.row()
-        row.label(text=f"License: {license_type}")
 
