@@ -66,12 +66,16 @@ class Splatter_PT_Pro_Panel(bpy.types.Panel):
             row.operator(Splatter_OT_Upgrade_To_Pro.bl_idname, icon='WORLD')
 
 
-class Splatter_PT_Main_Panel(bpy.types.Panel):
+class Splatter_PT_Standard_Panel(bpy.types.Panel):
     bl_label = "Pivot Standard Operations"
-    bl_idname = PRE + "_PT_main_panel"
+    bl_idname = PRE + "_PT_standard_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = CATEGORY  # Tab name in the N-Panel
+
+    @classmethod
+    def poll(cls, context):
+        return get_engine_license_status() != LICENSE_PRO
 
     def draw(self, context):
         obj = context.active_object
