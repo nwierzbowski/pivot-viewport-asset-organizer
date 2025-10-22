@@ -1,6 +1,9 @@
+import sys
 import bpy
 import os
 import stat
+
+from splatter import engine
 
 from .classes import SceneAttributes
 from bpy.props import PointerProperty
@@ -57,6 +60,22 @@ def register():
     except Exception as e:
         print(f"Note: Could not adjust permissions for engine binary during register: {e}")
 
+    # Start the splatter engine
+    engine_started = engine.start_engine()
+    
+    if not engine_started:
+        print("[Splatter] Failed to start engine after loading file")
+    else:
+        # Print Cython edition for debugging
+        try:
+            lib_path = os.path.join(os.path.dirname(__file__), 'lib')
+            if lib_path not in sys.path:
+                sys.path.insert(0, lib_path)
+            from .lib import edition_utils
+            edition_utils.print_edition()
+        except Exception as e:
+            print(f"[Splatter] Could not print Cython edition: {e}")
+
     # Register persistent handlers for engine lifecycle management
     if handlers.on_load_pre not in bpy.app.handlers.load_pre:
         bpy.app.handlers.load_pre.append(handlers.on_load_pre)
@@ -64,6 +83,8 @@ def register():
         bpy.app.handlers.load_post.append(handlers.on_load_post)
     if handlers.on_depsgraph_update not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(handlers.on_depsgraph_update)
+
+    
 
 
 def unregister():

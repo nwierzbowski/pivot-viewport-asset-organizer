@@ -223,19 +223,5 @@ def on_load_post(scene):
     engine_state.update_group_membership_snapshot({}, replace=True)
     clear_previous_scales()
     
-    # Start the splatter engine
-    engine_started = engine.start_engine()
     
-    if not engine_started:
-        print("[Splatter] Failed to start engine after loading file")
-    else:
-        # Print Cython edition for debugging
-        try:
-            lib_path = os.path.join(os.path.dirname(__file__), 'lib')
-            if lib_path not in sys.path:
-                sys.path.insert(0, lib_path)
-            from .lib import edition_utils
-            edition_utils.print_edition()
-        except Exception as e:
-            print(f"[Splatter] Could not print Cython edition: {e}")
     
