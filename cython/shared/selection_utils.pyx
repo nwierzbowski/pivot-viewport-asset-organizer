@@ -89,6 +89,30 @@ def aggregate_object_groups(list selected_objects):
     scene_coll = group_manager.get_group_manager().get_objects_collection()
     depsgraph = bpy.context.evaluated_depsgraph_get()
 
+    # Standard edition: just process the single selected object as-is
+    if edition_utils.is_standard_edition():
+        obj = selected_objects[0]
+        if obj.type != 'MESH':
+            return [], [], [], [], 0, 0, 0
+        
+        eval_obj = obj.evaluated_get(depsgraph)
+        eval_mesh = eval_obj.data
+        if len(eval_mesh.vertices) == 0:
+            return [], [], [], [], 0, 0, 0
+        
+        group_verts = len(eval_mesh.vertices)
+        group_edges = len(eval_mesh.edges)
+        
+        return (
+            [[obj]],  # mesh_groups
+            [[obj]],  # parent_groups
+            [[obj]],  # full_groups
+            [obj.name],  # group_names
+            group_verts,
+            group_edges,
+            1
+        )
+
     # Build a lookup that points every nested collection back to its top-level owner.
     coll_to_top_map = defaultdict(list)
     stack = []

@@ -104,6 +104,7 @@ def unregister():
 
     # Perform cleanup as if we're unloading a file
     handlers.on_load_pre(None)
+    engine.stop_engine()
 
 
 if __name__ == "__main__":

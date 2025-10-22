@@ -207,7 +207,7 @@ def on_load_pre(scene):
         print(f"[Splatter] Failed to sync classifications before load: {e}")
     
     # Stop the splatter engine
-    engine.stop_engine()
+    
     
 
 @persistent
