@@ -103,10 +103,6 @@ class Splatter_PT_Standard_Panel(bpy.types.Panel):
     bl_region_type = "UI"
     bl_category = CATEGORY  # Tab name in the N-Panel
 
-    @classmethod
-    def poll(cls, context):
-        return get_engine_license_status() != LICENSE_PRO
-
     def draw(self, context):
         obj = context.active_object
         layout = self.layout
