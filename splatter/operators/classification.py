@@ -82,25 +82,17 @@ def get_qualifying_objects_for_selected(selected_objects, objects_collection):
     return list(set(qualifying))  # remove duplicates
 
 
-def perform_classification(objects):
-    # Exit edit mode if active to ensure mesh data is accessible
-    if bpy.context.mode == 'EDIT_MESH':
-        bpy.ops.object.mode_set(mode='OBJECT')
-    
-    startCPP = time.perf_counter()
-    
-    classify_object.classify_and_apply_objects(objects)
-    endCPP = time.perf_counter()
-    elapsedCPP = endCPP - startCPP
-    print(f"Total time elapsed: {(elapsedCPP) * 1000:.2f}ms")
-    engine_state._is_performing_classification = True
-
-
 class Splatter_OT_Classify_Selected(bpy.types.Operator):
+    """
+    Pro Edition: Standardize Selected Groups
+    
+    Takes user selection, groups objects by collection boundaries and root parents,
+    performs classification on entire groups with group guessing in the engine.
+    """
     bl_idname = "object." + PRE.lower() + "standardize_selected_objects"
     license_type = engine_state.get_engine_license_status()
-    bl_label = "Standardize and Classify Selected"
-    bl_description = "Classify selected objects"
+    bl_label = "Standardize Selected Groups"
+    bl_description = "Classify selected objects and their groups"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -110,16 +102,33 @@ class Splatter_OT_Classify_Selected(bpy.types.Operator):
         return bool(get_qualifying_objects_for_selected(sel, objects_collection))
 
     def execute(self, context):
+        # Exit edit mode if active to ensure mesh data is accessible
+        if bpy.context.mode == 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+        startTime = time.perf_counter()
+        
         objects_collection = group_manager.get_group_manager().get_objects_collection()
         objects = get_qualifying_objects_for_selected(context.selected_objects, objects_collection)
-        perform_classification(objects)
+        classify_object.classify_and_apply_groups(objects)
+        
+        endTime = time.perf_counter()
+        elapsed = endTime - startTime
+        print(f"Classify Selected Groups completed in {(elapsed) * 1000:.2f}ms")
+        engine_state._is_performing_classification = True
         return {FINISHED}
 
 
 class Splatter_OT_Classify_Active_Object(bpy.types.Operator):
+    """
+    Standard Edition: Standardize Active Object
+    
+    Classifies only the active object directly without any group guessing or 
+    collection hierarchy processing. Returns results directly to object.
+    """
     bl_idname = "object." + PRE.lower() + "standardize_active_object"
     bl_label = "Standardize Active Object"
-    bl_description = "Classify the active object"
+    bl_description = "Classify the active object directly"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -129,9 +138,19 @@ class Splatter_OT_Classify_Active_Object(bpy.types.Operator):
         return obj and obj in get_qualifying_objects_for_selected([obj], objects_collection)
 
     def execute(self, context):
-        objects_collection = group_manager.get_group_manager().get_objects_collection()
-        objects = get_qualifying_objects_for_selected([context.active_object], objects_collection)
-        perform_classification(objects)
+        # Exit edit mode if active to ensure mesh data is accessible
+        if bpy.context.mode == 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+        startTime = time.perf_counter()
+        
+        obj = context.active_object
+        classify_object.classify_and_apply_active_object(obj)
+        
+        endTime = time.perf_counter()
+        elapsed = endTime - startTime
+        print(f"Classify Active Object completed in {(elapsed) * 1000:.2f}ms")
+        engine_state._is_performing_classification = True
         return {FINISHED}
 
 
