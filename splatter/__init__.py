@@ -36,8 +36,6 @@ _standard_panel_registered = False
 
 classesToRegister = (
     SceneAttributes,
-    Splatter_PT_Status_Panel,
-    Splatter_PT_Pro_Panel,
     Splatter_OT_Classify_Selected,
     Splatter_OT_Classify_Active_Object,
     Splatter_OT_Organize_Classified_Objects,
@@ -51,6 +49,8 @@ def register():
     for cls in classesToRegister:
         bpy.utils.register_class(cls)
     bpy.types.Scene.splatter = PointerProperty(type=SceneAttributes)
+
+    
 
     # Ensure engine binary is executable after zip install (zip extraction often drops exec bits)
     try:
@@ -82,10 +82,14 @@ def register():
             print(f"[Splatter] Could not print Cython edition: {e}")
             is_pro = False
 
+    bpy.utils.register_class(Splatter_PT_Status_Panel)
+
     # Conditionally register standard panel for non-pro licenses
     if not is_pro:
         bpy.utils.register_class(Splatter_PT_Standard_Panel)
         _standard_panel_registered = True
+
+    bpy.utils.register_class(Splatter_PT_Pro_Panel)
 
     # Register persistent handlers for engine lifecycle management
     if handlers.on_load_pre not in bpy.app.handlers.load_pre:
@@ -104,13 +108,15 @@ def register():
 def unregister():
     global _standard_panel_registered
     print(f"Unregistering {bl_info.get('name')}")
-    for cls in reversed(classesToRegister):  # Unregister in reverse order
-        bpy.utils.unregister_class(cls)
-
-    # Conditionally unregister standard panel if it was registered
+    
+    bpy.utils.unregister_class(Splatter_PT_Pro_Panel)
     if _standard_panel_registered:
         bpy.utils.unregister_class(Splatter_PT_Standard_Panel)
         _standard_panel_registered = False
+    bpy.utils.unregister_class(Splatter_PT_Status_Panel)
+    
+    for cls in reversed(classesToRegister):  # Unregister in reverse order
+        bpy.utils.unregister_class(cls)
 
     del bpy.types.Scene.splatter
 
