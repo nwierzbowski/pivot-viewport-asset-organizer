@@ -62,24 +62,6 @@ def _build_classify_groups_command(verts_shm_name, edges_shm_name, rotations_shm
     }
 
 
-def _build_classify_active_command(verts_shm_name, edges_shm_name, rotations_shm_name,
-                                   scales_shm_name, offsets_shm_name, vert_counts_mv,
-                                   edge_counts_mv, object_name):
-    """Construct the classify_active operation command for the engine (Standard edition)."""
-    return {
-        "id": 1,
-        "op": "classify_active",
-        "shm_verts": verts_shm_name,
-        "shm_edges": edges_shm_name,
-        "shm_rotations": rotations_shm_name,
-        "shm_scales": scales_shm_name,
-        "shm_offsets": offsets_shm_name,
-        "vert_count": vert_counts_mv[0],
-        "edge_count": edge_counts_mv[0],
-        "object_name": object_name
-    }
-
-
 def _prepare_object_transforms(parent_groups, mesh_groups, offsets_mv):
     """
     Extract offset transforms and rotation modes for all groups.
@@ -244,51 +226,66 @@ def classify_and_apply_groups(list selected_objects):
     engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=False)
 
 
-def classify_and_apply_active_object(object obj):
+def classify_and_apply_active_objects(list objects):
     """
-    Standard Edition: Classify a single active object directly.
+    Classify and apply standardization to one or more objects.
     
-    This function bypasses group guessing and collection hierarchy processing:
-    1. Extract mesh data from the single object
-    2. Marshal mesh data into shared memory
-    3. Send classify_active command to engine (single object processing)
-    4. Compute new transforms from engine response
-    5. Apply transforms to the object
+    This unified function handles both single and multiple objects:
+    - Single object (both editions): Direct standardization without group guessing
+    - Multiple objects (PRO edition only): Batch processing of multiple objects
     
     Args:
-        obj: The Blender object to classify (must have mesh data)
+        objects: List of Blender objects to classify (one or more)
+    
+    Raises:
+        RuntimeError: If STANDARD edition tries to classify multiple objects
     """
-    
-    if obj.type != 'MESH':
+    if not objects:
         return
     
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    eval_obj = obj.evaluated_get(depsgraph)
-    eval_mesh = eval_obj.data
+    # Validation: STANDARD edition only supports single object
+    if len(objects) > 1 and not edition_utils.is_pro_edition():
+        raise RuntimeError(f"STANDARD edition only supports single object classification, got {len(objects)}")
     
-    if len(eval_mesh.vertices) == 0:
+    # Filter to mesh objects only
+    mesh_objects = [obj for obj in objects if obj.type == 'MESH']
+    if not mesh_objects:
         return
     
-    # --- Single object data preparation ---
-    total_verts = len(eval_mesh.vertices)
-    total_edges = len(eval_mesh.edges)
-    mesh_groups = [[obj]]
+    # Build mesh data for all objects
+    mesh_groups = [[obj] for obj in mesh_objects]
+    total_verts = sum(len(obj.data.vertices) for obj in mesh_objects)
+    total_edges = sum(len(obj.data.edges) for obj in mesh_objects)
+    
+    if total_verts == 0:
+        return
     
     # --- Shared memory setup ---
     shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(
-        total_verts, total_edges, 1, mesh_groups)
+        total_verts, total_edges, len(mesh_objects), mesh_groups)
     
     verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
     vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv = count_memory_views
     
     # --- Extract transforms and rotation modes ---
+    parent_groups = [[obj] for obj in mesh_objects]
     all_parent_offsets, all_original_rots = _prepare_object_transforms(
-        [[obj]], mesh_groups, offsets_mv)
+        parent_groups, mesh_groups, offsets_mv)
     
-    # --- Engine communication ---
-    command = _build_classify_active_command(
-        verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
-        vert_counts_mv, edge_counts_mv, obj.name)
+    # --- Engine communication: unified array format ---
+    # Engine will validate that multiple objects are only used in PRO edition
+    command = {
+        "id": 1,
+        "op": "classify_active",
+        "shm_verts": verts_shm_name,
+        "shm_edges": edges_shm_name,
+        "shm_rotations": rotations_shm_name,
+        "shm_scales": scales_shm_name,
+        "shm_offsets": offsets_shm_name,
+        "vert_counts": list(vert_counts_mv),
+        "edge_counts": list(edge_counts_mv),
+        "object_names": [obj.name for obj in mesh_objects]
+    }
     
     engine = get_engine_communicator()
     engine.send_command_async(command)
@@ -300,12 +297,11 @@ def classify_and_apply_active_object(object obj):
         shm.close()
     
     # --- Extract engine results ---
-    result = final_response["result"]
-    rot = Quaternion(result["rot"])
-    origin = tuple(result["origin"])
-
-    print(f"Classified object '{obj.name}': rot={rot}, origin={origin}")
+    # Engine returns results as a dict keyed by object name
+    results = final_response.get("results", {})
+    rots = [Quaternion(results[obj.name]["rot"]) for obj in mesh_objects if obj.name in results]
+    origins = [tuple(results[obj.name]["origin"]) for obj in mesh_objects if obj.name in results]
     
     # --- Compute and apply transforms ---
-    locations = _compute_object_locations([[obj]], [rot], all_parent_offsets)
-    _apply_object_transforms([[obj]], all_original_rots, [rot], locations, [origin])
+    locations = _compute_object_locations(parent_groups, rots, all_parent_offsets)
+    _apply_object_transforms(parent_groups, all_original_rots, rots, locations, origins)

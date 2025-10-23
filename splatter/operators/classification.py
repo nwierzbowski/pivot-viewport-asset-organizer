@@ -1,7 +1,7 @@
 import bpy
 import time
 
-from ..constants import LICENSE_PRO, PRE, FINISHED
+from ..constants import LICENSE_PRO, LICENSE_STANDARD, PRE, FINISHED
 from ..lib import classify_object
 from ..lib import group_manager
 from .. import engine_state
@@ -82,17 +82,17 @@ def get_qualifying_objects_for_selected(selected_objects, objects_collection):
     return list(set(qualifying))  # remove duplicates
 
 
-class Splatter_OT_Classify_Selected(bpy.types.Operator):
+class Splatter_OT_Standardize_Selected_Groups(bpy.types.Operator):
     """
     Pro Edition: Standardize Selected Groups
     
     Takes user selection, groups objects by collection boundaries and root parents,
     performs classification on entire groups with group guessing in the engine.
     """
-    bl_idname = "object." + PRE.lower() + "standardize_selected_objects"
+    bl_idname = "object." + PRE.lower() + "standardize_selected_groups"
     license_type = engine_state.get_engine_license_status()
     bl_label = "Standardize Selected Groups"
-    bl_description = "Classify selected objects and their groups"
+    bl_description = "Standardize selected objects and their groups"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -114,21 +114,54 @@ class Splatter_OT_Classify_Selected(bpy.types.Operator):
         
         endTime = time.perf_counter()
         elapsed = endTime - startTime
-        print(f"Classify Selected Groups completed in {(elapsed) * 1000:.2f}ms")
+        print(f"Standardize Selected Groups completed in {(elapsed) * 1000:.2f}ms")
         engine_state._is_performing_classification = True
         return {FINISHED}
 
 
-class Splatter_OT_Classify_Active_Object(bpy.types.Operator):
+class Splatter_OT_Standardize_Selected_Objects(bpy.types.Operator):
+    """
+    Pro Edition: Standardize Selected Objects
+    
+    Standardizes one or more selected objects.
+    """
+    bl_idname = "object." + PRE.lower() + "standardize_selected_objects"
+    bl_label = "Standardize Selected Objects"
+    bl_description = "Standardize selected objects"
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        sel = getattr(context, "selected_objects", None) or []
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
+        return bool(get_qualifying_objects_for_selected(sel, objects_collection))
+
+    def execute(self, context):
+        # Exit edit mode if active to ensure mesh data is accessible
+        if bpy.context.mode == 'EDIT_MESH':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        
+        startTime = time.perf_counter()
+        
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
+        objects = get_qualifying_objects_for_selected(context.selected_objects, objects_collection)
+        classify_object.classify_and_apply_active_objects(objects)
+        
+        endTime = time.perf_counter()
+        elapsed = endTime - startTime
+        print(f"Standardize Selected Objects completed in {(elapsed) * 1000:.2f}ms")
+        return {FINISHED}
+
+
+class Splatter_OT_Standardize_Active_Object(bpy.types.Operator):
     """
     Standard Edition: Standardize Active Object
     
-    Classifies only the active object directly without any group guessing or 
-    collection hierarchy processing. Returns results directly to object.
+    Standardizes the active object only.
     """
     bl_idname = "object." + PRE.lower() + "standardize_active_object"
     bl_label = "Standardize Active Object"
-    bl_description = "Classify the active object directly"
+    bl_description = "Standardize the active object"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -144,13 +177,14 @@ class Splatter_OT_Classify_Active_Object(bpy.types.Operator):
         
         startTime = time.perf_counter()
         
+        objects_collection = group_manager.get_group_manager().get_objects_collection()
         obj = context.active_object
-        classify_object.classify_and_apply_active_object(obj)
+        if obj and obj in get_qualifying_objects_for_selected([obj], objects_collection):
+            classify_object.classify_and_apply_active_objects([obj])
         
         endTime = time.perf_counter()
         elapsed = endTime - startTime
-        print(f"Classify Active Object completed in {(elapsed) * 1000:.2f}ms")
-        engine_state._is_performing_classification = True
+        print(f"Standardize Active Object completed in {(elapsed) * 1000:.2f}ms")
         return {FINISHED}
 
 

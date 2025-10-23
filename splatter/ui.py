@@ -6,8 +6,9 @@ from .operators.operators import (
 )
 
 from .operators.classification import (
-    Splatter_OT_Classify_Selected,
-    Splatter_OT_Classify_Active_Object,
+    Splatter_OT_Standardize_Selected_Groups,
+    Splatter_OT_Standardize_Selected_Objects,
+    Splatter_OT_Standardize_Active_Object,
 )
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
@@ -80,7 +81,10 @@ class Splatter_PT_Pro_Panel(bpy.types.Panel):
             
             # Pro features
             row = layout.row()
-            row.operator(Splatter_OT_Classify_Selected.bl_idname)
+            row.operator(Splatter_OT_Standardize_Selected_Objects.bl_idname)
+
+            row = layout.row()
+            row.operator(Splatter_OT_Standardize_Selected_Groups.bl_idname)
             
             # Organization button
             row = layout.row()
@@ -109,5 +113,5 @@ class Splatter_PT_Standard_Panel(bpy.types.Panel):
         
         # Classification buttons
         row = layout.row()
-        row.operator(Splatter_OT_Classify_Active_Object.bl_idname)
+        row.operator(Splatter_OT_Standardize_Active_Object.bl_idname)
 
