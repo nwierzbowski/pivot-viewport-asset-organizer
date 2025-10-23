@@ -102,7 +102,9 @@ def _prepare_object_transforms(parent_groups, mesh_groups, offsets_mv):
         
         for obj in parent_group:
             obj.rotation_mode = 'QUATERNION'
-            all_original_rots.append(obj.rotation_quaternion)
+            # Use world-space rotation to handle objects that may not be root objects
+            world_quat = obj.matrix_world.to_quaternion()
+            all_original_rots.append(world_quat)
         
         current_offset_idx += group_offset_size
     
