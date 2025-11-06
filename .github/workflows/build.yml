@@ -103,6 +103,7 @@ jobs:
             python3-pip \
             ccache
           python3.11 -m pip install --user cython numpy
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Set up ccache (Ubuntu)
         if: runner.os == 'Linux'
@@ -116,6 +117,7 @@ jobs:
         run: |
           brew update
           brew install cmake ninja python3 cython numpy ccache
+          echo "/opt/homebrew/bin" >> $GITHUB_PATH
 
       - name: Set up ccache (macOS)
         if: runner.os == 'macOS'
@@ -143,11 +145,28 @@ jobs:
         with:
           cmake-version: '3.30'
 
-      - name: Configure CMake (${{ matrix.edition }})
+      - name: Configure CMake (${{ matrix.edition }}) - Linux
+        if: runner.os == 'Linux'
         run: |
           export PYTHON_EXECUTABLE=/usr/bin/python3.11
           cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE
         shell: bash
+
+      - name: Configure CMake (${{ matrix.edition }}) - macOS
+        if: runner.os == 'macOS'
+        run: |
+          PYTHON_EXECUTABLE=$(which python3.14 || which python3)
+          export PATH="/opt/homebrew/bin:$PATH"
+          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE
+        shell: bash
+
+      - name: Configure CMake (${{ matrix.edition }}) - Windows
+        if: runner.os == 'Windows'
+        run: |
+          python -c "import sys; print(sys.executable)" > python_path.txt
+          set /p PYTHON_EXECUTABLE=<python_path.txt
+          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=%PYTHON_EXECUTABLE%
+        shell: cmd
 
       - name: Build (${{ matrix.edition }})
         run: cmake --build --preset=${{ matrix.preset }}
