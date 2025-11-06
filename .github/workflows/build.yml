@@ -219,6 +219,13 @@ jobs:
       - name: Configure CMake (${{ matrix.edition }}) - Windows
         if: runner.os == 'Windows'
         run: |
+          REM Initialize MSVC environment (x64)
+          for /f "delims=" %%i in ('vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath') do set VSINSTALLDIR=%%i
+          if not defined VSINSTALLDIR (
+            echo ERROR: Unable to locate a suitable Visual Studio installation
+            exit /b 1
+          )
+          call "%VSINSTALLDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul
           REM Find Python 3.11 from setup-python action
           for /f "delims=" %%i in ('where python.exe') do (
             %%i --version 2>&1 | findstr "3.11" >nul && set PYTHON_EXECUTABLE=%%i && goto found_python
@@ -246,8 +253,8 @@ jobs:
           echo Using NumPy: %NUMPY_INCLUDE%
           echo Using Cython: %CYTHON_EXECUTABLE%
           cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} ^
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache ^
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache ^
+            -DCMAKE_C_COMPILER=cl.exe ^
+            -DCMAKE_CXX_COMPILER=cl.exe ^
             -DPython3_EXECUTABLE=%PYTHON_EXECUTABLE% ^
             -DPython3_INCLUDE_DIR=%PYTHON_INCLUDE% ^
             -DPython3_NumPy_INCLUDE_DIR=%NUMPY_INCLUDE% ^
