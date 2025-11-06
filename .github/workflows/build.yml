@@ -148,16 +148,19 @@ jobs:
       - name: Configure CMake (${{ matrix.edition }}) - Linux
         if: runner.os == 'Linux'
         run: |
+          export PATH="$HOME/.local/bin:$PATH"
           export PYTHON_EXECUTABLE=/usr/bin/python3.11
-          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE
+          CYTHON_EXECUTABLE=$(which cython)
+          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE -DCYTHON_EXECUTABLE=$CYTHON_EXECUTABLE
         shell: bash
 
       - name: Configure CMake (${{ matrix.edition }}) - macOS
         if: runner.os == 'macOS'
         run: |
-          PYTHON_EXECUTABLE=$(which python3.14 || which python3)
           export PATH="/opt/homebrew/bin:$PATH"
-          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE
+          PYTHON_EXECUTABLE=$(which python3.14 || which python3)
+          CYTHON_EXECUTABLE=$(which cython)
+          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE -DCYTHON_EXECUTABLE=$CYTHON_EXECUTABLE
         shell: bash
 
       - name: Configure CMake (${{ matrix.edition }}) - Windows
@@ -165,7 +168,9 @@ jobs:
         run: |
           python -c "import sys; print(sys.executable)" > python_path.txt
           set /p PYTHON_EXECUTABLE=<python_path.txt
-          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=%PYTHON_EXECUTABLE%
+          where cython > cython_path.txt
+          set /p CYTHON_EXECUTABLE=<cython_path.txt
+          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=%PYTHON_EXECUTABLE% -DCYTHON_EXECUTABLE=%CYTHON_EXECUTABLE%
         shell: cmd
 
       - name: Build (${{ matrix.edition }})
