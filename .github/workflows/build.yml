@@ -99,10 +99,10 @@ jobs:
             cmake \
             ninja-build \
             g++ \
-            python3-dev \
-            python3-pip \
+            python3.11-dev \
+            python3.11-pip \
             ccache
-          pip3 install --user cython numpy
+          python3.11 -m pip install --user cython numpy
 
       - name: Set up ccache (Ubuntu)
         if: runner.os == 'Linux'
@@ -141,10 +141,12 @@ jobs:
       - name: Set up CMake (all platforms)
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.28'
+          cmake-version: '3.30'
 
       - name: Configure CMake (${{ matrix.edition }})
-        run: cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        run: |
+          export PYTHON_EXECUTABLE=/usr/bin/python3.11
+          cmake --preset=${{ matrix.edition == 'PRO' && 'pro' || 'standard' }} -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DPython_EXECUTABLE=$PYTHON_EXECUTABLE
         shell: bash
 
       - name: Build (${{ matrix.edition }})
