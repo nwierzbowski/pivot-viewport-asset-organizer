@@ -100,7 +100,7 @@ jobs:
             ninja-build \
             g++ \
             python3.11-dev \
-            python3.11-pip \
+            python3-pip \
             ccache
           python3.11 -m pip install --user cython numpy
 
