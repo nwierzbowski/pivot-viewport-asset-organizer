@@ -2,6 +2,7 @@ import sys
 import bpy
 import os
 import stat
+import importlib
 
 from . import engine
 from .classes import SceneAttributes
@@ -47,6 +48,29 @@ classesToRegister = (
 def register():
     global _standard_panel_registered
     print(f"Registering {bl_info.get('name')} version {bl_info.get('version')}")
+    
+    # Stop any running engine from previous edition before reloading modules
+    try:
+        engine.stop_engine()
+    except Exception as e:
+        print(f"[Splatter] Note: Could not stop engine during register: {e}")
+    
+    # Force reload of Cython modules to pick up new edition binary
+    cython_modules = [
+        'splatter.lib.edition_utils',
+        'splatter.lib.operators.classify_object',
+        'splatter.lib.operators.selection_utils',
+        'splatter.lib.shared.shm_utils',
+        'splatter.lib.shared.transform_utils',
+        'splatter.lib.shared.group_manager',
+    ]
+    for mod_name in cython_modules:
+        if mod_name in sys.modules:
+            try:
+                importlib.reload(sys.modules[mod_name])
+                print(f"[Splatter] Reloaded {mod_name}")
+            except Exception as e:
+                print(f"[Splatter] Warning: Could not reload {mod_name}: {e}")
     
     # Add platform-specific lib directory to sys.path for Cython module loading
     try:
