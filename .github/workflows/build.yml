@@ -28,43 +28,43 @@ jobs:
       matrix:
         include:
           # Linux x86-64
-          # - os: linux
-          #   arch: x86-64
-          #   runs-on: ubuntu-22.04
-          #   edition: PRO
-          #   preset: pro-release
+          - os: linux
+            arch: x86-64
+            runs-on: ubuntu-22.04
+            edition: PRO
+            preset: pro-release
             
-          # - os: linux
-          #   arch: x86-64
-          #   runs-on: ubuntu-22.04
-          #   edition: STANDARD
-          #   preset: standard-release
+          - os: linux
+            arch: x86-64
+            runs-on: ubuntu-22.04
+            edition: STANDARD
+            preset: standard-release
 
-          # # macOS x86-64 (Intel)
-          # - os: macos
-          #   arch: x86-64
-          #   runs-on: macos-15-intel
-          #   edition: PRO
-          #   preset: pro-release
+          # macOS x86-64 (Intel)
+          - os: macos
+            arch: x86-64
+            runs-on: macos-15-intel
+            edition: PRO
+            preset: pro-release
             
-          # - os: macos
-          #   arch: x86-64
-          #   runs-on: macos-15-intel
-          #   edition: STANDARD
-          #   preset: standard-release
+          - os: macos
+            arch: x86-64
+            runs-on: macos-15-intel
+            edition: STANDARD
+            preset: standard-release
 
-          # # macOS arm64 (Apple Silicon)
-          # - os: macos
-          #   arch: arm64
-          #   runs-on: macos-latest
-          #   edition: PRO
-          #   preset: pro-release
+          # macOS arm64 (Apple Silicon)
+          - os: macos
+            arch: arm64
+            runs-on: macos-latest
+            edition: PRO
+            preset: pro-release
             
-          # - os: macos
-          #   arch: arm64
-          #   runs-on: macos-latest
-          #   edition: STANDARD
-          #   preset: standard-release
+          - os: macos
+            arch: arm64
+            runs-on: macos-latest
+            edition: STANDARD
+            preset: standard-release
 
           # Windows x86-64
           - os: windows
