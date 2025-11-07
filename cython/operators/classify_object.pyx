@@ -263,8 +263,16 @@ def classify_and_apply_active_objects(list objects):
     
     # Build mesh data for all objects
     mesh_groups = [[obj] for obj in mesh_objects]
-    total_verts = sum(len(obj.data.vertices) for obj in mesh_objects)
-    total_edges = sum(len(obj.data.edges) for obj in mesh_objects)
+    
+    # Use evaluated depsgraph to account for modifiers that may add verts/edges
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    total_verts = 0
+    total_edges = 0
+    for obj in mesh_objects:
+        eval_obj = obj.evaluated_get(depsgraph)
+        eval_mesh = eval_obj.data
+        total_verts += len(eval_mesh.vertices)
+        total_edges += len(eval_mesh.edges)
     
     if total_verts == 0:
         return
