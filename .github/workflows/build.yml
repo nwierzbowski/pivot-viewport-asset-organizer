@@ -362,14 +362,10 @@ jobs:
                 mkdir -p "$addon_dir/lib/$platform"
                 if [[ -d "$src_root/lib/$platform" ]]; then
                   echo "Copying $edition Cython modules for $platform from lib/$platform"
-                  find "$src_root/lib/$platform" -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
-                    cp "$module" "$addon_dir/lib/$platform/" 2>/dev/null || true
-                  done
+                  find "$src_root/lib/$platform" -type f \( -name "*.so" -o -name "*.pyd" \) -exec cp {} "$addon_dir/lib/$platform/" \; 2>/dev/null || true
                 elif [[ -d "$src_root/lib" ]]; then
                   echo "Copying $edition Cython modules for $platform from lib (no platform subdir)"
-                  find "$src_root/lib" -maxdepth 1 -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
-                    cp "$module" "$addon_dir/lib/$platform/" 2>/dev/null || true
-                  done
+                  find "$src_root/lib" -maxdepth 1 -type f \( -name "*.so" -o -name "*.pyd" \) -exec cp {} "$addon_dir/lib/$platform/" \; 2>/dev/null || true
                 else
                   echo "WARNING: No Cython modules found for $edition in $artifact_dir"
                 fi
@@ -383,7 +379,7 @@ jobs:
             fi
             
             # Create the edition-specific zip with pivot folder at root
-            zip -r "pivot-addon-$edition.zip" "$addon_dir"
+            zip -r "pivot-addon-$edition.zip" "pivot-$edition"
             
             echo "Created $edition addon package: pivot-addon-$edition.zip"
           done
