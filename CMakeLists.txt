@@ -40,39 +40,62 @@ set(SPLATTER_EDITION_DEFINES "${_edition_defines}" CACHE INTERNAL "Compile defin
 set(SPLATTER_EDITION_PRO_DEF ${_edition_pro_flag} CACHE INTERNAL "Cython DEF flag for PRO edition" FORCE)
 set(SPLATTER_EDITION_STANDARD_DEF ${_edition_standard_flag} CACHE INTERNAL "Cython DEF flag for STANDARD edition" FORCE)
 set(SPLATTER_EDITION_NAME_DEF ${SPLATTER_EDITION} CACHE INTERNAL "Cython DEF name for selected edition" FORCE)
-set(SPLATTER_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin" CACHE INTERNAL "Engine output directory")
-set(SPLATTER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/splatter/lib" CACHE INTERNAL "Cython module output directory")
+
+# Detect platform architecture for per-architecture builds
+string(TOLOWER "${CMAKE_SYSTEM_NAME}" _system_name)
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _processor)
+
+# Normalize architecture names
+if(_processor MATCHES "^(x86_64|AMD64|amd64)$")
+    set(_arch "x86-64")
+elseif(_processor MATCHES "^(aarch64|arm64)$")
+    set(_arch "arm64")
+else()
+    set(_arch "${_processor}")
+endif()
+
+set(SPLATTER_PLATFORM_ID "${_system_name}-${_arch}" CACHE INTERNAL "Platform identifier (e.g., darwin-arm64, linux-x86-64)")
+set(SPLATTER_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/splatter/bin/${SPLATTER_PLATFORM_ID}" CACHE INTERNAL "Engine output directory")
+set(SPLATTER_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/splatter/lib/${SPLATTER_PLATFORM_ID}" CACHE INTERNAL "Cython module output directory")
 
 unset(_edition_pro_flag)
 unset(_edition_standard_flag)
 unset(_edition_name)
+unset(_system_name)
+unset(_processor)
+unset(_arch)
 message(STATUS "Building Splatter edition: ${SPLATTER_EDITION}")
+message(STATUS "Platform identifier: ${SPLATTER_PLATFORM_ID}")
 
-# Ensure output directories are ready for this edition
-function(_splatter_prepare_dir dir)
+# Ensure output directories are ready for this edition and platform
+function(_splatter_prepare_dir dir platform_id)
     if(dir STREQUAL "")
         return()
     endif()
     file(MAKE_DIRECTORY "${dir}")
+    # Store both the edition and platform ID in the marker file
     set(marker "${dir}/.edition")
+    set(marker_content "${platform_id}:${SPLATTER_EDITION}")
     set(should_clean TRUE)
     if(EXISTS "${marker}")
         file(READ "${marker}" existing_marker)
         string(STRIP "${existing_marker}" existing_marker)
-        if(existing_marker STREQUAL "${SPLATTER_EDITION}")
+        if(existing_marker STREQUAL "${marker_content}")
             set(should_clean FALSE)
         endif()
     endif()
     # Always clear to ensure correct edition artifacts
-    file(GLOB children LIST_DIRECTORIES true "${dir}/*")
-    if(children)
-        file(REMOVE_RECURSE ${children})
+    if(should_clean)
+        file(GLOB children LIST_DIRECTORIES true "${dir}/*")
+        if(children)
+            file(REMOVE_RECURSE ${children})
+        endif()
     endif()
-    file(WRITE "${marker}" "${SPLATTER_EDITION}\n")
+    file(WRITE "${marker}" "${marker_content}\n")
 endfunction()
 
-_splatter_prepare_dir("${SPLATTER_BIN_DIR}")
-_splatter_prepare_dir("${SPLATTER_LIB_DIR}")
+_splatter_prepare_dir("${SPLATTER_BIN_DIR}" "${SPLATTER_PLATFORM_ID}")
+_splatter_prepare_dir("${SPLATTER_LIB_DIR}" "${SPLATTER_PLATFORM_ID}")
 
 # Shared dependencies (available to subprojects)
 include(FetchContent)
@@ -87,7 +110,17 @@ FetchContent_Declare(
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
 )
-FetchContent_MakeAvailable(Eigen)
+FetchContent_GetProperties(Eigen)
+if(NOT Eigen_POPULATED)
+    FetchContent_Populate(Eigen)
+endif()
+
+if(NOT TARGET Eigen3::Eigen)
+    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    set_target_properties(Eigen3::Eigen PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${Eigen_SOURCE_DIR}"
+    )
+endif()
 
 # Required Boost libs for IPC and JSON
 cmake_policy(SET CMP0167 NEW) # Suppress FindBoost deprecation warning
