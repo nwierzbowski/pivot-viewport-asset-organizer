@@ -344,11 +344,15 @@ jobs:
               # Copy Cython modules to platform-specific directory
               mkdir -p "universal-addon/lib/$platform"
               if [[ -d "$src_root/lib/$platform" ]]; then
-                echo "Copying Cython modules for $platform"
-                cp -r "$src_root/lib/$platform/"* "universal-addon/lib/$platform/" 2>/dev/null || true
+                echo "Copying Cython modules for $platform from lib/$platform"
+                find "$src_root/lib/$platform" -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
+                  cp "$module" "universal-addon/lib/$platform/" 2>/dev/null || true
+                done
               elif [[ -d "$src_root/lib" ]]; then
-                echo "Copying all Cython modules (no platform subdir) for $platform"
-                cp -r "$src_root/lib/"* "universal-addon/lib/$platform/" 2>/dev/null || true
+                echo "Copying Cython modules for $platform from lib (no platform subdir)"
+                find "$src_root/lib" -maxdepth 1 -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
+                  cp "$module" "universal-addon/lib/$platform/" 2>/dev/null || true
+                done
               else
                 echo "WARNING: No Cython modules found for $platform"
               fi
