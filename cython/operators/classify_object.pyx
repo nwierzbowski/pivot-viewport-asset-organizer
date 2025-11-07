@@ -205,7 +205,9 @@ def classify_and_apply_groups(list selected_objects):
             shm_name = getattr(shm, "name", "<unknown>")
         except Exception:
             shm_name = "<unknown>"
+        print(f"[SHM] Closing shared memory segment: {shm_name}")
         shm.close()
+        print(f"[SHM] Successfully closed: {shm_name}")
     
     if not bool(final_response.get("ok", True)):
         error_msg = final_response.get("error", "Unknown engine error during classify_groups")
@@ -314,7 +316,9 @@ def classify_and_apply_active_objects(list objects):
             shm_name = getattr(shm, "name", "<unknown>")
         except Exception:
             shm_name = "<unknown>"
+        print(f"[SHM] Closing shared memory segment: {shm_name}")
         shm.close()
+        print(f"[SHM] Successfully closed: {shm_name}")
     
     if not bool(final_response.get("ok", True)):
         error_msg = final_response.get("error", "Unknown engine error during classify_objects")

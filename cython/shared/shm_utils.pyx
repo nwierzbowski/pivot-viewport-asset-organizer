@@ -17,18 +17,56 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
 
     # macOS has a 31-char limit for POSIX shared memory names
     # Use short prefixes and truncate UUID to fit within the limit
-    uid = uuid.uuid4().hex[:16]  # Use first 16 chars of UUID
-    verts_shm_name = f"sp_v_{uid}"
-    edges_shm_name = f"sp_e_{uid}"
-    rotations_shm_name = f"sp_r_{uid}"
-    scales_shm_name = f"sp_s_{uid}"
-    offsets_shm_name = f"sp_o_{uid}"
+    # macOS also doesn't accept leading forward slashes in shared memory names
+    uid = uuid.uuid4().hex[:12]  # Use first 12 chars of UUID for extra margin
+    verts_shm_name = f"pv_{uid}"
+    edges_shm_name = f"pe_{uid}"
+    rotations_shm_name = f"pr_{uid}"
+    scales_shm_name = f"ps_{uid}"
+    offsets_shm_name = f"po_{uid}"
 
-    verts_shm = shared_memory.SharedMemory(create=True, size=verts_size, name=verts_shm_name)
-    edges_shm = shared_memory.SharedMemory(create=True, size=edges_size, name=edges_shm_name)
-    rotations_shm = shared_memory.SharedMemory(create=True, size=rotations_size, name=rotations_shm_name)
-    scales_shm = shared_memory.SharedMemory(create=True, size=scales_size, name=scales_shm_name)
-    offsets_shm = shared_memory.SharedMemory(create=True, size=offsets_size, name=offsets_shm_name)
+    try:
+        print(f"[SHM] Creating verts segment: {verts_shm_name} (size={verts_size} bytes)")
+        verts_shm = shared_memory.SharedMemory(create=True, size=verts_size, name=verts_shm_name)
+        print(f"[SHM] Successfully created verts segment: {verts_shm_name}")
+    except FileExistsError:
+        # If segment already exists (shouldn't happen), clean up and retry
+        print(f"[SHM] Segment {verts_shm_name} already exists, cleaning up...")
+        try:
+            existing = shared_memory.SharedMemory(name=verts_shm_name)
+            existing.unlink()
+            print(f"[SHM] Unlinked existing segment: {verts_shm_name}")
+        except Exception as cleanup_err:
+            print(f"[SHM] Failed to clean up {verts_shm_name}: {cleanup_err}")
+        verts_shm = shared_memory.SharedMemory(create=True, size=verts_size, name=verts_shm_name)
+        print(f"[SHM] Successfully created verts segment after cleanup: {verts_shm_name}")
+    
+    try:
+        print(f"[SHM] Creating edges segment: {edges_shm_name} (size={edges_size} bytes)")
+        edges_shm = shared_memory.SharedMemory(create=True, size=edges_size, name=edges_shm_name)
+        print(f"[SHM] Successfully created edges segment: {edges_shm_name}")
+        
+        print(f"[SHM] Creating rotations segment: {rotations_shm_name} (size={rotations_size} bytes)")
+        rotations_shm = shared_memory.SharedMemory(create=True, size=rotations_size, name=rotations_shm_name)
+        print(f"[SHM] Successfully created rotations segment: {rotations_shm_name}")
+        
+        print(f"[SHM] Creating scales segment: {scales_shm_name} (size={scales_size} bytes)")
+        scales_shm = shared_memory.SharedMemory(create=True, size=scales_size, name=scales_shm_name)
+        print(f"[SHM] Successfully created scales segment: {scales_shm_name}")
+        
+        print(f"[SHM] Creating offsets segment: {offsets_shm_name} (size={offsets_size} bytes)")
+        offsets_shm = shared_memory.SharedMemory(create=True, size=offsets_size, name=offsets_shm_name)
+        print(f"[SHM] Successfully created offsets segment: {offsets_shm_name}")
+    except Exception as e:
+        # Cleanup on failure
+        print(f"[SHM] ERROR: Failed to create shared memory segments: {e}")
+        print(f"[SHM] Cleaning up verts segment: {verts_shm_name}")
+        try:
+            verts_shm.close()
+            verts_shm.unlink()
+        except Exception as cleanup_err:
+            print(f"[SHM] Failed to clean up verts segment: {cleanup_err}")
+        raise RuntimeError(f"Failed to create shared memory segments: {e}")
 
     cdef cnp.ndarray all_verts = np.ndarray((verts_size // 4,), dtype=np.float32, buffer=verts_shm.buf)
     cdef cnp.ndarray all_edges = np.ndarray((edges_size // 4,), dtype=np.uint32, buffer=edges_shm.buf)
@@ -120,6 +158,7 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     shm_names = (verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name)
     count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv)
 
+    print(f"[SHM] create_data_arrays complete. Created segments: {shm_names}")
     return shm_objects, shm_names, count_memory_views
 
 
@@ -180,11 +219,24 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
     cdef size_t face_sizes_size = <size_t>total_faces_count * 4
 
     # macOS has a 31-char limit for POSIX shared memory names
-    uid_faces = uuid.uuid4().hex[:16]
-    face_sizes_shm_name = f"sp_fs_{uid_faces}"
+    uid_faces = uuid.uuid4().hex[:12]  # Use first 12 chars of UUID for extra margin
+    face_sizes_shm_name = f"pfs_{uid_faces}"
 
     try:
+        print(f"[SHM] Creating face_sizes segment: {face_sizes_shm_name} (size={face_sizes_size} bytes)")
         face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
+        print(f"[SHM] Successfully created face_sizes segment: {face_sizes_shm_name}")
+    except FileExistsError:
+        # If segment already exists, clean up and retry
+        print(f"[SHM] Segment {face_sizes_shm_name} already exists, cleaning up...")
+        try:
+            existing = shared_memory.SharedMemory(name=face_sizes_shm_name)
+            existing.unlink()
+            print(f"[SHM] Unlinked existing segment: {face_sizes_shm_name}")
+        except Exception as cleanup_err:
+            print(f"[SHM] Failed to clean up {face_sizes_shm_name}: {cleanup_err}")
+        face_sizes_shm = shared_memory.SharedMemory(create=True, size=face_sizes_size, name=face_sizes_shm_name)
+        print(f"[SHM] Successfully created face_sizes segment after cleanup: {face_sizes_shm_name}")
         shm_face_sizes_buf = np.ndarray((total_faces_count,), dtype=np.uint32, buffer=face_sizes_shm.buf)
 
         face_counts = np.empty(total_objects, dtype=np.uint32)
@@ -220,9 +272,23 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
         if total_face_vertices == 0:
             raise ValueError("prepare_face_data: collected faces but no vertex indices recorded")
 
-        faces_shm_name = f"sp_f_{uid_faces}"
+        faces_shm_name = f"pf_{uid_faces}"
         faces_size = <size_t>total_face_vertices * 4
-        faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
+        try:
+            print(f"[SHM] Creating faces segment: {faces_shm_name} (size={faces_size} bytes)")
+            faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
+            print(f"[SHM] Successfully created faces segment: {faces_shm_name}")
+        except FileExistsError:
+            # If segment already exists, clean up and retry
+            print(f"[SHM] Segment {faces_shm_name} already exists, cleaning up...")
+            try:
+                existing = shared_memory.SharedMemory(name=faces_shm_name)
+                existing.unlink()
+                print(f"[SHM] Unlinked existing segment: {faces_shm_name}")
+            except Exception as cleanup_err:
+                print(f"[SHM] Failed to clean up {faces_shm_name}: {cleanup_err}")
+            faces_shm = shared_memory.SharedMemory(create=True, size=faces_size, name=faces_shm_name)
+            print(f"[SHM] Successfully created faces segment after cleanup: {faces_shm_name}")
         shm_faces_buf = np.ndarray((total_face_vertices,), dtype=np.uint32, buffer=faces_shm.buf)
 
         faces_offset = 0
@@ -246,10 +312,13 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
         shm_objects = (faces_shm, face_sizes_shm)
         shm_names = (faces_shm_name, face_sizes_shm_name)
 
+        print(f"[SHM] prepare_face_data complete. Created segments: {shm_names}")
         return shm_objects, shm_names, face_counts_mv, face_sizes_mv, face_vert_counts_mv, total_faces_count, total_face_vertices
 
-    except Exception:
+    except Exception as e:
+        print(f"[SHM] ERROR in prepare_face_data: {e}")
         if faces_shm is not None:
+            print(f"[SHM] Closing and unlinking faces_shm: {faces_shm.name if hasattr(faces_shm, 'name') else 'unknown'}")
             try:
                 pass
             except Exception:
@@ -257,6 +326,7 @@ def prepare_face_data(uint32_t total_objects, list mesh_groups):
             faces_shm.close()
             faces_shm.unlink()
         if face_sizes_shm is not None:
+            print(f"[SHM] Closing and unlinking face_sizes_shm: {face_sizes_shm.name if hasattr(face_sizes_shm, 'name') else 'unknown'}")
             try:
                 pass
             except Exception:
