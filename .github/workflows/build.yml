@@ -225,15 +225,19 @@ jobs:
             echo ERROR: Unable to locate a suitable Visual Studio installation
             exit /b 1
           )
-          call "%VSINSTALLDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul
-          if not defined VCToolsInstallDir (
-            echo ERROR: vcvars64.bat did not set VCToolsInstallDir
+          call "%VSINSTALLDIR%\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul
+          if errorlevel 1 (
+            echo ERROR: vcvarsall.bat failed to initialize the MSVC environment
             exit /b 1
           )
-          set "CL_COMPILER=%VCToolsInstallDir%bin\Hostx64\x64\cl.exe"
-          if not exist "%CL_COMPILER%" (
-            echo ERROR: Expected MSVC compiler not found at %CL_COMPILER%
-            dir "%VCToolsInstallDir%bin\Hostx64\x64"
+          set "CL_COMPILER="
+          for /f "delims=" %%i in ('where cl.exe 2^>nul') do (
+            if not defined CL_COMPILER (
+              set "CL_COMPILER=%%i"
+            )
+          )
+          if not defined CL_COMPILER (
+            echo ERROR: Unable to locate cl.exe after initializing MSVC environment
             exit /b 1
           )
           REM Find Python 3.11 from setup-python action
@@ -258,6 +262,7 @@ jobs:
             echo ERROR: cython not found
             exit /b 1
           )
+          echo Using MSVC: %CL_COMPILER%
           echo Using Python: %PYTHON_EXECUTABLE%
           echo Using Python Include: %PYTHON_INCLUDE%
           echo Using NumPy: %NUMPY_INCLUDE%
