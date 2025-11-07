@@ -9,15 +9,15 @@ from .classes import SceneAttributes
 from bpy.props import PointerProperty
 
 from .operators.operators import (
-    Splatter_OT_Organize_Classified_Objects,
-    Splatter_OT_Upgrade_To_Pro,
+    Pivot_OT_Organize_Classified_Objects,
+    Pivot_OT_Upgrade_To_Pro,
 )
 from .operators.classification import (
-    Splatter_OT_Standardize_Selected_Groups,
-    Splatter_OT_Standardize_Selected_Objects,
-    Splatter_OT_Standardize_Active_Object,
+    Pivot_OT_Standardize_Selected_Groups,
+    Pivot_OT_Standardize_Selected_Objects,
+    Pivot_OT_Standardize_Active_Object,
 )
-from .ui import Splatter_PT_Standard_Panel, Splatter_PT_Pro_Panel, Splatter_PT_Status_Panel
+from .ui import Pivot_PT_Standard_Panel, Pivot_PT_Pro_Panel, Pivot_PT_Status_Panel
 from . import handlers
 
 bl_info = {
@@ -37,11 +37,11 @@ _standard_panel_registered = False
 
 classesToRegister = (
     SceneAttributes,
-    Splatter_OT_Standardize_Selected_Groups,
-    Splatter_OT_Standardize_Selected_Objects,
-    Splatter_OT_Standardize_Active_Object,
-    Splatter_OT_Organize_Classified_Objects,
-    Splatter_OT_Upgrade_To_Pro,
+    Pivot_OT_Standardize_Selected_Groups,
+    Pivot_OT_Standardize_Selected_Objects,
+    Pivot_OT_Standardize_Active_Object,
+    Pivot_OT_Organize_Classified_Objects,
+    Pivot_OT_Upgrade_To_Pro,
 )
 
 
@@ -57,12 +57,12 @@ def register():
     
     # Force reload of Cython modules to pick up new edition binary
     cython_modules = [
-        'splatter.lib.edition_utils',
-        'splatter.lib.operators.classify_object',
-        'splatter.lib.operators.selection_utils',
-        'splatter.lib.shared.shm_utils',
-        'splatter.lib.shared.transform_utils',
-        'splatter.lib.shared.group_manager',
+        'pivot.lib.edition_utils',
+        'pivot.lib.operators.classify_object',
+        'pivot.lib.operators.selection_utils',
+        'pivot.lib.shared.shm_utils',
+        'pivot.lib.shared.transform_utils',
+        'pivot.lib.shared.group_manager',
     ]
     for mod_name in cython_modules:
         if mod_name in sys.modules:
@@ -93,7 +93,7 @@ def register():
     
     for cls in classesToRegister:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.splatter = PointerProperty(type=SceneAttributes)
+    bpy.types.Scene.pivot = PointerProperty(type=SceneAttributes)
 
     
 
@@ -124,14 +124,14 @@ def register():
             print(f"[Pivot] Could not print Cython edition: {e}")
             is_pro = False
 
-    bpy.utils.register_class(Splatter_PT_Status_Panel)
+    bpy.utils.register_class(Pivot_PT_Status_Panel)
 
     # Conditionally register standard panel for non-pro licenses
     if not is_pro:
-        bpy.utils.register_class(Splatter_PT_Standard_Panel)
+        bpy.utils.register_class(Pivot_PT_Standard_Panel)
         _standard_panel_registered = True
 
-    bpy.utils.register_class(Splatter_PT_Pro_Panel)
+    bpy.utils.register_class(Pivot_PT_Pro_Panel)
 
     # Register persistent handlers for engine lifecycle management
     if handlers.on_load_pre not in bpy.app.handlers.load_pre:
@@ -151,16 +151,16 @@ def unregister():
     global _standard_panel_registered
     print(f"Unregistering {bl_info.get('name')}")
     
-    bpy.utils.unregister_class(Splatter_PT_Pro_Panel)
+    bpy.utils.unregister_class(Pivot_PT_Pro_Panel)
     if _standard_panel_registered:
-        bpy.utils.unregister_class(Splatter_PT_Standard_Panel)
+        bpy.utils.unregister_class(Pivot_PT_Standard_Panel)
         _standard_panel_registered = False
-    bpy.utils.unregister_class(Splatter_PT_Status_Panel)
+    bpy.utils.unregister_class(Pivot_PT_Status_Panel)
     
     for cls in reversed(classesToRegister):  # Unregister in reverse order
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Scene.splatter
+    del bpy.types.Scene.pivot
 
     # Unregister all persistent handlers
     if handlers.on_load_pre in bpy.app.handlers.load_pre:

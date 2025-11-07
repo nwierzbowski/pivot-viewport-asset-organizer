@@ -257,10 +257,10 @@ jobs:
       - name: Verify binary (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          engine_path=$(find splatter/bin -maxdepth 2 -type f -name splatter_engine -print -quit)
+          engine_path=$(find pivot/bin -maxdepth 2 -type f -name pivot_engine -print -quit)
           if [ -z "$engine_path" ]; then
-            echo "ERROR: Engine binary not found under splatter/bin"
-            ls -R splatter/bin || true
+            echo "ERROR: Engine binary not found under pivot/bin"
+            ls -R pivot/bin || true
             exit 1
           fi
           echo "Using engine binary: $engine_path"
@@ -278,20 +278,20 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $enginePath = Get-ChildItem -Path "splatter\bin" -Filter "splatter_engine.exe" -File -Recurse | Select-Object -First 1
+          $enginePath = Get-ChildItem -Path "pivot\bin" -Filter "pivot_engine.exe" -File -Recurse | Select-Object -First 1
           if ($null -ne $enginePath) {
             Get-Item $enginePath.FullName
           } else {
-            Write-Error "splatter\\bin\\splatter_engine.exe not found in any subdirectory"
+            Write-Error "pivot\\bin\\pivot_engine.exe not found in any subdirectory"
           }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: splatter-engine-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.edition }}
+          name: pivot-engine-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.edition }}
           path: |
-            splatter/bin/
-            splatter/lib/
+            pivot/bin/
+            pivot/lib/
           retention-days: 30
 
   create-release:
@@ -311,24 +311,24 @@ jobs:
 
       - name: Create universal addon packages (STANDARD and PRO)
         run: |
-          # Check out splatter addon structure for packaging
-          mkdir -p splatter-addon-base
+          # Check out pivot addon structure for packaging
+          mkdir -p pivot-addon-base
           
           # Create separate packages for STANDARD and PRO editions
           for edition in STANDARD PRO; do
             echo "Building universal package for $edition edition"
-            addon_dir="splatter-addon-$edition"
+            addon_dir="pivot-addon-$edition"
             
-            # Copy the splatter addon structure
-            cp -r splatter "$addon_dir"
+            # Copy the pivot addon structure
+            cp -r pivot "$addon_dir"
             mkdir -p "$addon_dir/bin" "$addon_dir/lib"
             
             # Extract and organize binaries from platform artifacts for this edition
             for artifact_dir in artifacts/*/; do
               if [[ -d "$artifact_dir" ]]; then
                 artifact_name=$(basename "$artifact_dir")
-                # Normalize artifact name (e.g., splatter-engine-windows-x86-64-PRO)
-                platform=$(echo "$artifact_name" | sed -E 's/splatter-engine-([^-]+-[^-]+)-.*/\1/')
+                # Normalize artifact name (e.g., pivot-engine-windows-x86-64-PRO)
+                platform=$(echo "$artifact_name" | sed -E 's/pivot-engine-([^-]+-[^-]+)-.*/\1/')
                 # Convert macos-* to darwin-*
                 platform=${platform/macos/darwin}
                 artifact_edition=$(echo "$artifact_name" | sed -E 's/.*-([A-Z]+)$/\1/')
@@ -340,15 +340,15 @@ jobs:
                 fi
 
                 src_root="$artifact_dir"
-                if [[ -d "$artifact_dir/splatter" ]]; then
-                  src_root="$artifact_dir/splatter"
+                if [[ -d "$artifact_dir/pivot" ]]; then
+                  src_root="$artifact_dir/pivot"
                 fi
 
                 # Copy engine binary to platform-specific directory
                 mkdir -p "$addon_dir/bin/$platform"
-                engine_path=$(find "$src_root/bin" -maxdepth 3 -type f \( -name 'splatter_engine' -o -name 'splatter_engine.exe' \) | head -n1)
+                engine_path=$(find "$src_root/bin" -maxdepth 3 -type f \( -name 'pivot_engine' -o -name 'pivot_engine.exe' \) | head -n1)
                 if [[ -n "$engine_path" ]]; then
-                  dest_engine="$addon_dir/bin/$platform/splatter_engine"
+                  dest_engine="$addon_dir/bin/$platform/pivot_engine"
                   if [[ $engine_path == *.exe ]]; then
                     dest_engine+=".exe"
                   fi
@@ -377,27 +377,27 @@ jobs:
             done
             
             # Verify we got binaries and modules for this edition
-            if [[ -z $(find "$addon_dir/bin" -type f -name 'splatter_engine*' -print -quit) ]]; then
+            if [[ -z $(find "$addon_dir/bin" -type f -name 'pivot_engine*' -print -quit) ]]; then
               echo "ERROR: No engine binaries found for $edition!"
               exit 1
             fi
             
-            # Create the edition-specific zip with splatter folder at root
-            zip -r "splatter-addon-$edition.zip" "$addon_dir"
+            # Create the edition-specific zip with pivot folder at root
+            zip -r "pivot-addon-$edition.zip" "$addon_dir"
             
-            echo "Created $edition addon package: splatter-addon-$edition.zip"
+            echo "Created $edition addon package: pivot-addon-$edition.zip"
           done
 
       - name: Upload STANDARD addon
         uses: actions/upload-artifact@v4
         with:
-          name: splatter-addon-STANDARD
-          path: splatter-addon-STANDARD.zip
+          name: pivot-addon-STANDARD
+          path: pivot-addon-STANDARD.zip
           retention-days: 30
 
       - name: Upload PRO addon
         uses: actions/upload-artifact@v4
         with:
-          name: splatter-addon-PRO
-          path: splatter-addon-PRO.zip
+          name: pivot-addon-PRO
+          path: pivot-addon-PRO.zip
           retention-days: 30

@@ -9,7 +9,7 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_BUILD_TYPE": "Release",
-        "SPLATTER_EDITION": "PRO"
+        "PIVOT_EDITION": "PRO"
       }
     },
     {
@@ -18,7 +18,7 @@
       "inherits": "pro",
       "binaryDir": "${sourceDir}/build-standard",
       "cacheVariables": {
-        "SPLATTER_EDITION": "STANDARD"
+        "PIVOT_EDITION": "STANDARD"
       }
     }
   ],

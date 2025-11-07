@@ -32,7 +32,7 @@ def get_engine_binary_path() -> str:
         str: Path to the pivot_engine executable
     """
     addon_root = os.path.dirname(os.path.dirname(__file__))
-    bin_dir = os.path.join(addon_root, 'splatter', 'bin')
+    bin_dir = os.path.join(addon_root, 'pivot', 'bin')
     
     # Detect OS and architecture
     system = platform.system().lower()

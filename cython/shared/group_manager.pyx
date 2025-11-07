@@ -36,8 +36,8 @@ cdef class GroupManager:
     # ==================== Blender API ====================
 
     def get_objects_collection(self) -> Optional[Any]:
-        """Get the objects collection from the scene's splatter properties."""
-        objects_collection = bpy.context.scene.splatter.objects_collection
+        """Get the objects collection from the scene's pivot properties."""
+        objects_collection = bpy.context.scene.pivot.objects_collection
         return objects_collection if objects_collection else bpy.context.scene.collection
 
     cpdef str get_group_name(self, obj):
@@ -124,7 +124,7 @@ cdef class GroupManager:
             collection_name = collection.name
             subscribe_to = collection.path_resolve("name", False)
             
-            from splatter.handlers import on_group_name_changed
+            from pivot.handlers import on_group_name_changed
             
             bpy.msgbus.subscribe_rna(
                 key=subscribe_to,

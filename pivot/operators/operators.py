@@ -3,7 +3,7 @@ import time
 
 from mathutils import Vector
 
-from splatter import engine_state
+from pivot import engine_state
 from ..constants import (
     CANCELLED,
     FINISHED,
@@ -15,7 +15,7 @@ from .. import engine
 from ..surface_manager import get_surface_manager
 from ..lib import group_manager
 
-class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
+class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = "object." + PRE.lower() + "organize_classified_objects"
     license_type = engine_state.get_engine_license_status()
     bl_label = "Organize Viewport by Group"
@@ -92,7 +92,7 @@ class Splatter_OT_Organize_Classified_Objects(bpy.types.Operator):
         return {FINISHED}
 
 
-class Splatter_OT_Upgrade_To_Pro(bpy.types.Operator):
+class Pivot_OT_Upgrade_To_Pro(bpy.types.Operator):
     bl_idname = PRE.lower() + ".upgrade_to_pro"
     bl_label = "Upgrade to Pro"
     bl_description = "Visit our website!"

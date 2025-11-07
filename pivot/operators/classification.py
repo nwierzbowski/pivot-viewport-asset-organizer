@@ -82,7 +82,7 @@ def get_qualifying_objects_for_selected(selected_objects, objects_collection):
     return list(set(qualifying))  # remove duplicates
 
 
-class Splatter_OT_Standardize_Selected_Groups(bpy.types.Operator):
+class Pivot_OT_Standardize_Selected_Groups(bpy.types.Operator):
     """
     Pro Edition: Standardize Selected Groups
     
@@ -119,7 +119,7 @@ class Splatter_OT_Standardize_Selected_Groups(bpy.types.Operator):
         return {FINISHED}
 
 
-class Splatter_OT_Standardize_Selected_Objects(bpy.types.Operator):
+class Pivot_OT_Standardize_Selected_Objects(bpy.types.Operator):
     """
     Pro Edition: Standardize Selected Objects
     
@@ -153,7 +153,7 @@ class Splatter_OT_Standardize_Selected_Objects(bpy.types.Operator):
         return {FINISHED}
 
 
-class Splatter_OT_Standardize_Active_Object(bpy.types.Operator):
+class Pivot_OT_Standardize_Active_Object(bpy.types.Operator):
     """
     Standard Edition: Standardize Active Object
     

@@ -14,13 +14,13 @@ import time
 import bpy
 
 from . import selection_utils, shm_utils, transform_utils, edition_utils, group_manager
-from splatter import engine_state
-from splatter.engine import get_engine_communicator
+from pivot import engine_state
+from pivot.engine import get_engine_communicator
 
 # Collection metadata keys
-GROUP_COLLECTION_PROP = "splatter_group_name"
+GROUP_COLLECTION_PROP = "pivot_group_name"
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot"
-CLASSIFICATION_COLLECTION_PROP = "splatter_surface_type"
+CLASSIFICATION_COLLECTION_PROP = "pivot_surface_type"
 
 
 
@@ -228,7 +228,7 @@ def classify_and_apply_groups(list selected_objects):
     core_group_mgr.update_managed_group_names(group_names)
     core_group_mgr.set_groups_synced(group_names)
     # Organize into surface hierarchy
-    from splatter.surface_manager import get_surface_manager
+    from pivot.surface_manager import get_surface_manager
     get_surface_manager().organize_groups_into_surfaces(group_names, surface_types)
     
     group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)

@@ -21,8 +21,8 @@ assets/
 build*/
 dist/
 out/
-splatter/lib/
-splatter/bin/
+pivot/lib/
+pivot/bin/
 *.egg-info/
 *.so
 *.pyd

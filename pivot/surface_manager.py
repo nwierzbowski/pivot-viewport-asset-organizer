@@ -14,9 +14,9 @@ from .lib import classification
 
 # Property keys for collection metadata
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot Classifications"
-CLASSIFICATION_ROOT_MARKER_PROP = "splatter_is_classification_root"
-CLASSIFICATION_COLLECTION_PROP = "splatter_surface_type"
-CLASSIFICATION_MARKER_PROP = "splatter_is_classification_collection"
+CLASSIFICATION_ROOT_MARKER_PROP = "pivot_is_classification_root"
+CLASSIFICATION_COLLECTION_PROP = "pivot_surface_type"
+CLASSIFICATION_MARKER_PROP = "pivot_is_classification_collection"
 
 
 class SurfaceManager:

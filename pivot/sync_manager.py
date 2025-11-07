@@ -1,5 +1,5 @@
 """
-Sync Manager for Splatter.
+Sync Manager for Pivot.
 
 Orchestrates synchronization operations between the Blender addon and the C++ engine.
 """

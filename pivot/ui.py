@@ -1,14 +1,14 @@
 from re import S
 import bpy
 from .operators.operators import (
-    Splatter_OT_Organize_Classified_Objects,
-    Splatter_OT_Upgrade_To_Pro,
+    Pivot_OT_Organize_Classified_Objects,
+    Pivot_OT_Upgrade_To_Pro,
 )
 
 from .operators.classification import (
-    Splatter_OT_Standardize_Selected_Groups,
-    Splatter_OT_Standardize_Selected_Objects,
-    Splatter_OT_Standardize_Active_Object,
+    Pivot_OT_Standardize_Selected_Groups,
+    Pivot_OT_Standardize_Selected_Objects,
+    Pivot_OT_Standardize_Active_Object,
 )
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
@@ -17,7 +17,7 @@ from .engine_state import get_engine_license_status, set_engine_license_status
 from . import engine
 
 
-class Splatter_PT_Status_Panel(bpy.types.Panel):
+class Pivot_PT_Status_Panel(bpy.types.Panel):
     bl_label = "Pivot Status"
     bl_idname = PRE + "_PT_status_panel"
     bl_space_type = "VIEW_3D"
@@ -47,7 +47,7 @@ class Splatter_PT_Status_Panel(bpy.types.Panel):
         row.label(text=f"License: {license_type}")
 
 
-class Splatter_PT_Pro_Panel(bpy.types.Panel):
+class Pivot_PT_Pro_Panel(bpy.types.Panel):
     bl_label = "Pivot Pro Operations"
     bl_idname = PRE + "_PT_pro_panel"
     bl_space_type = "VIEW_3D"
@@ -77,18 +77,18 @@ class Splatter_PT_Pro_Panel(bpy.types.Panel):
         if enabled:
             # Objects Collection selector
             row = layout.row()
-            row.prop(bpy.context.scene.splatter, "objects_collection")
+            row.prop(bpy.context.scene.pivot, "objects_collection")
             
             # Pro features
             row = layout.row()
-            row.operator(Splatter_OT_Standardize_Selected_Objects.bl_idname)
+            row.operator(Pivot_OT_Standardize_Selected_Objects.bl_idname)
 
             row = layout.row()
-            row.operator(Splatter_OT_Standardize_Selected_Groups.bl_idname)
+            row.operator(Pivot_OT_Standardize_Selected_Groups.bl_idname)
             
             # Organization button
             row = layout.row()
-            row.operator(Splatter_OT_Organize_Classified_Objects.bl_idname)
+            row.operator(Pivot_OT_Organize_Classified_Objects.bl_idname)
         else:
             # Standard mode: show upgrade info
             layout.label(text="Unlock Your Full Pipeline:")
@@ -97,10 +97,10 @@ class Splatter_PT_Pro_Panel(bpy.types.Panel):
             layout.label(text="- Use collections to arrange viewport ")
             layout.separator()
             row = layout.row()
-            row.operator(Splatter_OT_Upgrade_To_Pro.bl_idname, icon='WORLD')
+            row.operator(Pivot_OT_Upgrade_To_Pro.bl_idname, icon='WORLD')
 
 
-class Splatter_PT_Standard_Panel(bpy.types.Panel):
+class Pivot_PT_Standard_Panel(bpy.types.Panel):
     bl_label = "Pivot Standard Operations"
     bl_idname = PRE + "_PT_standard_panel"
     bl_space_type = "VIEW_3D"
@@ -113,5 +113,5 @@ class Splatter_PT_Standard_Panel(bpy.types.Panel):
         
         # Classification buttons
         row = layout.row()
-        row.operator(Splatter_OT_Standardize_Active_Object.bl_idname)
+        row.operator(Pivot_OT_Standardize_Active_Object.bl_idname)
 
