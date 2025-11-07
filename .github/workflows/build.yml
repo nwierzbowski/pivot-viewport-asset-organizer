@@ -309,72 +309,95 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create universal addon package
+      - name: Create universal addon packages (STANDARD and PRO)
         run: |
-          mkdir -p universal-addon/bin universal-addon/lib
+          # Check out splatter addon structure for packaging
+          mkdir -p splatter-addon-base
           
-          # Extract and organize binaries from all platform artifacts
-          for artifact_dir in artifacts/*/; do
-            if [[ -d "$artifact_dir" ]]; then
-              echo "Processing $artifact_dir"
-              artifact_name=$(basename "$artifact_dir")
-              # Normalize artifact name (e.g., splatter-engine-windows-x86-64-PRO)
-              platform=$(echo "$artifact_name" | sed -E 's/splatter-engine-([^-]+-[^-]+)-.*/\1/')
-              edition=$(echo "$artifact_name" | sed -E 's/.*-([A-Z]+)$/\1/')
-
-              src_root="$artifact_dir"
-              if [[ -d "$artifact_dir/splatter" ]]; then
-                src_root="$artifact_dir/splatter"
-              fi
-
-              # Copy engine binary to platform-specific directory
-              mkdir -p "universal-addon/bin/$platform"
-              engine_path=$(find "$src_root/bin" -maxdepth 3 -type f \( -name 'splatter_engine' -o -name 'splatter_engine.exe' \) | head -n1)
-              if [[ -n "$engine_path" ]]; then
-                dest_engine="universal-addon/bin/$platform/splatter_engine"
-                if [[ $engine_path == *.exe ]]; then
-                  dest_engine+=".exe"
+          # Create separate packages for STANDARD and PRO editions
+          for edition in STANDARD PRO; do
+            echo "Building universal package for $edition edition"
+            addon_dir="splatter-addon-$edition"
+            
+            # Copy the splatter addon structure
+            cp -r splatter "$addon_dir"
+            mkdir -p "$addon_dir/bin" "$addon_dir/lib"
+            
+            # Extract and organize binaries from platform artifacts for this edition
+            for artifact_dir in artifacts/*/; do
+              if [[ -d "$artifact_dir" ]]; then
+                artifact_name=$(basename "$artifact_dir")
+                # Normalize artifact name (e.g., splatter-engine-windows-x86-64-PRO)
+                platform=$(echo "$artifact_name" | sed -E 's/splatter-engine-([^-]+-[^-]+)-.*/\1/')
+                # Convert macos-* to darwin-*
+                platform=${platform/macos/darwin}
+                artifact_edition=$(echo "$artifact_name" | sed -E 's/.*-([A-Z]+)$/\1/')
+                
+                # Skip if this artifact is not for the current edition
+                if [[ "$artifact_edition" != "$edition" ]]; then
+                  echo "Skipping $artifact_name (not $edition)"
+                  continue
                 fi
-                echo "Copying engine from $engine_path -> $dest_engine"
-                cp "$engine_path" "$dest_engine"
-              else
-                echo "WARNING: No engine binary found in $artifact_dir"
-              fi
 
-              # Copy Cython modules to platform-specific directory
-              mkdir -p "universal-addon/lib/$platform"
-              if [[ -d "$src_root/lib/$platform" ]]; then
-                echo "Copying Cython modules for $platform from lib/$platform"
-                find "$src_root/lib/$platform" -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
-                  cp "$module" "universal-addon/lib/$platform/" 2>/dev/null || true
-                done
-              elif [[ -d "$src_root/lib" ]]; then
-                echo "Copying Cython modules for $platform from lib (no platform subdir)"
-                find "$src_root/lib" -maxdepth 1 -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
-                  cp "$module" "universal-addon/lib/$platform/" 2>/dev/null || true
-                done
-              else
-                echo "WARNING: No Cython modules found for $platform"
+                src_root="$artifact_dir"
+                if [[ -d "$artifact_dir/splatter" ]]; then
+                  src_root="$artifact_dir/splatter"
+                fi
+
+                # Copy engine binary to platform-specific directory
+                mkdir -p "$addon_dir/bin/$platform"
+                engine_path=$(find "$src_root/bin" -maxdepth 3 -type f \( -name 'splatter_engine' -o -name 'splatter_engine.exe' \) | head -n1)
+                if [[ -n "$engine_path" ]]; then
+                  dest_engine="$addon_dir/bin/$platform/splatter_engine"
+                  if [[ $engine_path == *.exe ]]; then
+                    dest_engine+=".exe"
+                  fi
+                  echo "Copying $edition engine from $engine_path -> $dest_engine"
+                  cp "$engine_path" "$dest_engine"
+                else
+                  echo "WARNING: No engine binary found for $edition in $artifact_dir"
+                fi
+
+                # Copy Cython modules to platform-specific directory
+                mkdir -p "$addon_dir/lib/$platform"
+                if [[ -d "$src_root/lib/$platform" ]]; then
+                  echo "Copying $edition Cython modules for $platform from lib/$platform"
+                  find "$src_root/lib/$platform" -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
+                    cp "$module" "$addon_dir/lib/$platform/" 2>/dev/null || true
+                  done
+                elif [[ -d "$src_root/lib" ]]; then
+                  echo "Copying $edition Cython modules for $platform from lib (no platform subdir)"
+                  find "$src_root/lib" -maxdepth 1 -type f \( -name "*.so" -o -name "*.pyd" \) | while read module; do
+                    cp "$module" "$addon_dir/lib/$platform/" 2>/dev/null || true
+                  done
+                else
+                  echo "WARNING: No Cython modules found for $edition in $artifact_dir"
+                fi
               fi
+            done
+            
+            # Verify we got binaries and modules for this edition
+            if [[ -z $(find "$addon_dir/bin" -type f -name 'splatter_engine*' -print -quit) ]]; then
+              echo "ERROR: No engine binaries found for $edition!"
+              exit 1
             fi
+            
+            # Create the edition-specific zip with splatter folder at root
+            zip -r "splatter-addon-$edition.zip" "$addon_dir"
+            
+            echo "Created $edition addon package: splatter-addon-$edition.zip"
           done
-          
-          # Verify we got binaries and modules for at least one platform
-          if [[ -z $(find universal-addon/bin -type f -name 'splatter_engine*' -print -quit) ]]; then
-            echo "ERROR: No engine binaries found!"
-            exit 1
-          fi
-          
-          # Create the universal zip with bin/ and lib/ at root
-          cd universal-addon
-          zip -r ../splatter-binaries-universal.zip .
-          cd ..
-          
-          echo "Created universal binaries package: splatter-binaries-universal.zip"
 
-      - name: Upload universal addon
+      - name: Upload STANDARD addon
         uses: actions/upload-artifact@v4
         with:
-          name: splatter-binaries-universal
-          path: splatter-binaries-universal.zip
+          name: splatter-addon-STANDARD
+          path: splatter-addon-STANDARD.zip
+          retention-days: 30
+
+      - name: Upload PRO addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: splatter-addon-PRO
+          path: splatter-addon-PRO.zip
           retention-days: 30
