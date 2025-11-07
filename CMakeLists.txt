@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 project(splatter_engine LANGUAGES CXX C)
 
+if(MSVC)
+    # Ensure MSVC uses the static runtime consistently to avoid /MD vs /MT clashes
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # Build configuration
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose build type: Debug, Release, etc." FORCE)
