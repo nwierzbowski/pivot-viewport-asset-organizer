@@ -43,25 +43,6 @@ def set_origin_and_preserve_children(obj, new_origin_world):
 
 
 
-def _build_classify_groups_command(verts_shm_name, edges_shm_name, rotations_shm_name,
-                                   scales_shm_name, offsets_shm_name, vert_counts_mv,
-                                   edge_counts_mv, object_counts_mv, group_names):
-    """Construct the classify_groups operation command for the engine (Pro edition)."""
-    return {
-        "id": 1,
-        "op": "classify_groups",
-        "shm_verts": verts_shm_name,
-        "shm_edges": edges_shm_name,
-        "shm_rotations": rotations_shm_name,
-        "shm_scales": scales_shm_name,
-        "shm_offsets": offsets_shm_name,
-        "vert_counts": list(vert_counts_mv),
-        "edge_counts": list(edge_counts_mv),
-        "object_counts": list(object_counts_mv),
-        "group_names": group_names
-    }
-
-
 def _prepare_object_transforms(parent_groups, mesh_groups, offsets_mv):
     """
     Extract offset transforms and rotation modes for all groups.
@@ -189,7 +170,7 @@ def classify_and_apply_groups(list selected_objects):
             parent_groups, mesh_groups, offsets_mv)
         
         # --- Engine communication ---
-        command = _build_classify_groups_command(
+        command = engine.build_classify_groups_command(
             verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
             vert_counts_mv, edge_counts_mv, object_counts_mv, group_names)
         
@@ -293,18 +274,9 @@ def classify_and_apply_active_objects(list objects):
     
     # --- Engine communication: unified array format ---
     # Engine will validate that multiple objects are only used in PRO edition
-    command = {
-        "id": 1,
-        "op": "classify_objects",
-        "shm_verts": verts_shm_name,
-        "shm_edges": edges_shm_name,
-        "shm_rotations": rotations_shm_name,
-        "shm_scales": scales_shm_name,
-        "shm_offsets": offsets_shm_name,
-        "vert_counts": list(vert_counts_mv),
-        "edge_counts": list(edge_counts_mv),
-        "object_names": [obj.name for obj in mesh_objects]
-    }
+    command = engine.build_classify_objects_command(
+        verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
+        vert_counts_mv, edge_counts_mv, [obj.name for obj in mesh_objects])
     
     engine = get_engine_communicator()
     engine.send_command_async(command)
@@ -353,10 +325,7 @@ def get_stored_group_surface_types():
     """
     engine = get_engine_communicator()
     
-    command = {
-        "id": 2,
-        "op": "get_group_surface_types"
-    }
+    command = engine.build_get_group_surface_types_command()
     
     response = engine.send_command(command)
     
