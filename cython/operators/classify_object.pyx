@@ -203,7 +203,14 @@ def classify_and_apply_groups(list selected_objects):
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=False)
 
     # Always get surface types for ALL stored groups (for organization)
-    all_surface_types = get_stored_group_surface_types()
+    surface_types_command = engine.build_get_group_surface_types_command()
+    surface_types_response = engine.send_command(surface_types_command)
+    
+    if not bool(surface_types_response.get("ok", True)):
+        error_msg = surface_types_response.get("error", "Unknown engine error during get_group_surface_types")
+        raise RuntimeError(f"get_group_surface_types failed: {error_msg}")
+    
+    all_surface_types = surface_types_response.get("groups", {})
 
     # --- Always organize ALL groups using surface types ---
     if all_surface_types:
@@ -306,31 +313,3 @@ def classify_and_apply_active_objects(list objects):
     # --- Compute and apply transforms ---
     locations = _compute_object_locations(parent_groups, rots, all_parent_offsets)
     _apply_object_transforms(parent_groups, all_original_rots, rots, locations, origins)
-
-
-def get_stored_group_surface_types():
-    """
-    Retrieve surface types for all stored groups from the engine.
-    
-    This function is called when standardizing with zero unsynced objects selected,
-    to fetch the cached surface type classifications for all stored groups.
-    
-    Returns:
-        dict: Mapping of group names to their surface types in the same format as classify_groups.
-              Example: {"group1": {"surface_type": "0"}, "group2": {"surface_type": "1"}}
-              Returns empty dict if no groups are stored.
-    
-    Raises:
-        RuntimeError: If communication with the engine fails.
-    """
-    engine = get_engine_communicator()
-    
-    command = engine.build_get_group_surface_types_command()
-    
-    response = engine.send_command(command)
-    
-    if not bool(response.get("ok", True)):
-        error_msg = response.get("error", "Unknown engine error during get_group_surface_types")
-        raise RuntimeError(f"get_group_surface_types failed: {error_msg}")
-    
-    return response.get("groups", {})
