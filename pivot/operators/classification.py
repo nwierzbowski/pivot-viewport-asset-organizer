@@ -90,10 +90,12 @@ class Pivot_OT_Standardize_Selected_Groups(bpy.types.Operator):
     performs classification on entire groups with group guessing in the engine.
     """
     bl_idname = "object." + PRE.lower() + "standardize_selected_groups"
+    bl_icon = 'OUTLINER_OB_GROUP_INSTANCE'
     license_type = engine_state.get_engine_license_status()
     bl_label = "Standardize Selected Groups"
     bl_description = "Standardize selected objects and their groups"
     bl_options = {"REGISTER", "UNDO"}
+    
 
     @classmethod
     def poll(cls, context):
@@ -129,6 +131,7 @@ class Pivot_OT_Standardize_Selected_Objects(bpy.types.Operator):
     bl_label = "Standardize Selected Objects"
     bl_description = "Standardize selected objects"
     bl_options = {"REGISTER", "UNDO"}
+    bl_icon = 'SNAP_VOLUME'
 
     @classmethod
     def poll(cls, context):
@@ -163,6 +166,7 @@ class Pivot_OT_Standardize_Active_Object(bpy.types.Operator):
     bl_label = "Standardize Active Object"
     bl_description = "Standardize the active object"
     bl_options = {"REGISTER", "UNDO"}
+    bl_icon = 'SNAP_VOLUME'
 
     @classmethod
     def poll(cls, context):

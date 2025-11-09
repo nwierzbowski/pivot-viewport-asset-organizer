@@ -81,10 +81,10 @@ class Pivot_PT_Pro_Panel(bpy.types.Panel):
             
             # Pro features
             row = layout.row()
-            row.operator(Pivot_OT_Standardize_Selected_Objects.bl_idname)
+            row.operator(Pivot_OT_Standardize_Selected_Objects.bl_idname, icon=Pivot_OT_Standardize_Selected_Objects.bl_icon)
 
             row = layout.row()
-            row.operator(Pivot_OT_Standardize_Selected_Groups.bl_idname)
+            row.operator(Pivot_OT_Standardize_Selected_Groups.bl_idname, icon=Pivot_OT_Standardize_Selected_Groups.bl_icon)
             
             # Organization button
             row = layout.row()
@@ -113,5 +113,5 @@ class Pivot_PT_Standard_Panel(bpy.types.Panel):
         
         # Classification buttons
         row = layout.row()
-        row.operator(Pivot_OT_Standardize_Active_Object.bl_idname)
+        row.operator(Pivot_OT_Standardize_Active_Object.bl_idname, icon='MESH_DATA')
 
