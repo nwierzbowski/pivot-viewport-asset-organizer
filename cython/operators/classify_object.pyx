@@ -5,12 +5,10 @@
 # - Computing and applying new world-space transforms based on engine output
 # - Managing collection hierarchy for surface type classification (Pro edition)
 
-from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 from mathutils import Quaternion, Vector, Matrix
 
 import numpy as np
-import time
 import bpy
 
 from . import selection_utils, shm_utils, transform_utils, edition_utils, group_manager
@@ -136,7 +134,7 @@ def _apply_object_transforms(parent_groups, all_original_rots, rots, locations, 
 
 
 
-def classify_and_apply_groups(list selected_objects):
+def standardize_groups(list selected_objects):
     """
     Pro Edition: Classify selected groups via engine.
     
@@ -157,6 +155,9 @@ def classify_and_apply_groups(list selected_objects):
         selection_utils.aggregate_object_groups(selected_objects)
     core_group_mgr = group_manager.get_group_manager()
     
+    # Get engine communicator for the entire function
+    engine = get_engine_communicator()
+    
     if group_names:
         # --- Shared memory setup ---
         shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(
@@ -170,11 +171,9 @@ def classify_and_apply_groups(list selected_objects):
             parent_groups, mesh_groups, offsets_mv)
         
         # --- Engine communication ---
-        command = engine.build_classify_groups_command(
+        command = engine.build_standardize_groups_command(
             verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
-            vert_counts_mv, edge_counts_mv, object_counts_mv, group_names)
-        
-        engine = get_engine_communicator()
+            list(vert_counts_mv), list(edge_counts_mv), list(object_counts_mv), group_names)
         engine.send_command_async(command)
         
         final_response = engine.wait_for_response(1)
@@ -203,12 +202,12 @@ def classify_and_apply_groups(list selected_objects):
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=False)
 
     # Always get surface types for ALL stored groups (for organization)
-    surface_types_command = engine.build_get_group_surface_types_command()
+    surface_types_command = engine.build_get_surface_types_command()
     surface_types_response = engine.send_command(surface_types_command)
     
     if not bool(surface_types_response.get("ok", True)):
-        error_msg = surface_types_response.get("error", "Unknown engine error during get_group_surface_types")
-        raise RuntimeError(f"get_group_surface_types failed: {error_msg}")
+        error_msg = surface_types_response.get("error", "Unknown engine error during get_surface_types")
+        raise RuntimeError(f"get_surface_types failed: {error_msg}")
     
     all_surface_types = surface_types_response.get("groups", {})
 
@@ -225,7 +224,7 @@ def classify_and_apply_groups(list selected_objects):
             core_group_mgr.get_managed_group_names_set(), surface_types)
 
 
-def classify_and_apply_active_objects(list objects):
+def standardize_objects(list objects):
     """
     Classify and apply standardization to one or more objects.
     
@@ -281,11 +280,10 @@ def classify_and_apply_active_objects(list objects):
     
     # --- Engine communication: unified array format ---
     # Engine will validate that multiple objects are only used in PRO edition
-    command = engine.build_classify_objects_command(
-        verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
-        vert_counts_mv, edge_counts_mv, [obj.name for obj in mesh_objects])
-    
     engine = get_engine_communicator()
+    command = engine.build_standardize_objects_command(
+        verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
+        list(vert_counts_mv), list(edge_counts_mv), [obj.name for obj in mesh_objects])
     engine.send_command_async(command)
     
     final_response = engine.wait_for_response(1)

@@ -339,12 +339,12 @@ class PivotEngine:
             print(f"Error dropping groups from engine: {exc}")
             return -1
 
-    def build_classify_groups_command(self, verts_shm_name: str, edges_shm_name: str, 
+    def build_standardize_groups_command(self, verts_shm_name: str, edges_shm_name: str, 
                                      rotations_shm_name: str, scales_shm_name: str, 
                                      offsets_shm_name: str, vert_counts: list, 
                                      edge_counts: list, object_counts: list, 
                                      group_names: list) -> Dict[str, Any]:
-        """Build a classify_groups command for the engine (Pro edition).
+        """Build a standardize_groups command for the engine (Pro edition).
         
         Args:
             verts_shm_name: Shared memory name for vertex data
@@ -355,14 +355,14 @@ class PivotEngine:
             vert_counts: List of vertex counts per group
             edge_counts: List of edge counts per group
             object_counts: List of object counts per group
-            group_names: List of group names to classify
+            group_names: List of group names to standardize
             
         Returns:
             Dict containing the command structure
         """
         return {
             "id": COMMAND_CLASSIFY_GROUPS,
-            "op": "classify_groups",
+            "op": "standardize_groups",
             "shm_verts": verts_shm_name,
             "shm_edges": edges_shm_name,
             "shm_rotations": rotations_shm_name,
@@ -374,11 +374,11 @@ class PivotEngine:
             "group_names": group_names
         }
 
-    def build_classify_objects_command(self, verts_shm_name: str, edges_shm_name: str,
+    def build_standardize_objects_command(self, verts_shm_name: str, edges_shm_name: str,
                                       rotations_shm_name: str, scales_shm_name: str,
                                       offsets_shm_name: str, vert_counts: list,
                                       edge_counts: list, object_names: list) -> Dict[str, Any]:
-        """Build a classify_objects command for the engine.
+        """Build a standardize_objects command for the engine.
         
         Args:
             verts_shm_name: Shared memory name for vertex data
@@ -388,14 +388,14 @@ class PivotEngine:
             offsets_shm_name: Shared memory name for offset data
             vert_counts: List of vertex counts per object
             edge_counts: List of edge counts per object
-            object_names: List of object names to classify
+            object_names: List of object names to standardize
             
         Returns:
             Dict containing the command structure
         """
         return {
             "id": COMMAND_CLASSIFY_OBJECTS,
-            "op": "classify_objects",
+            "op": "standardize_objects",
             "shm_verts": verts_shm_name,
             "shm_edges": edges_shm_name,
             "shm_rotations": rotations_shm_name,
@@ -406,15 +406,15 @@ class PivotEngine:
             "object_names": object_names
         }
 
-    def build_get_group_surface_types_command(self) -> Dict[str, Any]:
-        """Build a get_group_surface_types command for the engine.
+    def build_get_surface_types_command(self) -> Dict[str, Any]:
+        """Build a get_surface_types command for the engine.
         
         Returns:
             Dict containing the command structure
         """
         return {
             "id": COMMAND_GET_GROUP_SURFACE_TYPES,
-            "op": "get_group_surface_types"
+            "op": "get_surface_types"
         }
 
 
