@@ -134,7 +134,7 @@ cdef class GroupManager:
             )
             
             self._name_tracker[collection] = collection_name
-            print(f"[Pivot] Successfully subscribed to '{collection_name}'")
+            # print(f"[Pivot] Successfully subscribed to '{collection_name}'")
             
         except Exception as e:
             print(f"[Pivot] Failed to subscribe to name changes: {e}")
