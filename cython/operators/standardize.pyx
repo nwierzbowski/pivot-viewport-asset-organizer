@@ -128,17 +128,12 @@ def standardize_groups(list selected_objects):
         group_names = list(groups.keys())
         rots = [Quaternion(groups[name]["rot"]) for name in group_names]
         origins = [tuple(groups[name]["origin"]) for name in group_names]
-
-        # print(origins)
         
         # --- Update pivot positions with actual origins from engine ---
         for i, pivot in enumerate(pivots):
             old_pivot_loc = pivot.location.copy()
-            print("Old pivot location:", old_pivot_loc)
             new_pivot_loc = Vector(origins[i]) + pivot.matrix_world.translation
-            print("New pivot location:", new_pivot_loc)
             pivot_movement = new_pivot_loc - old_pivot_loc
-            print("Pivot movement:", pivot_movement)
             
             # Move all children by the opposite amount to keep them visually in place
             for child in pivot.children:
