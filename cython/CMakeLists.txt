@@ -14,7 +14,6 @@ set(CYTHON_MODULE_SOURCES
     shared/group_manager.pyx
     shared/selection_utils.pyx
     shared/shm_utils.pyx
-    shared/transform_utils.pyx
 )
 
 # Operator modules that need linking to core library
