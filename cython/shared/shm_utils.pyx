@@ -7,7 +7,7 @@ import platform
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 
-def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups):
+def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups, list pivots):
     cdef uint32_t num_groups = len(mesh_groups)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     verts_size = total_verts * 3 * 4  # float32 = 4 bytes
@@ -72,11 +72,12 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef uint32_t obj_edge_count
     cdef uint32_t vert_offset
     cdef uint32_t edge_offset
-    # cdef object ref_trans
+    cdef size_t group_idx = 0
 
     for group in mesh_groups:
         vert_offset = 0
         edge_offset = 0
+        pivot = pivots[group_idx]  # Get the corresponding pivot for this group
         # Get reference position from first object in group
         for obj in group:
             quat = obj.matrix_world.to_3x3().to_quaternion()
@@ -92,8 +93,8 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
             scales[idx_scale + 2] = scale_vec.z
             idx_scale += 3
 
-            trans_vec = obj.matrix_world.translation
-            # Calculate offset relative to first object in group
+            trans_vec = obj.matrix_world.translation - pivot.matrix_world.translation
+            # Offset relative to the pivot
 
             offsets[idx_offset] = trans_vec.x
             offsets[idx_offset + 1] = trans_vec.y
@@ -115,6 +116,7 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
 
         curr_verts_offset += vert_offset
         curr_edges_offset += edge_offset
+        group_idx += 1
 
     cdef uint32_t[::1] vert_counts_mv = vert_counts
     cdef uint32_t[::1] edge_counts_mv = edge_counts

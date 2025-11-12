@@ -1,6 +1,7 @@
 # selection_utils.pyx - selection and grouping helpers for Blender objects
 
 import bpy
+from mathutils import Vector, Matrix
 from . import edition_utils
 from pivot.surface_manager import CLASSIFICATION_MARKER_PROP, CLASSIFICATION_ROOT_MARKER_PROP
 from collections import defaultdict
@@ -105,12 +106,12 @@ def aggregate_object_groups(list selected_objects):
         
         return (
             [[obj]],  # mesh_groups
-            [[obj]],  # parent_groups
             [[obj]],  # full_groups
             [obj.name],  # group_names
             group_verts,
             group_edges,
-            1
+            1,
+            []  # pivots (empty for standard edition single object)
         )
 
     # Build a lookup that points every nested collection back to its top-level owner.
@@ -202,4 +203,62 @@ def aggregate_object_groups(list selected_objects):
         total_edges += group_edges
         total_objects += len(meshes)
 
-    return mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects
+    # Create pivots for all groups
+    first_world_locs = [parent_group[0].matrix_world.translation.copy() for parent_group in parent_groups]
+    temp_origins = [tuple(loc) for loc in first_world_locs]
+    pivots = _setup_pivots_for_groups_return_empties(parent_groups, group_names, temp_origins, first_world_locs)
+
+    return mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots
+
+
+def _setup_pivots_for_groups_return_empties(parent_groups, group_names, origins, first_world_locs):
+    """Set up one pivot empty per group with smart empty detection/creation."""
+    pivots = []
+    for i, parent_group in enumerate(parent_groups):
+        target_origin = first_world_locs[i]
+        empty = _get_or_create_pivot_empty(parent_group, group_names[i], target_origin)
+        pivots.append(empty)
+    return pivots
+
+
+def _get_or_create_pivot_empty(parent_group, group_name, target_origin):
+    """
+    Get or create a single pivot empty for the group.
+    - If group's collection has exactly one empty, reuse it
+    - If group's collection has no empties, create one
+    - If group's collection has multiple empties, create a new one and parent existing empties to it
+    Only parent the parent objects (from parent_group) to the pivot; children inherit automatically.
+    Returns: the pivot empty (which is NOT added to parent_group)
+    """
+    # Get the collection containing the first object
+    group_collection = parent_group[0].users_collection[0] if parent_group[0].users_collection else bpy.context.scene.collection
+    
+    # Find all empties in the collection
+    empties_in_collection = [obj for obj in group_collection.objects if obj.type == 'EMPTY']
+    
+    # Determine which empty to use
+    if len(empties_in_collection) == 1:
+        # Exactly one empty: reuse it
+        empty = empties_in_collection[0]
+    else:
+        # Zero or multiple empties: create a new one
+        empty = bpy.data.objects.new(f"{group_name}_pivot", None)
+        group_collection.objects.link(empty)
+        empty.rotation_mode = 'QUATERNION'
+        
+        # If there were multiple empties, parent them to the new pivot
+        if len(empties_in_collection) > 1:
+            for existing_empty in empties_in_collection:
+                existing_empty.parent = empty
+                existing_empty.matrix_parent_inverse = Matrix.Translation(-target_origin)
+    
+    # Position the pivot
+    empty.location = target_origin
+    
+    # Parent ALL parent objects to the pivot (meshes, lamps, cameras, etc.)
+    for obj in parent_group:
+        if obj.type != 'EMPTY':  # Skip any empties in parent_group (to avoid self-parenting issues)
+            obj.parent = empty
+            obj.matrix_parent_inverse = Matrix.Translation(-target_origin)
+    
+    return empty
