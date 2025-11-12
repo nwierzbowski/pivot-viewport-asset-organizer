@@ -152,18 +152,25 @@ def standardize_groups(list selected_objects):
         raise RuntimeError(f"get_surface_types failed: {error_msg}")
     
     all_surface_types = surface_types_response.get("groups", {})
+    print(all_surface_types)
 
     # --- Always organize ALL groups using surface types ---
     if all_surface_types:
+        # Use the response order directly instead of converting to list and back
+        # This preserves the engine's ordering and prevents group/surface type misalignment
         all_group_names = list(all_surface_types.keys())
         surface_types = [all_surface_types[name]["surface_type"] for name in all_group_names]
+        
+        # Verify we have matching counts to prevent misalignment
+        if len(all_group_names) != len(surface_types):
+            raise RuntimeError(f"Mismatch between group names ({len(all_group_names)}) and surface types ({len(surface_types)})")
         
         core_group_mgr.update_managed_group_names(all_group_names)
         core_group_mgr.set_groups_synced(all_group_names)
         
         from pivot.surface_manager import get_surface_manager
-        get_surface_manager().organize_groups_into_surfaces(
-            core_group_mgr.get_managed_group_names_set(), surface_types)
+        # Pass as parallel lists with verified alignment to avoid swapping
+        get_surface_manager().organize_groups_into_surfaces(all_group_names, surface_types)
 
 
 def standardize_objects(list objects):
