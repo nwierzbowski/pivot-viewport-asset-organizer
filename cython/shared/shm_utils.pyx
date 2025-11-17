@@ -126,11 +126,10 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef uint32_t[::1] vert_counts_mv = vert_counts
     cdef uint32_t[::1] edge_counts_mv = edge_counts
     cdef uint32_t[::1] object_counts_mv = object_counts
-    cdef float[::1] offsets_mv = offsets
 
     shm_objects = (verts_shm, edges_shm, rotations_shm, scales_shm, offsets_shm)
     shm_names = (verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name)
-    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv)
+    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv)
 
     return shm_objects, shm_names, count_memory_views
 

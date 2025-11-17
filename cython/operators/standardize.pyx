@@ -77,6 +77,29 @@ def set_origin_and_preserve_children(obj, new_origin_world):
     for child in obj.children:
         child.matrix_parent_inverse = correction @ child.matrix_parent_inverse
 
+
+def _send_engine_command_and_get_response(engine, command):
+    """Send engine command and handle response with error checking."""
+    engine.send_command_async(command)
+    final_response = engine.wait_for_response(1)
+    
+    if not bool(final_response.get("ok", True)):
+        error_msg = final_response.get("error", "Unknown engine error")
+        raise RuntimeError(f"Engine command failed: {error_msg}")
+    
+    return final_response
+
+
+def _close_shared_memory_segments(shm_objects):
+    """Close shared memory segments with error handling."""
+    for shm in shm_objects:
+        try:
+            shm.close()
+        except Exception as e:
+            shm_name = getattr(shm, "name", "<unknown>")
+            print(f"Warning: Failed to close shared memory segment '{shm_name}': {e}")
+
+
 def standardize_groups(list selected_objects):
     """
     Pro Edition: Classify selected groups via engine.
@@ -111,23 +134,17 @@ def standardize_groups(list selected_objects):
             total_verts, total_edges, total_objects, mesh_groups, pivots)
         
         verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
-        vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv = count_memory_views
+        vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
         
         # --- Engine communication ---
         command = engine.build_standardize_groups_command(
             verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
             list(vert_counts_mv), list(edge_counts_mv), list(object_counts_mv), group_names)
-        engine.send_command_async(command)
         
-        final_response = engine.wait_for_response(1)
+        final_response = _send_engine_command_and_get_response(engine, command)
         
         # Close shared memory in parent process
-        for shm in shm_objects:
-            shm.close()
-        
-        if not bool(final_response.get("ok", True)):
-            error_msg = final_response.get("error", "Unknown engine error during classify_groups")
-            raise RuntimeError(f"classify_groups failed: {error_msg}")
+        _close_shared_memory_segments(shm_objects)
 
         groups = final_response["groups"]
         
@@ -220,7 +237,7 @@ def standardize_objects(list objects):
         total_verts, total_edges, len(mesh_objects), mesh_groups, [])  # No pivots for objects
     
     verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
-    vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv = count_memory_views
+    vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
     
     # --- Engine communication: unified array format ---
     # Engine will validate that multiple objects are only used in PRO edition
