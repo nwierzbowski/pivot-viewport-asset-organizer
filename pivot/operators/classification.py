@@ -1,7 +1,7 @@
 import bpy
 import time
 
-from ..constants import LICENSE_PRO, LICENSE_STANDARD, PRE, FINISHED
+from ..constants import PRE, FINISHED
 from ..lib import standardize
 from ..lib import group_manager
 from .. import engine_state
