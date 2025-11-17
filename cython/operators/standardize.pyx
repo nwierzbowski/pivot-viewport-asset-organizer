@@ -36,28 +36,20 @@ def _get_or_create_pivot_empty(parent_group, group_name, target_origin):
     return selection_utils._get_or_create_pivot_empty(parent_group, group_name, target_origin)
 
 
-def _apply_transforms_to_pivots(pivots, origins, rots):
+def _apply_transforms_to_pivots(pivots, origins, rots, cogs):
     """Apply position and rotation transforms to pivots.
     Updates pivot positions with origins, then applies rotations by modifying children's matrix_local."""
 
     for i, pivot in enumerate(pivots):
-        # Update pivot position with actual origin from engine
-        old_pivot_loc = pivot.location.copy()
-        new_pivot_loc = Vector(origins[i]) + pivot.matrix_world.translation
-        pivot_movement = new_pivot_loc - old_pivot_loc
-        
-        # Move all children by the opposite amount to keep them visually in place
-        for child in pivot.children:
-            child.matrix_world.translation -= pivot_movement
-        
-        # Now update the pivot location
-        pivot.location = new_pivot_loc
-        
-        # Apply rotation to each child's matrix_local
         delta_quat = rots[i]
         rotation_matrix = delta_quat.to_matrix().to_4x4()
+        target_origin = pivot.matrix_world.translation + Vector(cogs[i]) - rotation_matrix @ Vector(cogs[i]) + Vector(origins[i])
+
         for child in pivot.children:
-            child.matrix_local = rotation_matrix @ child.matrix_local
+            child.matrix_local = (Matrix.Translation(Vector(origins[i])).inverted() @ Matrix.Translation(rotation_matrix @ Vector(cogs[i]))) @ rotation_matrix @ Matrix.Translation(Vector(cogs[i])).inverted() @ child.matrix_local 
+
+        pivot.matrix_world.translation = target_origin
+        
 
 
 def set_origin_and_preserve_children(obj, new_origin_world):
@@ -152,9 +144,10 @@ def standardize_groups(list selected_objects):
         group_names = list(groups.keys())
         rots = [Quaternion(groups[name]["rot"]) for name in group_names]
         origins = [tuple(groups[name]["origin"]) for name in group_names]
+        cogs = [tuple(groups[name]["cog"]) for name in group_names]
         
         # --- Apply transforms to PIVOTS (objects follow via parenting) ---
-        _apply_transforms_to_pivots(pivots, origins, rots)
+        _apply_transforms_to_pivots(pivots, origins, rots, cogs)
         
         # Build group membership snapshot
         group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)
@@ -268,24 +261,34 @@ def standardize_objects(list objects):
     results = final_response.get("results", {})
     rots = [Quaternion(results[obj.name]["rot"]) for obj in mesh_objects if obj.name in results]
     origins = [tuple(results[obj.name]["origin"]) for obj in mesh_objects if obj.name in results]
-    print(origins)
+    cogs = [tuple(results[obj.name]["cog"]) for obj in mesh_objects if obj.name in results]
     
     # --- Apply transforms directly to objects ---
     for i, obj in enumerate(mesh_objects):
         if i < len(rots) and i < len(origins):
             rot = rots[i]
             # Engine returns origin relative to object's old position - convert to world space
-            origin = obj.matrix_world.translation + Vector(origins[i])
+            # origin = obj.matrix_world.translation + Vector(origins[i])
+            cog = obj.matrix_world.translation + Vector(cogs[i])
+            # start_origin = obj.matrix_world.translation
             
             # First move to new origin
-            set_origin_and_preserve_children(obj, origin)
+            set_origin_and_preserve_children(obj, cog)
             
             # Then apply rotation around the new origin (current position)
             rotation_matrix = rot.to_matrix().to_4x4()
             current_pos = obj.matrix_world.translation
             # Transform to rotate around current position: T(pos) @ R @ T(-pos)
             transform = Matrix.Translation(current_pos) @ rotation_matrix @ Matrix.Translation(-current_pos)
+
+
+            # Compute the new origin: current_pos + origins[i] - rot @ cogs[i]
+            origin_vector = current_pos + Vector(origins[i]) - rot @ Vector(cogs[i])
+
+
             obj.matrix_world = transform @ obj.matrix_world
+
+            set_origin_and_preserve_children(obj, origin_vector)
             
             # Set 3D cursor to this object's origin
             bpy.context.scene.cursor.location = obj.matrix_world.translation
