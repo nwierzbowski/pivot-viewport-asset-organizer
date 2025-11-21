@@ -18,8 +18,8 @@ class Pivot_OT_Standardize_Selected_Groups(bpy.types.Operator):
     bl_idname = "object." + PRE.lower() + "standardize_selected_groups"
     bl_icon = 'OUTLINER_COLLECTION'
     license_type = engine_state.get_engine_license_status()
-    bl_label = "Standardize Selected Groups"
-    bl_description = "Standardize selected objects and their groups"
+    bl_label = "Standardize & Classify Selected Groups"
+    bl_description = "Analyzes the selection to identify asset groups in the Source Collection. Runs the full standardization and classification process on each group, then creates a new, perfectly organized Outliner structure. This is the main 'processing' step for your scene"
     bl_options = {"REGISTER", "UNDO"}
     
 

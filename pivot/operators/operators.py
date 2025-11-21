@@ -18,8 +18,8 @@ from ..lib import group_manager
 class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = "object." + PRE.lower() + "organize_classified_objects"
     license_type = engine_state.get_engine_license_status()
-    bl_label = "Organize Viewport by Group"
-    bl_description = "Organize classified objects"
+    bl_label = "Arrange All Groups by Class"
+    bl_description = "Arranges all classified objects found in the Source Collection into clean rows grouped by class. Note: This operation ignores your current selection"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod

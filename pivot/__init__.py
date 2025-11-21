@@ -13,8 +13,10 @@ from .operators.operators import (
 )
 from .operators.group_classification import Pivot_OT_Standardize_Selected_Groups
 from .operators.object_classification import (
-    Pivot_OT_Standardize_Selected_Objects,
-    Pivot_OT_Standardize_Active_Object,
+    Pivot_OT_Set_Origin_Selected_Objects,
+    Pivot_OT_Align_Facing_Selected_Objects,
+    Pivot_OT_Set_Origin_Active_Object,
+    Pivot_OT_Align_Facing_Active_Object,
 )
 from .ui import Pivot_PT_Standard_Panel, Pivot_PT_Pro_Panel, Pivot_PT_Status_Panel, Pivot_PT_Configuration_Panel
 from . import handlers
@@ -31,21 +33,21 @@ bl_info = {
     "category": "3D View",
 }
 
-# Track if standard panel was registered (only for non-pro licenses)
-_standard_panel_registered = False
-
 classesToRegister = (
     SceneAttributes,
     Pivot_OT_Standardize_Selected_Groups,
-    Pivot_OT_Standardize_Selected_Objects,
-    Pivot_OT_Standardize_Active_Object,
+    # Pivot_OT_Set_Origin_Selected_Groups,
+    # Pivot_OT_Align_Facing_Selected_Groups,
+    Pivot_OT_Set_Origin_Selected_Objects,
+    Pivot_OT_Align_Facing_Selected_Objects,
+    Pivot_OT_Set_Origin_Active_Object,
+    Pivot_OT_Align_Facing_Active_Object,
     Pivot_OT_Organize_Classified_Objects,
     Pivot_OT_Upgrade_To_Pro,
 )
 
 
 def register():
-    global _standard_panel_registered
     print(f"Registering {bl_info.get('name')} version {bl_info.get('version')}")
     
     # Stop any running engine from previous edition
@@ -101,10 +103,8 @@ def register():
     bpy.utils.register_class(Pivot_PT_Status_Panel)
     bpy.utils.register_class(Pivot_PT_Configuration_Panel)
 
-    # Conditionally register standard panel for non-pro licenses
-    if not is_pro:
-        bpy.utils.register_class(Pivot_PT_Standard_Panel)
-        _standard_panel_registered = True
+    # Always register standard panel
+    bpy.utils.register_class(Pivot_PT_Standard_Panel)
 
     bpy.utils.register_class(Pivot_PT_Pro_Panel)
 
@@ -123,13 +123,10 @@ def register():
 
 
 def unregister():
-    global _standard_panel_registered
     print(f"Unregistering {bl_info.get('name')}")
     
     bpy.utils.unregister_class(Pivot_PT_Pro_Panel)
-    if _standard_panel_registered:
-        bpy.utils.unregister_class(Pivot_PT_Standard_Panel)
-        _standard_panel_registered = False
+    bpy.utils.unregister_class(Pivot_PT_Standard_Panel)
     bpy.utils.unregister_class(Pivot_PT_Status_Panel)
     bpy.utils.unregister_class(Pivot_PT_Configuration_Panel)
     

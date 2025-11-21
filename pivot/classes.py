@@ -8,7 +8,7 @@ from .lib import classification
 from .constants import LICENSE_STANDARD, LICENSE_PRO
 
 # UI Labels (property names derived from these)
-LABEL_OBJECTS_COLLECTION = "Objects:"
+LABEL_OBJECTS_COLLECTION = "Source Collection:"
 LABEL_ROOM_COLLECTION = "Room:"
 LABEL_SURFACE_TYPE = "Surface Context:"
 LABEL_SURFACE_CONTEXT = "Surface Context:"
@@ -59,13 +59,13 @@ def poll_visible_collections(self, coll):
 class SceneAttributes(PropertyGroup):
     objects_collection: PointerProperty(
         name=LABEL_OBJECTS_COLLECTION.rstrip(":"),
-        description="Collection containing objects to scatter",
+        description="Defines the collection that contains all the assets you want Pivot to operate on. This acts as the source and scope for all Scene Organization tools",
         type=Collection,
         poll=poll_visible_collections,
     )
     surface_type: EnumProperty(
         name=LABEL_SURFACE_TYPE.rstrip(":"),
-        description="Default surface type for classification",
+        description="Sets the global context for all standardization operations. 'Auto' intelligently guesses the surface for each asset, while manual overrides force a specific context (Ground, Wall, or Ceiling) for the entire operation",
         items=[
             ("AUTO", "Auto", "Lets the engine decide"),
             (str(classification.SURFACE_GROUND), "Ground", "Ground surface"),
@@ -76,7 +76,7 @@ class SceneAttributes(PropertyGroup):
     )
     origin_method: EnumProperty(
         name=LABEL_ORIGIN_METHOD.rstrip(":"),
-        description="Method for calculating object origins",
+        description="Sets the method for placing the origin. 'Base' uses the primary contact surface (bottom, back, or top) as determined by the 'Surface Context', while 'Volume' uses a high-speed approximation of the object's volumetric center",
         items=[
             ('BASE', 'Base', 'Center of surface contact'),
             ('VOLUME', 'Volume', 'Center of gravity by volume'),

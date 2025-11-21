@@ -7,12 +7,14 @@ from .operators.operators import (
 
 from .operators.group_classification import Pivot_OT_Standardize_Selected_Groups
 from .operators.object_classification import (
-    Pivot_OT_Standardize_Selected_Objects,
-    Pivot_OT_Standardize_Active_Object,
+    Pivot_OT_Set_Origin_Selected_Objects,
+    Pivot_OT_Align_Facing_Selected_Objects,
+    Pivot_OT_Set_Origin_Active_Object,
+    Pivot_OT_Align_Facing_Active_Object,
 )
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
-from .classes import LABEL_ORIGIN_METHOD, LABEL_SURFACE_TYPE
+from .classes import LABEL_OBJECTS_COLLECTION, LABEL_ORIGIN_METHOD, LABEL_SURFACE_TYPE
 from .engine_state import get_engine_license_status, set_engine_license_status
 from . import engine
 
@@ -55,8 +57,8 @@ class Pivot_PT_Configuration_Panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        
-        # Configuration options
+
+        # Objects Collection selector
         row = layout.row()
         row.label(text=LABEL_SURFACE_TYPE)
         row = layout.row()
@@ -68,7 +70,7 @@ class Pivot_PT_Configuration_Panel(bpy.types.Panel):
 
 
 class Pivot_PT_Pro_Panel(bpy.types.Panel):
-    bl_label = "Pivot Pro Operations"
+    bl_label = "Scene Standardization"
     bl_idname = PRE + "_PT_pro_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -95,14 +97,11 @@ class Pivot_PT_Pro_Panel(bpy.types.Panel):
         enabled = (license_type == LICENSE_PRO)
         
         if enabled:
-            # Objects Collection selector
             row = layout.row()
-            row.prop(bpy.context.scene.pivot, "objects_collection")
-            
-            # Pro features
+            row.label(text=LABEL_OBJECTS_COLLECTION)
             row = layout.row()
-            row.operator(Pivot_OT_Standardize_Selected_Objects.bl_idname, icon=Pivot_OT_Standardize_Selected_Objects.bl_icon)
-
+            row.prop(bpy.context.scene.pivot, "objects_collection", text="")
+            layout.separator()
             row = layout.row()
             row.operator(Pivot_OT_Standardize_Selected_Groups.bl_idname, icon=Pivot_OT_Standardize_Selected_Groups.bl_icon)
             
@@ -121,7 +120,7 @@ class Pivot_PT_Pro_Panel(bpy.types.Panel):
 
 
 class Pivot_PT_Standard_Panel(bpy.types.Panel):
-    bl_label = "Pivot Standard Operations"
+    bl_label = "Object Standardization"
     bl_idname = PRE + "_PT_standard_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -131,7 +130,22 @@ class Pivot_PT_Standard_Panel(bpy.types.Panel):
         obj = context.active_object
         layout = self.layout
         
-        # Classification buttons
-        row = layout.row()
-        row.operator(Pivot_OT_Standardize_Active_Object.bl_idname, icon=Pivot_OT_Standardize_Active_Object.bl_icon)
+        # Get license_type from cached engine status
+        license_type = get_engine_license_status()
+        is_pro = (license_type == LICENSE_PRO)
+        
+        if is_pro:
+            # Pro edition: Show selected objects first
+            layout.label(text="On Selected Objects:")
+            row = layout.row()
+            row.operator(Pivot_OT_Set_Origin_Selected_Objects.bl_idname, icon=Pivot_OT_Set_Origin_Selected_Objects.bl_icon)
+            row = layout.row()
+            row.operator(Pivot_OT_Align_Facing_Selected_Objects.bl_idname, icon=Pivot_OT_Align_Facing_Selected_Objects.bl_icon)
+        else:
+            # Standard edition: Show active object first
+            layout.label(text="On Active Object:")
+            row = layout.row()
+            row.operator(Pivot_OT_Set_Origin_Active_Object.bl_idname, icon=Pivot_OT_Set_Origin_Active_Object.bl_icon)
+            row = layout.row()
+            row.operator(Pivot_OT_Align_Facing_Active_Object.bl_idname, icon=Pivot_OT_Align_Facing_Active_Object.bl_icon)
 
