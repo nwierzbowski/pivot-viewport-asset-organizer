@@ -31,6 +31,11 @@ class SurfaceManager:
         """Get the display name for a surface key."""
         return classification.SURFACE_TYPE_NAMES.get(surface_key, surface_key)
 
+    def _ensure_surface_collections_exist(self, pivot_root: Any) -> None:
+        """Guarantee every known surface collection exists under the pivot root."""
+        for surface_key in classification.SURFACE_TYPE_NAMES:
+            self.get_or_create_surface_collection(pivot_root, surface_key)
+
     def _get_and_enforce_root_collection(self) -> Optional[Any]:
         """Find or create the root classification collection and enforce structure by removing orphaned classification collections."""
         pivot_root = None
@@ -57,6 +62,9 @@ class SurfaceManager:
                         parent.children.unlink(coll)
                 # Remove the collection
                 bpy.data.collections.remove(coll)
+
+            # Ensure each surface bucket exists so we can reclassify into it
+            self._ensure_surface_collections_exist(pivot_root)
         
         return pivot_root
 

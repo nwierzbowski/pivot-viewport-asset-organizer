@@ -91,8 +91,7 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
     """
     
     # --- Aggregation phase ---
-    mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots = \
-        selection_utils.aggregate_object_groups(selected_objects)
+    mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots = selection_utils.aggregate_object_groups(selected_objects)
     core_group_mgr = group_manager.get_group_manager()
     
     # Get engine communicator for the entire function
