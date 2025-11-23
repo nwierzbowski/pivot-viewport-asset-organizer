@@ -73,73 +73,75 @@ def _close_shared_memory_segments(shm_objects):
             shm_name = getattr(shm, "name", "<unknown>")
             print(f"Warning: Failed to close shared memory segment '{shm_name}': {e}")
 
+
+def _standardize_synced_groups(engine, synced_group_names, surface_context):
+    """Reclassify cached groups without sending mesh data."""
+
+    if not synced_group_names:
+        return {}
+
+    command = engine.build_standardize_synced_groups_command(synced_group_names, surface_context)
+    final_response = _send_engine_command_and_get_response(engine, command)
+    # print("Standardized synced groups response:", final_response)
+    return final_response.get("groups", {})
+
 def standardize_groups(list selected_objects, str origin_method, str surface_context):
-    """
-    Pro Edition: Classify selected groups via engine.
-    
-    This function handles group guessing and collection hierarchy:
-    1. Aggregate objects into groups by collection boundaries and root parents
-    2. Set up pivot empties and ensure proper collection organization
-    3. Marshal mesh data into shared memory
-    4. Send classify_groups command to engine (performs group-level operations)
-    5. Compute new transforms from engine response
-    6. Apply transforms to objects
-    7. Organize results into surface type collections
-    
-    Args:
-        selected_objects: List of Blender objects selected by the user
-    """
-    
-    # --- Aggregation phase ---
-    mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots = selection_utils.aggregate_object_groups(selected_objects)
+    """Pro Edition: Classify selected groups via engine."""
+
+    mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots, synced_group_names, synced_pivots = selection_utils.aggregate_object_groups(selected_objects)
     core_group_mgr = group_manager.get_group_manager()
-    
-    # Get engine communicator for the entire function
+
     engine = get_engine_communicator()
-    
+    new_group_results = {}
+    transformed_group_names = []
+
     if group_names:
-        # Pivots are already created in aggregate_object_groups
-        # Use the existing pivots for shared memory setup
-        
-        # --- Shared memory setup ---
         shm_objects, shm_names, count_memory_views = shm_utils.create_data_arrays(
             total_verts, total_edges, total_objects, mesh_groups, pivots)
-        
+
         verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name = shm_names
         vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
-        
-        # --- Engine communication ---
+
         command = engine.build_standardize_groups_command(
             verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
             list(vert_counts_mv), list(edge_counts_mv), list(object_counts_mv), group_names, surface_context)
-        
+
         final_response = _send_engine_command_and_get_response(engine, command)
-        
-        # Close shared memory in parent process
+
         _close_shared_memory_segments(shm_objects)
 
-        groups = final_response["groups"]
-        
-        # --- Extract and apply transforms ---
-        group_names = list(groups.keys())
-        rots = [Quaternion(groups[name]["rot"]) for name in group_names]
-        origins = [tuple(groups[name]["origin"]) for name in group_names]
-        cogs = [tuple(groups[name]["cog"]) for name in group_names]
-        
-        # Choose origin method
-        if (origin_method == "BASE"):
-            new_origins = origins
-        else:
-            new_origins = cogs
-        
-        # --- Apply transforms to PIVOTS (objects follow via parenting) ---
-        _apply_transforms_to_pivots(pivots, new_origins, rots, cogs)
-        
-        # Build group membership snapshot
-        group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, group_names)
+        new_group_results = final_response["groups"]
+        transformed_group_names = list(new_group_results.keys())
+
+        group_membership_snapshot = engine_state.build_group_membership_snapshot(full_groups, transformed_group_names)
         engine_state.update_group_membership_snapshot(group_membership_snapshot, replace=False)
 
-    # Always get surface types for ALL stored groups (for organization)
+    synced_group_results = _standardize_synced_groups(engine, synced_group_names, surface_context)
+
+    all_group_results = {**new_group_results, **synced_group_results}
+    all_transformed_group_names = list(all_group_results.keys())
+
+    if all_transformed_group_names:
+        all_rots = [Quaternion(all_group_results[name]["rot"]) for name in all_transformed_group_names]
+        all_origins = [tuple(all_group_results[name]["origin"]) for name in all_transformed_group_names]
+        all_cogs = [tuple(all_group_results[name]["cog"]) for name in all_transformed_group_names]
+
+        if origin_method == "BASE":
+            all_new_origins = all_origins
+        else:
+            all_new_origins = all_cogs
+
+        pivot_lookup = {group_names[i]: pivots[i] for i in range(len(group_names))}
+        pivot_lookup.update({synced_group_names[i]: synced_pivots[i] for i in range(len(synced_group_names))})
+        all_pivots = []
+        for name in all_transformed_group_names:
+            pivot = pivot_lookup.get(name)
+            if pivot is None:
+                print(f"Warning: Pivot not found for group '{name}'")
+            all_pivots.append(pivot)
+
+        _apply_transforms_to_pivots(all_pivots, all_new_origins, all_rots, all_cogs)
+
     surface_types_command = engine.build_get_surface_types_command()
     surface_types_response = engine.send_command(surface_types_command)
     

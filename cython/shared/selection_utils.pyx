@@ -87,19 +87,25 @@ def aggregate_object_groups(list selected_objects):
     cdef set collections_to_process
     # Get the configured objects collection
     from . import group_manager
-    scene_coll = group_manager.get_group_manager().get_objects_collection()
+    group_mgr = group_manager.get_group_manager()
+    scene_coll = group_mgr.get_objects_collection()
     depsgraph = bpy.context.evaluated_depsgraph_get()
+    sync_state = group_mgr.get_sync_state()
+    cdef list synced_group_names = []
+    cdef set seen_synced = set()
+    cdef list synced_parent_groups = []
+    cdef list synced_parent_group_names = []
 
     # Standard edition: just process the single selected object as-is
     if edition_utils.is_standard_edition():
         obj = selected_objects[0]
         if obj.type != 'MESH':
-            return [], [], [], [], 0, 0, 0
+            return [], [], [], [], 0, 0, 0, []
         
         eval_obj = obj.evaluated_get(depsgraph)
         eval_mesh = eval_obj.data
         if len(eval_mesh.vertices) == 0:
-            return [], [], [], [], 0, 0, 0
+            return [], [], [], [], 0, 0, 0, []
         
         group_verts = len(eval_mesh.vertices)
         group_edges = len(eval_mesh.edges)
@@ -111,7 +117,9 @@ def aggregate_object_groups(list selected_objects):
             group_verts,
             group_edges,
             1,
-            []  # pivots (empty for standard edition single object)
+            [],  # pivots (empty for standard edition single object)
+            [],
+            []  # synced_pivots
         )
 
     # Build a lookup that points every nested collection back to its top-level owner.
@@ -151,12 +159,10 @@ def aggregate_object_groups(list selected_objects):
     group_verts = 0
     group_edges = 0
 
-    # Deduplicate root parents to avoid processing the same hierarchy multiple times.
     for obj in selected_objects:
         root_obj = get_root_object(obj)
         root_objects.add(root_obj)
 
-    # First pass: accumulate collections to process, creating new ones where needed.
     collections_to_process = set()
     for root_obj in root_objects:
         if not has_mesh_with_vertices(root_obj, depsgraph):
@@ -167,21 +173,28 @@ def aggregate_object_groups(list selected_objects):
                 scene_coll.objects.unlink(root_obj)
                 scene_coll.children.link(new_coll)
                 new_coll.objects.link(root_obj)
-                # Move all descendants to the new collection as well
                 _, descendants = get_mesh_and_all_descendants(root_obj, depsgraph)
                 for obj in descendants:
                     if obj != root_obj and scene_coll in obj.users_collection:
                         scene_coll.objects.unlink(obj)
                         new_coll.objects.link(obj)
                 collections_to_process.add(new_coll)
-            elif coll in coll_to_top_map:
+            elif coll in coll_to_top_map: 
                 for top in coll_to_top_map[coll]:
-                    if not group_manager.get_group_manager().get_sync_state().get(top.name, False):
+                    # if not group_manager.get_group_manager().get_sync_state().get(top.name, False):
                         collections_to_process.add(top)
 
-    # Second pass: build groups for each collection.
     for processed_coll in collections_to_process:
         top_roots = get_all_root_objects(processed_coll)
+        if not top_roots:
+            continue
+        if sync_state.get(processed_coll.name, False):
+            if processed_coll.name not in seen_synced:
+                seen_synced.add(processed_coll.name)
+                synced_group_names.append(processed_coll.name)
+                synced_parent_groups.append(top_roots)
+                synced_parent_group_names.append(processed_coll.name)
+            continue
         meshes = []
         descendants = []
         for root_obj in top_roots:
@@ -203,15 +216,19 @@ def aggregate_object_groups(list selected_objects):
         total_edges += group_edges
         total_objects += len(meshes)
 
-    # Create pivots for all groups
     pivots = _setup_pivots_for_groups_return_empties(parent_groups, group_names)
 
-    # Add pivots to full_groups for group membership tracking (avoid duplicates)
     for i, pivot in enumerate(pivots):
         if pivot not in full_groups[i]:
             full_groups[i].append(pivot)
 
-    return mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots
+    if synced_parent_group_names:
+        synced_pivots = _setup_pivots_for_groups_return_empties(
+            synced_parent_groups, synced_parent_group_names)
+    else:
+        synced_pivots = []
+
+    return mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots, synced_group_names, synced_pivots
 
 
 def _setup_pivots_for_groups_return_empties(parent_groups, group_names):
