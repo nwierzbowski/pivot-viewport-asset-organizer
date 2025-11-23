@@ -82,7 +82,6 @@ def _standardize_synced_groups(engine, synced_group_names, surface_context):
 
     command = engine.build_standardize_synced_groups_command(synced_group_names, surface_context)
     final_response = _send_engine_command_and_get_response(engine, command)
-    # print("Standardized synced groups response:", final_response)
     return final_response.get("groups", {})
 
 def standardize_groups(list selected_objects, str origin_method, str surface_context):
