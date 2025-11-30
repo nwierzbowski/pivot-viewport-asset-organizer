@@ -4,7 +4,7 @@ import uuid
 import multiprocessing.shared_memory as shared_memory
 import bpy
 import platform
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 
@@ -84,17 +84,27 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
         edge_offset = 0
         if pivots and group_idx < len(pivots):
             pivot_obj = pivots[group_idx]
+            pivot_matrix_world = pivot_obj.matrix_world.copy()
+            try:
+                pivot_matrix_inv = pivot_matrix_world.inverted()
+            except Exception:
+                pivot_matrix_inv = Matrix.Identity(4)
+            pivot_basis_inv = pivot_matrix_inv.to_3x3()
+            use_pivot_transform = True
         else:
-            pivot_obj = group[0]
-        pivot_matrix_world = pivot_obj.matrix_world.copy()
-        try:
-            pivot_matrix_inv = pivot_matrix_world.inverted()
-        except Exception:
+            pivot_obj = None
             pivot_matrix_inv = Matrix.Identity(4)
-        pivot_basis_inv = pivot_matrix_inv.to_3x3()
+            pivot_basis_inv = Matrix.Identity(3)
+            use_pivot_transform = False
         for obj in group:
-            obj_local_matrix = pivot_matrix_inv @ obj.matrix_world
-            quat = obj_local_matrix.to_3x3().to_quaternion()
+            if use_pivot_transform:
+                obj_local_matrix = pivot_matrix_inv @ obj.matrix_world
+                quat = obj_local_matrix.to_3x3().to_quaternion()
+                trans_vec = obj.matrix_world.translation - pivot_obj.matrix_world.translation
+                local_translation = pivot_basis_inv @ trans_vec
+            else:
+                quat = obj.matrix_world.to_3x3().to_quaternion()
+                local_translation = Vector((0.0, 0.0, 0.0))
             rotations[idx_rot] = quat.w
             rotations[idx_rot + 1] = quat.x
             rotations[idx_rot + 2] = quat.y
@@ -107,8 +117,6 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
             scales[idx_scale + 2] = scale_vec.z
             idx_scale += 3
 
-            trans_vec = obj.matrix_world.translation - pivot_obj.matrix_world.translation
-            local_translation = pivot_basis_inv @ trans_vec
             # Offset relative to the pivot coordinate system, accounting for child/parent hierarchy
 
             offsets[idx_offset] = local_translation.x

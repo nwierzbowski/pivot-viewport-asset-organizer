@@ -43,21 +43,21 @@ def _apply_transforms_to_pivots(pivots, origins, rots, cogs):
         
 
 
-def set_origin_and_preserve_children(obj, new_origin_world):
+def set_origin_and_preserve_children(obj, new_origin_local):
     """Move object origin to new_origin_world while preserving visual placement of mesh and children."""
     old_matrix = obj.matrix_world.copy()
-    inv_matrix = old_matrix.to_3x3().inverted()
-    world_offset = new_origin_world - old_matrix.translation
-    local_offset = inv_matrix @ world_offset
-    correction = Matrix.Translation(-local_offset)
+    # Rotate new_origin_local by the inverse of the world matrix rotation to get local space
+    local_new_origin = old_matrix.to_3x3().inverted() @ new_origin_local
+    new_world_pos = old_matrix.translation + new_origin_local
+    correction = Matrix.Translation(-local_new_origin)
 
     # Apply correction to mesh if it exists
     if hasattr(obj, 'data') and hasattr(obj.data, 'transform'):
         obj.data.transform(correction)
 
     # Update world location and fix children parenting
-    obj.matrix_world.translation = new_origin_world
-    for child in obj.children:
+    obj.matrix_world.translation = new_world_pos
+    for child in obj.children:  
         child.matrix_parent_inverse = correction @ child.matrix_parent_inverse
 
 
@@ -261,8 +261,8 @@ def standardize_object_origins(list objects, str origin_method, str surface_cont
     for i, obj in enumerate(mesh_objects):
         if i < len(origins) and i < len(cogs):
 
-            origin_vector = obj.matrix_world.translation + Vector(new_origins[i])
-            set_origin_and_preserve_children(obj, origin_vector)
+            # origin_vector = obj.matrix_world.translation + 
+            set_origin_and_preserve_children(obj, Vector(new_origins[i]))
             bpy.context.scene.cursor.location = obj.matrix_world.translation
     
 
@@ -273,7 +273,7 @@ def standardize_object_rotations(list objects):
     for i, obj in enumerate(mesh_objects):
         if i < len(rots) and i < len(cogs):
             rot = rots[i]
-            cog = obj.matrix_world.translation + Vector(cogs[i])
+            cog = Vector(cogs[i])
             rotation_matrix = rot.to_matrix().to_4x4()
-            transform = Matrix.Translation(cog) @ rotation_matrix @ Matrix.Translation(-cog)
-            obj.matrix_world = transform @ obj.matrix_world
+            transform = Matrix.Translation(obj.matrix_world.translation + cog) @ rotation_matrix @ Matrix.Translation(-obj.matrix_world.translation - cog) @ obj.matrix_world
+            obj.matrix_world = transform
