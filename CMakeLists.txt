@@ -1,5 +1,4 @@
 cmake_minimum_required(VERSION 3.16)
-project(pivot_engine LANGUAGES CXX C)
 
 if(MSVC)
     # Ensure MSVC uses the static runtime consistently to avoid /MD vs /MT clashes
@@ -114,7 +113,9 @@ if(BUILD_PY_MODULE)
 endif()
 
 # Convenience meta-target to build both when present
-add_custom_target(dev ALL)
-if(TARGET bridge)
+if(NOT TARGET dev)
+  add_custom_target(dev ALL)
+  if(TARGET bridge)
     add_dependencies(dev bridge)
+  endif()
 endif()
