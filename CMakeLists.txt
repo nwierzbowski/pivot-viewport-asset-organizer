@@ -105,30 +105,30 @@ _pivot_prepare_dir("${PIVOT_LIB_DIR}" "${PIVOT_PLATFORM_ID}")
 # Shared dependencies (available to subprojects)
 include(FetchContent)
 # Disable Eigen extras we don't use; keeps Windows builds from probing Fortran toolchains
-set(BUILD_TESTING OFF CACHE BOOL "Disable all third-party test targets" FORCE)
-set(EIGEN_TEST_FORTRAN OFF CACHE BOOL "Disable Eigen Fortran tests" FORCE)
-set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen self-tests" FORCE)
-set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen documentation build" FORCE)
-FetchContent_Declare(
-    Eigen
-    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG 3.4.0
-    GIT_SHALLOW TRUE
-)
-FetchContent_GetProperties(Eigen)
-if(NOT Eigen_POPULATED)
-    FetchContent_Populate(Eigen)
-endif()
-if(NOT DEFINED Eigen_SOURCE_DIR AND DEFINED eigen_SOURCE_DIR)
-    set(Eigen_SOURCE_DIR "${eigen_SOURCE_DIR}")
-endif()
+# set(BUILD_TESTING OFF CACHE BOOL "Disable all third-party test targets" FORCE)
+# set(EIGEN_TEST_FORTRAN OFF CACHE BOOL "Disable Eigen Fortran tests" FORCE)
+# set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Disable Eigen self-tests" FORCE)
+# set(EIGEN_BUILD_DOC OFF CACHE BOOL "Disable Eigen documentation build" FORCE)
+# FetchContent_Declare(
+#     Eigen
+#     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+#     GIT_TAG 3.4.0
+#     GIT_SHALLOW TRUE
+# )
+# FetchContent_GetProperties(Eigen)
+# if(NOT Eigen_POPULATED)
+#     FetchContent_Populate(Eigen)
+# endif()
+# if(NOT DEFINED Eigen_SOURCE_DIR AND DEFINED eigen_SOURCE_DIR)
+#     set(Eigen_SOURCE_DIR "${eigen_SOURCE_DIR}")
+# endif()
 
-if(NOT TARGET Eigen3::Eigen)
-    add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
-    set_target_properties(Eigen3::Eigen PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${Eigen_SOURCE_DIR}"
-    )
-endif()
+# if(NOT TARGET Eigen3::Eigen)
+#     add_library(Eigen3::Eigen INTERFACE IMPORTED GLOBAL)
+#     set_target_properties(Eigen3::Eigen PROPERTIES
+#         INTERFACE_INCLUDE_DIRECTORIES "${Eigen_SOURCE_DIR}"
+#     )
+# endif()
 
 # Required Boost libs for IPC and JSON
 cmake_policy(SET CMP0167 NEW) # Suppress FindBoost deprecation warning
