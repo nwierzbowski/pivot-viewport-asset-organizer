@@ -1,3 +1,6 @@
 [submodule "core"]
 	path = core
 	url = https://github.com/nwierzbowski/pivot-core.git
+[submodule "engine"]
+	path = engine
+	url = https://github.com/nwierzbowski/pivot-engine
