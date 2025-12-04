@@ -16,13 +16,12 @@ from types import ModuleType
 from typing import Dict
 
 __all__ = [
-    "classify_object",
     "classification",
     "edition_utils",
     "group_manager",
     "selection_utils",
     "shm_utils",
-    "transform_utils",
+    "standardize",
 ]
 
 # Cache of already imported extension modules keyed by attribute name
