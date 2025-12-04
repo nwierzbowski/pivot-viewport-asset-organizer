@@ -1,37 +1,36 @@
-````markdown
-# Pivot Build Workflow
+# PIVOT BRIDGE - GPL COMPLIANT SOURCE CODE
 
-The build system targets the Blender add-on directly. All binaries and Cython modules are emitted into the repository's `pivot/` folder so the add-on can be zipped or installed without extra staging steps. Builds use the Ninja generator.
+This repository contains the full source code for the GPLv3-licensed Python and Cython bridge components of the Pivot addon for Blender.
 
-## Default (Pro) build
+This code is provided in full compliance with the GNU General Public License (GPL) and is distributed to ensure users have the freedom to study, modify, and redistribute the open-source components of our product.
 
-```
-cmake --preset=default
-ninja -C build
-```
+## Licensing
+*   **Bridge Code:** Licensed under the GNU General Public License v3.0 or any later version. See [LICENSE.txt] for the full text.
+*   **Proprietary Engine:** The bridge component is designed to communicate with a separate, proprietary C++ application, the "Elbo Core Engine." The source code for the Engine is not included here.
+*   **The Full Product:** The full, installable addon and the proprietary engine can be acquired at [elbo.studio].
 
-Outputs:
+## Purpose
+The sole purpose of this code is to serve as a user interface and a high-speed data marshalling layer between the Blender Python API and the external Elbo Core Engine.
 
-- Engine executable: `pivot/bin/pivot_engine`
-- Cython modules: `pivot/lib/*.so`
+## Setup/Compilation
 
-The configure preset defaults to the **Pro** edition and sets the compile definitions `PIVOT_EDITION_PRO=1` and `PIVOT_EDITION_STANDARD=0`.
+To compile the .pyd/.so files from the source code, follow these steps:
 
-## Standard edition build
+1. Install dependencies using uv:
+   ```
+   uv sync
+   ```
 
-```
-cmake --preset=standard
-ninja -C build-standard
-```
+2. For the Pro edition build:
+   ```
+   cmake --preset=pro
+   ninja -C build-pro
+   ```
 
-This preset switches the edition to **Standard**, flipping the compile definitions accordingly. Each preset maintains its own build directory so you can generate both editions without a clean rebuild.
+3. For the Standard edition build:
+   ```
+   cmake --preset=standard
+   ninja -C build-standard
+   ```
 
-If you prefer to toggle the edition manually, set the cache variable when configuring:
-
-```
-cmake -S . -B build -DPIVOT_EDITION=STANDARD
-```
-
-After configuring, run `ninja -C <build-dir>` to rebuild.
-
-````
+The builds use the Ninja generator and output the binaries and Cython modules into the repository's `pivot/` folder.
