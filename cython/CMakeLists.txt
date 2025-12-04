@@ -58,12 +58,12 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
         endif()
         # Define SIZEOF_VOID_P for Windows compatibility with Cython-generated code
         target_compile_definitions(${mod} PRIVATE SIZEOF_VOID_P=${CMAKE_SIZEOF_VOID_P})
-        # Include engine src for classification.h (needed for operator modules)
+        # Include core headers (header-only library)
         target_include_directories(${mod} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core)
-        # Link core library for operator modules
-        if(${mod} IN_LIST OPERATOR_MODULES)
-            target_link_libraries(${mod} PRIVATE core)
-        endif()
+        # Core is header-only, no linking needed
+        # if(${mod} IN_LIST OPERATOR_MODULES)
+        #     target_link_libraries(${mod} PRIVATE core)
+        # endif()
         if(DEFINED PIVOT_EDITION_DEFINES)
             foreach(def ${PIVOT_EDITION_DEFINES})
                 target_compile_definitions(${mod} PRIVATE ${def})
