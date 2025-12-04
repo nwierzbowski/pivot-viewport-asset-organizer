@@ -4,13 +4,27 @@ This repository contains the full source code for the GPLv3-licensed Python and 
 
 This code is provided in full compliance with the GNU General Public License (GPL) and is distributed to ensure users have the freedom to study, modify, and redistribute the open-source components of our product.
 
-## Licensing
+## Licensing and Distribution
+
+The Pivot addon is a **hybrid software product** designed for maximum performance. It is comprised of two parts:
+
+1.  **The Pivot Bridge (GPLv3):** This is the code contained in this repository. It provides the user interface and API interaction logic.
+2.  **The Elbo Core Engine (Proprietary):** This is the pre-compiled C++ application that performs all the complex, high-speed geometric computation.
+
+**Crucial Note on Functionality:**
+
+The Pivot Bridge addon **will install and function without the Elbo Core Engine.** However, the addon **requires** the Core Engine binary to be present to execute any of the high-performance computation operators (like Classification or Batch Processing).
+
 *   **Bridge Code:** Licensed under the GNU General Public License v3.0 or any later version. See [License](https://github.com/nwierzbowski/pivot-blender-bridge/blob/main/LICENSE) for the full text.
-*   **Proprietary Engine:** The bridge component is designed to communicate with a separate, proprietary C++ application, the "Elbo Core Engine." The source code for the Engine is not included here.
-*   **The Full Product:** The full, installable addon and the proprietary engine can be acquired from [Gumroad](https://gumroad.com) or [Superhive](https://superhivemarket.com/products/pivot). Standard edition is free on Gumroad and $5 on Superhive, while Pro edition is $30 on both platforms. More information is available at [elbo.studio](https://www.elbo.studio).
+*   **Proprietary Engine:** The source code for the Engine is not included here. All proprietary components are governed by our EULA.
 
 ## Purpose
+
 The sole purpose of this code is to serve as a user interface and a high-speed data marshalling layer between the Blender Python API and the external Elbo Core Engine.
+
+## The Full Product
+
+The full, installable addon package (containing both the GPL Bridge and the proprietary Engine) can be acquired from [Gumroad](https://gumroad.com) or [Superhive](https://superhivemarket.com/products/pivot). Standard edition is free on Gumroad and $5 on Superhive, while Pro edition is $30 on both platforms. More information is available at [elbo.studio](https://www.elbo.studio).
 
 ## Setup/Compilation
 
