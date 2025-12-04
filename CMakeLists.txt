@@ -70,6 +70,9 @@ endif()
 
 set(PIVOT_PLATFORM_ID "${_system_name}-${_arch}" CACHE INTERNAL "Platform identifier (e.g., darwin-arm64, linux-x86-64)")
 set(PIVOT_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/lib/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Cython module output directory")
+if(NOT DEFINED PIVOT_BIN_DIR)
+    set(PIVOT_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/bin/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Engine output directory")
+endif()
 
 unset(_edition_pro_flag)
 unset(_edition_standard_flag)
@@ -79,6 +82,12 @@ unset(_processor)
 unset(_arch)
 message(STATUS "Building Pivot edition: ${PIVOT_EDITION}")
 message(STATUS "Platform identifier: ${PIVOT_PLATFORM_ID}")
+
+# Ensure output directories exist (blender-bridge handles its own lib, and engine bin if needed)
+file(MAKE_DIRECTORY "${PIVOT_LIB_DIR}")
+if(DEFINED PIVOT_BIN_DIR)
+    file(MAKE_DIRECTORY "${PIVOT_BIN_DIR}")
+endif()
 
 # Ensure output directories are ready for this edition and platform
 function(_pivot_prepare_dir dir platform_id)
