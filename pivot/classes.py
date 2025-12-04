@@ -8,9 +8,11 @@ from .lib import classification
 from .constants import LICENSE_STANDARD, LICENSE_PRO
 
 # UI Labels (property names derived from these)
-LABEL_OBJECTS_COLLECTION = "Objects:"
+LABEL_OBJECTS_COLLECTION = "Source Collection:"
 LABEL_ROOM_COLLECTION = "Room:"
-LABEL_SURFACE_TYPE = "Surface:"
+LABEL_SURFACE_TYPE = "Surface Context:"
+LABEL_SURFACE_CONTEXT = "Surface Context:"
+LABEL_ORIGIN_METHOD = "Origin Method:"
 LABEL_LICENSE_TYPE = "License:"
 
 # Marker property to identify classification collections
@@ -57,18 +59,27 @@ def poll_visible_collections(self, coll):
 class SceneAttributes(PropertyGroup):
     objects_collection: PointerProperty(
         name=LABEL_OBJECTS_COLLECTION.rstrip(":"),
-        description="Collection containing objects to scatter",
+        description="Defines the collection that contains all the assets you want Pivot to operate on. This acts as the source and scope for all Scene Organization tools",
         type=Collection,
         poll=poll_visible_collections,
     )
-    room_collection: PointerProperty(
-        name=LABEL_ROOM_COLLECTION.rstrip(":"),
-        description="Collection containing room geometry",
-        type=Collection,
-        poll=poll_visible_collections,
+    surface_type: EnumProperty(
+        name=LABEL_SURFACE_TYPE.rstrip(":"),
+        description="Sets the global context for all standardization operations. 'Auto' intelligently guesses the surface for each asset, while manual overrides force a specific context (Ground, Wall, or Ceiling) for the entire operation",
+        items=[
+            ("AUTO", "Auto", "Lets the engine decide"),
+            (str(classification.SURFACE_GROUND), "Ground", "Ground surface"),
+            (str(classification.SURFACE_WALL), "Wall", "Wall surface"),
+            (str(classification.SURFACE_CEILING), "Ceiling", "Ceiling surface"),
+        ],
+        default="AUTO",
     )
-    license_type: StringProperty(
-        name=LABEL_LICENSE_TYPE.rstrip(":"),
-        description="License type (read-only, determined by engine)",
-        default="UNKNOWN",
+    origin_method: EnumProperty(
+        name=LABEL_ORIGIN_METHOD.rstrip(":"),
+        description="Sets the method for placing the origin. 'Base' uses the primary contact surface (bottom, back, or top) as determined by the 'Surface Context', while 'Volume (Fast)' uses a proprietary, high-speed approximation of the object's volumetric center designed for stability",
+        items=[
+            ('BASE', 'Base', 'Center of surface contact'),
+            ('VOLUME', 'Volume (Fast)', 'Center of gravity by volume'),
+        ],
+        default='BASE',
     )

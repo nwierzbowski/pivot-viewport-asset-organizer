@@ -1,6 +1,7 @@
 # selection_utils.pyx - selection and grouping helpers for Blender objects
 
 import bpy
+from mathutils import Vector, Matrix, Quaternion
 from . import edition_utils
 from pivot.surface_manager import CLASSIFICATION_MARKER_PROP, CLASSIFICATION_ROOT_MARKER_PROP
 from collections import defaultdict
@@ -86,31 +87,40 @@ def aggregate_object_groups(list selected_objects):
     cdef set collections_to_process
     # Get the configured objects collection
     from . import group_manager
-    scene_coll = group_manager.get_group_manager().get_objects_collection()
+    group_mgr = group_manager.get_group_manager()
+    scene_coll = group_mgr.get_objects_collection()
     depsgraph = bpy.context.evaluated_depsgraph_get()
+    sync_state = group_mgr.get_sync_state()
+    existing_groups = group_mgr.get_managed_group_names_set()
+    cdef list synced_group_names = []
+    cdef set seen_synced = set()
+    cdef list synced_parent_groups = []
+    cdef list synced_parent_group_names = []
 
     # Standard edition: just process the single selected object as-is
     if edition_utils.is_standard_edition():
         obj = selected_objects[0]
         if obj.type != 'MESH':
-            return [], [], [], [], 0, 0, 0
+            return [], [], [], [], 0, 0, 0, []
         
         eval_obj = obj.evaluated_get(depsgraph)
         eval_mesh = eval_obj.data
         if len(eval_mesh.vertices) == 0:
-            return [], [], [], [], 0, 0, 0
+            return [], [], [], [], 0, 0, 0, []
         
         group_verts = len(eval_mesh.vertices)
         group_edges = len(eval_mesh.edges)
         
         return (
             [[obj]],  # mesh_groups
-            [[obj]],  # parent_groups
             [[obj]],  # full_groups
             [obj.name],  # group_names
             group_verts,
             group_edges,
-            1
+            1,
+            [],  # pivots (empty for standard edition single object)
+            [],
+            []  # synced_pivots
         )
 
     # Build a lookup that points every nested collection back to its top-level owner.
@@ -150,12 +160,10 @@ def aggregate_object_groups(list selected_objects):
     group_verts = 0
     group_edges = 0
 
-    # Deduplicate root parents to avoid processing the same hierarchy multiple times.
     for obj in selected_objects:
         root_obj = get_root_object(obj)
         root_objects.add(root_obj)
 
-    # First pass: accumulate collections to process, creating new ones where needed.
     collections_to_process = set()
     for root_obj in root_objects:
         if not has_mesh_with_vertices(root_obj, depsgraph):
@@ -166,21 +174,28 @@ def aggregate_object_groups(list selected_objects):
                 scene_coll.objects.unlink(root_obj)
                 scene_coll.children.link(new_coll)
                 new_coll.objects.link(root_obj)
-                # Move all descendants to the new collection as well
                 _, descendants = get_mesh_and_all_descendants(root_obj, depsgraph)
                 for obj in descendants:
                     if obj != root_obj and scene_coll in obj.users_collection:
                         scene_coll.objects.unlink(obj)
                         new_coll.objects.link(obj)
                 collections_to_process.add(new_coll)
-            elif coll in coll_to_top_map:
+            elif coll in coll_to_top_map: 
                 for top in coll_to_top_map[coll]:
-                    if not group_manager.get_group_manager().get_sync_state().get(top.name, False):
+                    # if not group_manager.get_group_manager().get_sync_state().get(top.name, False):
                         collections_to_process.add(top)
 
-    # Second pass: build groups for each collection.
     for processed_coll in collections_to_process:
         top_roots = get_all_root_objects(processed_coll)
+        if not top_roots:
+            continue
+        if sync_state.get(processed_coll.name, False):
+            if processed_coll.name not in seen_synced:
+                seen_synced.add(processed_coll.name)
+                synced_group_names.append(processed_coll.name)
+                synced_parent_groups.append(top_roots)
+                synced_parent_group_names.append(processed_coll.name)
+            continue
         meshes = []
         descendants = []
         for root_obj in top_roots:
@@ -202,4 +217,64 @@ def aggregate_object_groups(list selected_objects):
         total_edges += group_edges
         total_objects += len(meshes)
 
-    return mesh_groups, parent_groups, full_groups, group_names, total_verts, total_edges, total_objects
+    pivots = _setup_pivots_for_groups_return_empties(parent_groups, group_names, existing_groups)
+
+    for i, pivot in enumerate(pivots):
+        if pivot not in full_groups[i]:
+            full_groups[i].append(pivot)
+
+    if synced_parent_group_names:
+        synced_pivots = _setup_pivots_for_groups_return_empties(
+            synced_parent_groups, synced_parent_group_names, existing_groups)
+    else:
+        synced_pivots = []
+
+    return mesh_groups, full_groups, group_names, total_verts, total_edges, total_objects, pivots, synced_group_names, synced_pivots
+
+
+def _setup_pivots_for_groups_return_empties(parent_groups, group_names, existing_groups):
+    """Set up one pivot empty per group with smart empty detection/creation."""
+    pivots = []
+    for i, parent_group in enumerate(parent_groups):
+        target_origin = parent_group[0].matrix_world.translation.copy()
+        empty = _get_or_create_pivot_empty(parent_group, group_names[i], target_origin, existing_groups)
+        pivots.append(empty)
+    return pivots
+
+
+def _get_or_create_pivot_empty(parent_group, group_name, target_origin, existing_groups):
+    """
+    Get or create a single pivot empty for the group.
+    - If group's collection has exactly one empty, reuse it
+    - If group's collection has no empties, create one
+    - If group's collection has multiple empties, create a new one and parent existing empties to it
+    Only parent the parent objects (from parent_group) to the pivot; children inherit automatically.
+    Returns: the pivot empty (which is NOT added to parent_group)
+    """
+    # Get the collection containing the first object
+    group_collection = parent_group[0].users_collection[0] if parent_group[0].users_collection else bpy.context.scene.collection
+    
+    # Find all empties in the parent_group (root objects of the group)
+    empties_in_collection = [obj for obj in parent_group if obj.type == 'EMPTY']
+    
+    # Determine which empty to use
+    if len(empties_in_collection) == 1:
+        # Exactly one empty: reuse it
+        empty = empties_in_collection[0]
+        
+    else:
+        # Zero or multiple empties: create a new one
+        empty = bpy.data.objects.new(f"{group_name}_pivot", None)
+        group_collection.objects.link(empty)
+
+    # Reset rotation by setting matrix_world to preserve translation and scale, but reset rotation to identity
+    if group_name not in existing_groups:
+        empty.matrix_world = Matrix.LocRotScale(target_origin, None, empty.matrix_world.to_scale())
+    
+    # Parent all objects in parent_group to the pivot (except the pivot itself)
+    for obj in parent_group:
+        if obj != empty:  # Avoid self-parenting
+            obj.parent = empty
+            obj.matrix_parent_inverse = Matrix.Translation(-target_origin)
+    
+    return empty

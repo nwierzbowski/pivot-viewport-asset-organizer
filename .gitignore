@@ -16,6 +16,7 @@ test.*
 *.blend
 *.blend1
 assets/
+*.bmp
 
 # Build artifacts
 build*/

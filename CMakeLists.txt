@@ -12,7 +12,6 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Build toggles
-option(BUILD_ENGINE "Build C++ engine executable" ON)
 option(BUILD_PY_MODULE "Build Python (Cython) extension" ON)
 
 # Edition selection (defaults to PRO)
@@ -60,7 +59,6 @@ else()
 endif()
 
 set(PIVOT_PLATFORM_ID "${_system_name}-${_arch}" CACHE INTERNAL "Platform identifier (e.g., darwin-arm64, linux-x86-64)")
-set(PIVOT_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/bin/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Engine output directory")
 set(PIVOT_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/lib/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Cython module output directory")
 
 unset(_edition_pro_flag)
@@ -99,7 +97,6 @@ function(_pivot_prepare_dir dir platform_id)
     file(WRITE "${marker}" "${marker_content}\n")
 endfunction()
 
-_pivot_prepare_dir("${PIVOT_BIN_DIR}" "${PIVOT_PLATFORM_ID}")
 _pivot_prepare_dir("${PIVOT_LIB_DIR}" "${PIVOT_PLATFORM_ID}")
 
 # Shared dependencies (available to subprojects)

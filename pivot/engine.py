@@ -18,11 +18,15 @@ import atexit
 import json
 import select
 import platform
+import builtins
 from typing import Dict, Any, Optional, Tuple
 
 # Command IDs for engine communication
-COMMAND_SET_GROUP_CLASSIFICATIONS = 4
+COMMAND_SET_SURFACE_TYPES = 4
 COMMAND_DROP_GROUPS = 5
+COMMAND_CLASSIFY_GROUPS = 1
+COMMAND_CLASSIFY_OBJECTS = 1
+COMMAND_GET_GROUP_SURFACE_TYPES = 2
 
 
 def get_engine_binary_path() -> str:
@@ -290,8 +294,8 @@ class PivotEngine:
 
         try:
             command = {
-                "id": COMMAND_SET_GROUP_CLASSIFICATIONS,
-                "op": "set_group_classifications",
+                "id": COMMAND_SET_SURFACE_TYPES,
+                "op": "set_surface_types",
                 "classifications": payload
             }
             response = self.send_command(command)
@@ -336,9 +340,106 @@ class PivotEngine:
             print(f"Error dropping groups from engine: {exc}")
             return -1
 
+    def build_standardize_groups_command(self, verts_shm_name: str, edges_shm_name: str, 
+                                     rotations_shm_name: str, scales_shm_name: str, 
+                                     offsets_shm_name: str, vert_counts: list, 
+                                     edge_counts: list, object_counts: list, 
+                                     group_names: list, surface_contexts: list[str]) -> Dict[str, Any]:
+        """Build a standardize_groups command for the engine (Pro edition).
+        
+        Args:
+            verts_shm_name: Shared memory name for vertex data
+            edges_shm_name: Shared memory name for edge data
+            rotations_shm_name: Shared memory name for rotation data
+            scales_shm_name: Shared memory name for scale data
+            offsets_shm_name: Shared memory name for offset data
+            vert_counts: List of vertex counts per group
+            edge_counts: List of edge counts per group
+            object_counts: List of object counts per group
+            group_names: List of group names to standardize
+            surface_context: Surface context for standardization
+            
+        Returns:
+            Dict containing the command structure
+        """
+        return {
+            "id": COMMAND_CLASSIFY_GROUPS,
+            "op": "standardize_groups",
+            "shm_verts": verts_shm_name,
+            "shm_edges": edges_shm_name,
+            "shm_rotations": rotations_shm_name,
+            "shm_scales": scales_shm_name,
+            "shm_offsets": offsets_shm_name,
+            "vert_counts": vert_counts,
+            "edge_counts": edge_counts,
+            "object_counts": object_counts,
+            "group_names": group_names,
+            "surface_contexts": surface_contexts,
+        }
 
-# Global engine instance
-_engine_instance = PivotEngine()
+    def build_standardize_synced_groups_command(self, group_names: list[str], surface_contexts: list[str]) -> Dict[str, Any]:
+        """Build a command to reclassify already-synced groups without uploading mesh data."""
+        return {
+            "id": COMMAND_CLASSIFY_GROUPS,
+            "op": "standardize_synced_groups",
+            "group_names": group_names,
+            "surface_contexts": surface_contexts
+        }
+
+    def build_standardize_objects_command(self, verts_shm_name: str, edges_shm_name: str,
+                                      rotations_shm_name: str, scales_shm_name: str,
+                                      offsets_shm_name: str, vert_counts: list,
+                                      edge_counts: list, object_names: list, surface_contexts: list[str]) -> Dict[str, Any]:
+        """Build a standardize_objects command for the engine.
+        
+        Args:
+            verts_shm_name: Shared memory name for vertex data
+            edges_shm_name: Shared memory name for edge data
+            rotations_shm_name: Shared memory name for rotation data
+            scales_shm_name: Shared memory name for scale data
+            offsets_shm_name: Shared memory name for offset data
+            vert_counts: List of vertex counts per object
+            edge_counts: List of edge counts per object
+            object_names: List of object names to standardize
+            surface_contexts: Per-object surface context strings
+            
+        Returns:
+            Dict containing the command structure
+        """
+        return {
+            "id": COMMAND_CLASSIFY_OBJECTS,
+            "op": "standardize_objects",
+            "shm_verts": verts_shm_name,
+            "shm_edges": edges_shm_name,
+            "shm_rotations": rotations_shm_name,
+            "shm_scales": scales_shm_name,
+            "shm_offsets": offsets_shm_name,
+            "vert_counts": vert_counts,
+            "edge_counts": edge_counts,
+            "object_names": object_names,
+            "surface_contexts": surface_contexts
+        }
+
+    def build_get_surface_types_command(self) -> Dict[str, Any]:
+        """Build a get_surface_types command for the engine.
+        
+        Returns:
+            Dict containing the command structure
+        """
+        return {
+            "id": COMMAND_GET_GROUP_SURFACE_TYPES,
+            "op": "get_surface_types"
+        }
+
+
+# Global engine instance stored on builtins to persist across reloads
+_engine_instance = getattr(builtins, '_pivot_engine_instance', None)
+if _engine_instance is None:
+    _engine_instance = PivotEngine()
+    builtins._pivot_engine_instance = _engine_instance
+else:
+    if _engine_instance.is_running():
+        _engine_instance.stop()
 
 
 def start_engine() -> bool:
@@ -354,7 +455,9 @@ def stop_engine() -> None:
 def get_engine_communicator() -> PivotEngine:
     """Get the engine instance for communication."""
     if not _engine_instance.is_running():
-        raise RuntimeError("Engine process not started. Make sure the addon is properly registered.")
+        started = _engine_instance.start()
+        if not started:
+            raise RuntimeError("Engine process not started. Make sure the addon is properly registered.")
     return _engine_instance
 
 

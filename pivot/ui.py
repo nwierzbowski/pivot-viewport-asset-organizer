@@ -2,17 +2,18 @@ from re import S
 import bpy
 from .operators.operators import (
     Pivot_OT_Organize_Classified_Objects,
+    Pivot_OT_Reset_Classifications,
     Pivot_OT_Upgrade_To_Pro,
 )
 
-from .operators.classification import (
-    Pivot_OT_Standardize_Selected_Groups,
-    Pivot_OT_Standardize_Selected_Objects,
-    Pivot_OT_Standardize_Active_Object,
+from .operators.group_classification import Pivot_OT_Standardize_Selected_Groups
+from .operators.object_classification import (
+    Pivot_OT_Set_Origin_Selected_Objects,
+    Pivot_OT_Align_Facing_Selected_Objects,
 )
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
-from .classes import LABEL_OBJECTS_COLLECTION, LABEL_ROOM_COLLECTION, LABEL_SURFACE_TYPE, LABEL_LICENSE_TYPE
+from .classes import LABEL_OBJECTS_COLLECTION, LABEL_ORIGIN_METHOD, LABEL_SURFACE_TYPE
 from .engine_state import get_engine_license_status, set_engine_license_status
 from . import engine
 
@@ -46,9 +47,29 @@ class Pivot_PT_Status_Panel(bpy.types.Panel):
         row = layout.row()
         row.label(text=f"License: {license_type}")
 
+class Pivot_PT_Configuration_Panel(bpy.types.Panel):
+    bl_label = "Pivot Configuration"
+    bl_idname = PRE + "_PT_configuration_panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = CATEGORY  # Tab name in the N-Panel
+
+    def draw(self, context):
+        layout = self.layout
+
+        # Objects Collection selector
+        row = layout.row()
+        row.label(text=LABEL_SURFACE_TYPE)
+        row = layout.row()
+        row.prop(bpy.context.scene.pivot, "surface_type", expand=True)
+        row = layout.row()
+        row.label(text=LABEL_ORIGIN_METHOD)
+        row = layout.row()
+        row.prop(bpy.context.scene.pivot, "origin_method", expand=True)
+
 
 class Pivot_PT_Pro_Panel(bpy.types.Panel):
-    bl_label = "Pivot Pro Operations"
+    bl_label = "Scene Standardization"
     bl_idname = PRE + "_PT_pro_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -75,33 +96,35 @@ class Pivot_PT_Pro_Panel(bpy.types.Panel):
         enabled = (license_type == LICENSE_PRO)
         
         if enabled:
-            # Objects Collection selector
             row = layout.row()
-            row.prop(bpy.context.scene.pivot, "objects_collection")
-            
-            # Pro features
+            row.label(text=LABEL_OBJECTS_COLLECTION)
             row = layout.row()
-            row.operator(Pivot_OT_Standardize_Selected_Objects.bl_idname, icon=Pivot_OT_Standardize_Selected_Objects.bl_icon)
-
+            row.prop(bpy.context.scene.pivot, "objects_collection", text="")
+            layout.separator()
             row = layout.row()
-            row.operator(Pivot_OT_Standardize_Selected_Groups.bl_idname, icon=Pivot_OT_Standardize_Selected_Groups.bl_icon)
+            row.operator(Pivot_OT_Standardize_Selected_Groups.bl_idname)
             
             # Organization button
             row = layout.row()
             row.operator(Pivot_OT_Organize_Classified_Objects.bl_idname)
+            
+            # Reset classifications button
+            layout.separator()
+            row = layout.row()
+            row.operator(Pivot_OT_Reset_Classifications.bl_idname, icon='X')
         else:
             # Standard mode: show upgrade info
             layout.label(text="Unlock Your Full Pipeline:")
-            layout.label(text="- Multithreaded bulk standardization")
-            layout.label(text="- Auto sort assets into collections")
-            layout.label(text="- Use collections to arrange viewport ")
+            layout.label(text="- Intuitive multi-object grouping")
+            layout.label(text="- Auto-classify your entire scene")
+            layout.label(text="- Multithreaded C++ performance")
             layout.separator()
             row = layout.row()
             row.operator(Pivot_OT_Upgrade_To_Pro.bl_idname, icon='WORLD')
 
 
 class Pivot_PT_Standard_Panel(bpy.types.Panel):
-    bl_label = "Pivot Standard Operations"
+    bl_label = "Object Standardization"
     bl_idname = PRE + "_PT_standard_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -111,7 +134,12 @@ class Pivot_PT_Standard_Panel(bpy.types.Panel):
         obj = context.active_object
         layout = self.layout
         
-        # Classification buttons
+        # Get license_type from cached engine status
+        layout.label(text="On Selected Objects:")
+        # Always show selected objects operators
+        
         row = layout.row()
-        row.operator(Pivot_OT_Standardize_Active_Object.bl_idname, icon='MESH_DATA')
+        row.operator(Pivot_OT_Set_Origin_Selected_Objects.bl_idname, icon=Pivot_OT_Set_Origin_Selected_Objects.bl_icon)
+        row = layout.row()
+        row.operator(Pivot_OT_Align_Facing_Selected_Objects.bl_idname, icon=Pivot_OT_Align_Facing_Selected_Objects.bl_icon)
 

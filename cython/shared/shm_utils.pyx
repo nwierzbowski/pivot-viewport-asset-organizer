@@ -4,11 +4,11 @@ import uuid
 import multiprocessing.shared_memory as shared_memory
 import bpy
 import platform
+from mathutils import Matrix, Vector
 from libc.stdint cimport uint32_t
 from libc.stddef cimport size_t
 
-def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups):
-    cdef uint32_t num_groups = len(mesh_groups)
+def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t total_objects, list mesh_groups, list pivots, bint is_group_mode):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     verts_size = total_verts * 3 * 4  # float32 = 4 bytes
     edges_size = total_edges * 2 * 4  # uint32 = 4 bytes
@@ -66,20 +66,45 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
     cdef uint32_t curr_edges_offset = 0
     cdef object quat
     cdef object scale_vec
-    cdef object trans_vec
     cdef object mesh
+    cdef object pivot_obj
+    cdef object pivot_matrix_world
+    cdef object pivot_matrix_inv
+    cdef object obj_local_matrix
+    cdef object local_translation
+    cdef object trans_vec
     cdef uint32_t obj_vert_count
     cdef uint32_t obj_edge_count
     cdef uint32_t vert_offset
     cdef uint32_t edge_offset
-    # cdef object ref_trans
+    cdef size_t group_idx = 0
 
     for group in mesh_groups:
         vert_offset = 0
         edge_offset = 0
-        # Get reference position from first object in group
+        if is_group_mode:
+            pivot_obj = pivots[group_idx]
+            pivot_matrix_world = pivot_obj.matrix_world.copy()
+            try:
+                pivot_matrix_inv = pivot_matrix_world.inverted()
+            except Exception:
+                pivot_matrix_inv = Matrix.Identity(4)
+            pivot_basis_inv = pivot_matrix_inv.to_3x3()
+            use_pivot_transform = True
+        else:
+            pivot_obj = None
+            pivot_matrix_inv = Matrix.Identity(4)
+            pivot_basis_inv = Matrix.Identity(3)
+            use_pivot_transform = False
         for obj in group:
-            quat = obj.matrix_world.to_3x3().to_quaternion()
+            if use_pivot_transform:
+                obj_local_matrix = pivot_matrix_inv @ obj.matrix_world
+                quat = obj_local_matrix.to_3x3().to_quaternion()
+                trans_vec = obj.matrix_world.translation - pivot_obj.matrix_world.translation
+                local_translation = pivot_basis_inv @ trans_vec
+            else:
+                quat = obj.matrix_world.to_3x3().to_quaternion()
+                local_translation = Vector((0.0, 0.0, 0.0))
             rotations[idx_rot] = quat.w
             rotations[idx_rot + 1] = quat.x
             rotations[idx_rot + 2] = quat.y
@@ -92,12 +117,11 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
             scales[idx_scale + 2] = scale_vec.z
             idx_scale += 3
 
-            trans_vec = obj.matrix_world.translation
-            # Calculate offset relative to first object in group
+            # Offset relative to the pivot coordinate system, accounting for child/parent hierarchy
 
-            offsets[idx_offset] = trans_vec.x
-            offsets[idx_offset + 1] = trans_vec.y
-            offsets[idx_offset + 2] = trans_vec.z
+            offsets[idx_offset] = local_translation.x
+            offsets[idx_offset + 1] = local_translation.y
+            offsets[idx_offset + 2] = local_translation.z
             idx_offset += 3
 
             eval_obj = obj.evaluated_get(depsgraph)
@@ -115,15 +139,15 @@ def create_data_arrays(uint32_t total_verts, uint32_t total_edges, uint32_t tota
 
         curr_verts_offset += vert_offset
         curr_edges_offset += edge_offset
+        group_idx += 1
 
     cdef uint32_t[::1] vert_counts_mv = vert_counts
     cdef uint32_t[::1] edge_counts_mv = edge_counts
     cdef uint32_t[::1] object_counts_mv = object_counts
-    cdef float[::1] offsets_mv = offsets
 
     shm_objects = (verts_shm, edges_shm, rotations_shm, scales_shm, offsets_shm)
     shm_names = (verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name)
-    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv, offsets_mv)
+    count_memory_views = (vert_counts_mv, edge_counts_mv, object_counts_mv)
 
     return shm_objects, shm_names, count_memory_views
 

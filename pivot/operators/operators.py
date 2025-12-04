@@ -18,8 +18,8 @@ from ..lib import group_manager
 class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = "object." + PRE.lower() + "organize_classified_objects"
     license_type = engine_state.get_engine_license_status()
-    bl_label = "Organize Viewport by Group"
-    bl_description = "Organize classified objects"
+    bl_label = "Arrange Viewport by Collection"
+    bl_description = "Arranges all standardized objects found in the Source Collection into clean rows grouped by class. Note: This operation ignores your current selection"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
@@ -31,6 +31,27 @@ class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
     def execute(self, context):
         start_total = time.perf_counter()
         try:
+            from ..lib import standardize
+            
+            # First, standardize all managed groups
+            group_mgr = group_manager.get_group_manager()
+            managed_groups = list(group_mgr.get_managed_group_names_set())
+            
+            if managed_groups:
+                # Collect all objects from managed groups to standardize them
+                objects_to_standardize = []
+                for group_name in managed_groups:
+                    if group_name in bpy.data.collections:
+                        group_coll = bpy.data.collections[group_name]
+                        objects_to_standardize.extend(list(group_coll.objects))
+                
+                if objects_to_standardize:
+                    try:
+                        standardize.standardize_groups(objects_to_standardize, "BASE", "AUTO")
+                    except Exception as e:
+                        self.report({"WARNING"}, f"Failed to standardize groups: {e}")
+                        print(f"[Pivot] Standardize groups error: {e}")
+            
             surface_manager = get_surface_manager()
             classifications = surface_manager.collect_group_classifications()
             if classifications:
@@ -90,6 +111,54 @@ class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
         print(f"Organize objects - Engine call: {(end_engine - start_engine) * 1000:.2f}ms, Post-processing: {(end_post - start_post) * 1000:.2f}ms, Total: {(end_total - start_total) * 1000:.2f}ms")
             
         return {FINISHED}
+
+
+class Pivot_OT_Reset_Classifications(bpy.types.Operator):
+    bl_idname = "object." + PRE.lower() + "reset_classifications"
+    bl_label = "Reset Classifications"
+    bl_description = "Deletes the Pivot Classifications collection and all its related classification collections to reset the classification state"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        try:
+            from ..classes import CLASSIFICATION_ROOT_MARKER_PROP, CLASSIFICATION_MARKER_PROP
+            
+            # Find and delete all classification collections
+            collections_to_delete = []
+            
+            # First pass: find all collections marked as classification collections
+            for coll in bpy.data.collections:
+                if coll.get(CLASSIFICATION_ROOT_MARKER_PROP, False) or coll.get(CLASSIFICATION_MARKER_PROP, False):
+                    collections_to_delete.append(coll)
+            
+            # Delete found collections
+            deleted_count = 0
+            for coll in collections_to_delete:
+                try:
+                    # Unlink from scene if it's a root collection
+                    scene = context.scene
+                    if scene.collection.children.find(coll.name) != -1:
+                        scene.collection.children.unlink(coll)
+                    
+                    # Remove the collection entirely
+                    bpy.data.collections.remove(coll)
+                    deleted_count += 1
+                except RuntimeError as e:
+                    print(f"[Pivot] Failed to delete collection '{coll.name}': {e}")
+                    self.report({"WARNING"}, f"Failed to delete collection: {coll.name}")
+            
+            if deleted_count > 0:
+                self.report({"INFO"}, f"Reset classifications: deleted {deleted_count} collection(s)")
+                engine_state._is_performing_classification = True
+            else:
+                self.report({"INFO"}, "No classification collections found to reset")
+            
+            return {FINISHED}
+            
+        except Exception as e:
+            self.report({"ERROR"}, f"Failed to reset classifications: {e}")
+            print(f"[Pivot] Reset classifications error: {e}")
+            return {CANCELLED}
 
 
 class Pivot_OT_Upgrade_To_Pro(bpy.types.Operator):

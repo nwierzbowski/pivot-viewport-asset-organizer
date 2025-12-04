@@ -32,7 +32,7 @@ def on_depsgraph_update(scene, depsgraph):
         unsync_mesh_changes(scene, depsgraph)
     enforce_colors(scene, depsgraph)
     end_time = time.time()
-    print(f"on_depsgraph_update took {1000 * (end_time - start_time):.4f} milliseconds")
+    # print(f"on_depsgraph_update took {1000 * (end_time - start_time):.4f} milliseconds")
 
 
 def detect_collection_hierarchy_changes(scene, depsgraph):
@@ -207,7 +207,7 @@ def on_load_pre(scene):
         print(f"[Pivot] Failed to sync classifications before load: {e}")
     
     # Stop the pivot engine
-    
+    engine.stop_engine()
     
 
 @persistent

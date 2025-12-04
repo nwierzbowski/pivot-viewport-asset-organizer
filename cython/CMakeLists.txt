@@ -8,17 +8,16 @@ set(EDITION_FLAGS_FILE ${CMAKE_CURRENT_BINARY_DIR}/edition_flags.pxi)
 configure_file(${EDITION_FLAGS_TEMPLATE} ${EDITION_FLAGS_FILE} @ONLY)
 
 set(CYTHON_MODULE_SOURCES
-    operators/classify_object.pyx
+    operators/standardize.pyx
     shared/classification.pyx
     shared/edition_utils.pyx
     shared/group_manager.pyx
     shared/selection_utils.pyx
     shared/shm_utils.pyx
-    shared/transform_utils.pyx
 )
 
 # Operator modules that need linking to core library
-set(OPERATOR_MODULES classify_object classification)
+set(OPERATOR_MODULES standardize classification)
 
 # Build all Cython modules
 foreach(mod_src ${CYTHON_MODULE_SOURCES})

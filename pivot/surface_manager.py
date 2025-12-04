@@ -31,15 +31,42 @@ class SurfaceManager:
         """Get the display name for a surface key."""
         return classification.SURFACE_TYPE_NAMES.get(surface_key, surface_key)
 
-    def _find_or_create_root_collection(self) -> Optional[Any]:
-        """Find the root classification collection by marker, or create it if needed."""
-        # First try to find existing root by marker property
+    def _ensure_surface_collections_exist(self, pivot_root: Any) -> None:
+        """Guarantee every known surface collection exists under the pivot root."""
+        for surface_key in classification.SURFACE_TYPE_NAMES:
+            self.get_or_create_surface_collection(pivot_root, surface_key)
+
+    def _get_and_enforce_root_collection(self) -> Optional[Any]:
+        """Find or create the root classification collection and enforce structure by removing orphaned classification collections."""
+        pivot_root = None
+        classification_collections = []
+        
+        # Single loop: find root and collect all classification collections
         for coll in bpy.data.collections:
             if coll.get(CLASSIFICATION_ROOT_MARKER_PROP, False):
-                return coll
+                pivot_root = coll
+            if coll.get(CLASSIFICATION_MARKER_PROP, False):
+                classification_collections.append(coll)
         
-        # If not found, create or get by name and mark it
-        return self._collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        if pivot_root is None:
+            # If not found, create or get by name and mark it
+            pivot_root = self._collection_manager.get_or_create_root_collection(CLASSIFICATION_ROOT_COLLECTION_NAME)
+        
+        if pivot_root:
+            # Enforce structure: Remove classification collections not under the pivot root
+            collections_to_remove = [coll for coll in classification_collections if coll.name not in pivot_root.children]
+            for coll in collections_to_remove:
+                # Unlink from any parents first
+                for parent in bpy.data.collections:
+                    if coll.name in parent.children:
+                        parent.children.unlink(coll)
+                # Remove the collection
+                bpy.data.collections.remove(coll)
+
+            # Ensure each surface bucket exists so we can reclassify into it
+            self._ensure_surface_collections_exist(pivot_root)
+        
+        return pivot_root
 
     def get_or_create_surface_collection(self, pivot_root: Any, surface_key: str) -> Optional[Any]:
         """Get or create a surface classification collection."""
@@ -70,7 +97,7 @@ class SurfaceManager:
     def collect_group_classifications(self) -> Dict[str, int]:
         """Collect group -> surface type mappings."""
         result = {}
-        pivot_root = self._find_or_create_root_collection()
+        pivot_root = self._get_and_enforce_root_collection()
         if not pivot_root:
             return result
 
@@ -96,14 +123,14 @@ class SurfaceManager:
         except RuntimeError:
             return False
 
-    def organize_group_into_surface(self, group_collection: Any, surface_key: str) -> None:
+    def organize_group_into_surface(self, group_collection: Any, surface_key: str, pivot_root: Any) -> None:
         """Organize a single group collection into the surface hierarchy.
         
         Args:
             group_collection: The group collection to organize
             surface_key: The surface type key (str)
+            pivot_root: The pivot root collection
         """
-        pivot_root = self._find_or_create_root_collection()
         if not pivot_root:
             return
         
@@ -129,13 +156,16 @@ class SurfaceManager:
     def organize_groups_into_surfaces(self, group_names: list[str], surface_types: list[int]) -> None:
         """Organize multiple group collections into the surface hierarchy using parallel lists."""
         
+        # Get and enforce the root collection (includes cleanup)
+        pivot_root = self._get_and_enforce_root_collection()
+        
         for idx, group_name in enumerate(group_names):
             group_coll = bpy.data.collections.get(group_name)
             if not group_coll:
                 continue
             
             surface_key = str(surface_types[idx])
-            self.organize_group_into_surface(group_coll, surface_key)
+            self.organize_group_into_surface(group_coll, surface_key, pivot_root)
 
     def is_classification_collection(self, collection: Any) -> bool:
         """Check if a collection is a classification collection."""

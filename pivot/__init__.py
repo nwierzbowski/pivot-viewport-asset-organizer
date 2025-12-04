@@ -7,17 +7,20 @@ from . import engine
 from .classes import SceneAttributes
 from bpy.props import PointerProperty
 
+from . import engine_state
+from .lib import group_manager
+from . import handlers
 from .operators.operators import (
     Pivot_OT_Organize_Classified_Objects,
+    Pivot_OT_Reset_Classifications,
     Pivot_OT_Upgrade_To_Pro,
 )
-from .operators.classification import (
-    Pivot_OT_Standardize_Selected_Groups,
-    Pivot_OT_Standardize_Selected_Objects,
-    Pivot_OT_Standardize_Active_Object,
+from .operators.group_classification import Pivot_OT_Standardize_Selected_Groups
+from .operators.object_classification import (
+    Pivot_OT_Set_Origin_Selected_Objects,
+    Pivot_OT_Align_Facing_Selected_Objects,
 )
-from .ui import Pivot_PT_Standard_Panel, Pivot_PT_Pro_Panel, Pivot_PT_Status_Panel
-from . import handlers
+from .ui import Pivot_PT_Standard_Panel, Pivot_PT_Pro_Panel, Pivot_PT_Status_Panel, Pivot_PT_Configuration_Panel
 
 bl_info = {
     "name": "Pivot: Viewport Asset Organizer",
@@ -31,21 +34,27 @@ bl_info = {
     "category": "3D View",
 }
 
-# Track if standard panel was registered (only for non-pro licenses)
-_standard_panel_registered = False
-
 classesToRegister = (
     SceneAttributes,
     Pivot_OT_Standardize_Selected_Groups,
-    Pivot_OT_Standardize_Selected_Objects,
-    Pivot_OT_Standardize_Active_Object,
+    # Pivot_OT_Set_Origin_Selected_Groups,
+    # Pivot_OT_Align_Facing_Selected_Groups,
+    Pivot_OT_Set_Origin_Selected_Objects,
+    Pivot_OT_Align_Facing_Selected_Objects,
     Pivot_OT_Organize_Classified_Objects,
+    Pivot_OT_Reset_Classifications,
     Pivot_OT_Upgrade_To_Pro,
 )
 
+def _reset_sync_state() -> None:
+    """Clear cached engine sync data so reloads start from scratch."""
+    group_mgr = group_manager.get_group_manager()
+    group_mgr.reset_state()
+    engine_state.update_group_membership_snapshot({}, replace=True)
+    handlers.clear_previous_scales()
+
 
 def register():
-    global _standard_panel_registered
     print(f"Registering {bl_info.get('name')} version {bl_info.get('version')}")
     
     # Stop any running engine from previous edition
@@ -53,7 +62,7 @@ def register():
         engine.stop_engine()
     except Exception as e:
         print(f"[Pivot] Note: Could not stop engine during register: {e}")
-    
+
     # Add platform-specific lib directory to sys.path for Cython module loading
     try:
         platform_id = engine.get_platform_id()
@@ -82,13 +91,9 @@ def register():
     except Exception as e:
         print(f"Note: Could not adjust permissions for engine binary during register: {e}")
 
-    # Start the pivot engine
-    engine_started = engine.start_engine()
-    
-    if not engine_started:
-        print("[Pivot] Failed to start engine after loading file")
-        is_pro = False  # Default to standard if engine fails
-    else:
+    is_pro = False
+    try:
+        engine.get_engine_communicator()
         # Print Cython edition for debugging
         try:
             from .lib import edition_utils
@@ -97,13 +102,14 @@ def register():
         except Exception as e:
             print(f"[Pivot] Could not print Cython edition: {e}")
             is_pro = False
+    except RuntimeError as exc:
+        print(f"[Pivot] Failed to start engine after loading file: {exc}")
 
     bpy.utils.register_class(Pivot_PT_Status_Panel)
+    bpy.utils.register_class(Pivot_PT_Configuration_Panel)
 
-    # Conditionally register standard panel for non-pro licenses
-    if not is_pro:
-        bpy.utils.register_class(Pivot_PT_Standard_Panel)
-        _standard_panel_registered = True
+    # Always register standard panel
+    bpy.utils.register_class(Pivot_PT_Standard_Panel)
 
     bpy.utils.register_class(Pivot_PT_Pro_Panel)
 
@@ -122,14 +128,12 @@ def register():
 
 
 def unregister():
-    global _standard_panel_registered
     print(f"Unregistering {bl_info.get('name')}")
     
     bpy.utils.unregister_class(Pivot_PT_Pro_Panel)
-    if _standard_panel_registered:
-        bpy.utils.unregister_class(Pivot_PT_Standard_Panel)
-        _standard_panel_registered = False
+    bpy.utils.unregister_class(Pivot_PT_Standard_Panel)
     bpy.utils.unregister_class(Pivot_PT_Status_Panel)
+    bpy.utils.unregister_class(Pivot_PT_Configuration_Panel)
     
     for cls in reversed(classesToRegister):  # Unregister in reverse order
         bpy.utils.unregister_class(cls)
@@ -158,6 +162,7 @@ def unregister():
         print(f"[Pivot] Warning: Could not remove lib path: {e}")
 
     # Perform cleanup as if we're unloading a file
+    _reset_sync_state()
     handlers.on_load_pre(None)
     engine.stop_engine()
 

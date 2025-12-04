@@ -15,11 +15,13 @@ cdef class GroupManager:
     """Manages group collections and their metadata with integrated sync state."""
 
     cdef dict _sync_state
+    cdef dict _last_origin_base_state
     cdef dict _name_tracker
     cdef object _subscription_owner
 
     def __init__(self) -> None:
         self._sync_state = {}
+        self._last_origin_base_state = {}
         self._name_tracker = {}
         self._subscription_owner = object()  # Owner object for msgbus subscriptions
 
@@ -29,8 +31,21 @@ cdef class GroupManager:
         This is called when loading a new file to ensure clean state.
         Note: Keeps the same subscription_owner to avoid memory leaks from orphaned subscriptions.
         """
+        try:
+            data = getattr(bpy, "data", None)
+            if data:
+                collections = getattr(data, "collections", None)
+                if collections:
+                    for name in set(self._name_tracker.values()):
+                        coll = collections.get(name)
+                        if coll and coll.color_tag in {'COLOR_03', 'COLOR_04'}:
+                            coll.color_tag = 'NONE'
+        except Exception:
+            pass
+        
         self._sync_state.clear()
         self._name_tracker.clear()
+        self._last_origin_base_state.clear()
         # Keep the same subscription_owner to avoid memory leaks from orphaned msgbus subscriptions
 
     # ==================== Blender API ====================
@@ -134,7 +149,7 @@ cdef class GroupManager:
             )
             
             self._name_tracker[collection] = collection_name
-            print(f"[Pivot] Successfully subscribed to '{collection_name}'")
+            # print(f"[Pivot] Successfully subscribed to '{collection_name}'")
             
         except Exception as e:
             print(f"[Pivot] Failed to subscribe to name changes: {e}")
@@ -163,6 +178,7 @@ cdef class GroupManager:
         for name in group_names:
             if name and name not in self._sync_state:
                 self._sync_state[name] = True
+                self._last_origin_base_state.setdefault(name, True)
                 
                 # Subscribe to name changes when group is added
                 if name in bpy.data.collections:
@@ -185,6 +201,8 @@ cdef class GroupManager:
         for name in group_names:
             if name in self._sync_state:
                 del self._sync_state[name]
+                if name in self._last_origin_base_state:
+                    del self._last_origin_base_state[name]
                 # Unsubscribe when group is dropped
                 self._unsubscribe_group(name)
         print("Remaining state",self._sync_state)
@@ -206,6 +224,30 @@ cdef class GroupManager:
         for name in group_names:
             if name and name in self._sync_state:
                 self._sync_state[name] = True
+
+    cpdef void set_groups_last_origin_method_base(self, list group_names, bint used_base):
+        """Record whether each managed group was last transformed with the BASE origin method."""
+        cdef str name
+        for name in group_names:
+            if name:
+                self._last_origin_base_state[name] = bool(used_base)
+
+    cpdef dict get_last_origin_method_state(self):
+        """Return a copy of the last origin method state mapping."""
+        return dict(self._last_origin_base_state)
+
+    cpdef bint was_group_last_transformed_using_base(self, str group_name):
+        """Return True if the group was last transformed using the BASE origin method."""
+        if not group_name:
+            return False
+        return bool(self._last_origin_base_state.get(group_name, True))
+
+    cpdef bint was_object_last_transformed_using_base(self, object obj):
+        """Return True if the group owning the object was last transformed using BASE."""
+        group_name = self.get_group_name(obj)
+        if not group_name:
+            return True
+        return self.was_group_last_transformed_using_base(group_name)
 
     cpdef dict get_sync_state(self):
         """Return a copy of the full sync state dict (group_name -> synced bool)."""
