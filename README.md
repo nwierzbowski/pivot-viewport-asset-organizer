@@ -7,7 +7,7 @@ This code is provided in full compliance with the GNU General Public License (GP
 ## Licensing
 *   **Bridge Code:** Licensed under the GNU General Public License v3.0 or any later version. See [License](https://github.com/nwierzbowski/pivot-blender-bridge/blob/main/LICENSE) for the full text.
 *   **Proprietary Engine:** The bridge component is designed to communicate with a separate, proprietary C++ application, the "Elbo Core Engine." The source code for the Engine is not included here.
-*   **The Full Product:** The full, installable addon and the proprietary engine can be acquired from [Gumroad](https://gumroad.com/elbo) or [Superhive](https://superhivemarket.com/products/pivot). Standard edition is free on Gumroad and $5 on Superhive, while Pro edition is $30 on both platforms. More information is available at [elbo.studio](https://www.elbo.studio).
+*   **The Full Product:** The full, installable addon and the proprietary engine can be acquired from [Gumroad](https://gumroad.com) or [Superhive](https://superhivemarket.com/products/pivot). Standard edition is free on Gumroad and $5 on Superhive, while Pro edition is $30 on both platforms. More information is available at [elbo.studio](https://www.elbo.studio).
 
 ## Purpose
 The sole purpose of this code is to serve as a user interface and a high-speed data marshalling layer between the Blender Python API and the external Elbo Core Engine.
