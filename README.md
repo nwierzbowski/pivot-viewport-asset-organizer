@@ -14,9 +14,18 @@ The sole purpose of this code is to serve as a user interface and a high-speed d
 
 ## Setup/Compilation
 
-To compile the .pyd/.so files from the source code, follow these steps:
+To compile the .pyd/.so files from the source code, you must first install the necessary development dependencies using uv.
 
-1. Install dependencies using uv:
+**Prerequisites:** You must have the 'uv' package manager installed on your system.
+
+1. Clone the repository recursively and enter the directory:
+```
+git clone --recursive https://github.com/nwierzbowski/pivot-blender-bridge.git
+cd pivot-blender-bridge
+```
+
+2. **Initialize the Development Environment:**
+This step creates a self-contained Python Virtual Environment (`.venv`) and installs the exact versions of 'cmake', 'cython', 'numpy', and 'ninja' needed to compile the bridge code.
    ```
    uv sync
    ```
@@ -24,16 +33,21 @@ To compile the .pyd/.so files from the source code, follow these steps:
    - On Windows: `.venv\Scripts\activate`
    - On macOS/Linux: `source .venv/bin/activate`
 
-2. For the Pro edition build:
+3. **Compile the Bridge Binary:**
+(Once the environment is active, the following commands will run your build system)
+
+For the Pro edition build:
    ```
    cmake --preset=pro
    ninja -C build-pro
    ```
 
-3. For the Standard edition build:
+For the Standard edition build:
    ```
    cmake --preset=standard
    ninja -C build-standard
    ```
 
-The builds use the Ninja generator and output the binaries and Cython modules into the repository's `pivot/` folder. After building, zip the `pivot/` folder and install it as a Blender addon.
+The builds use the Ninja generator and output the binaries and Cython modules into the repository's `pivot/` folder. Specifically, the compiled .so (Linux/macOS) or .pyd (Windows) binaries will be placed in `pivot/lib/your-architecture/` (e.g., `pivot/lib/linux-x86-64/`). An empty `bin/` folder will also be present in the `pivot/` directory, where the compiled proprietary Elbo Core Engine binary must be manually placed after acquisition from the official sources. Note that this build process does not generate the proprietary engine, as its source code is not included in this repository due to its proprietary nature.
+
+After building, zip the `pivot/` folder and install it as a Blender addon.
