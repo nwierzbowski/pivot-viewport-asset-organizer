@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
+# Set minimum macOS deployment target
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version" FORCE)
+endif()
+
 if(MSVC)
     # Ensure MSVC uses the static runtime consistently to avoid /MD vs /MT clashes
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
