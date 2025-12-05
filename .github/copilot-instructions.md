@@ -1,7 +1,7 @@
 # Copilot Instructions for Pivot Project
 
 ## Architecture Overview
-Pivot is a Blender add-on for AI-powered object organization. It uses a hybrid Python/C++ architecture:
+Pivot is a Blender add-on for object organization. It uses a hybrid Python/C++ architecture:
 - **Python layer** (`pivot/`): Blender addon UI, data preparation, and IPC client.
 - **C++ engine** (`engine/`): High-performance geometric computations (COG via convex hulls, slicing).
 - **Communication**: JSON over stdin/stdout for control; shared memory (Boost.Interprocess) for large data arrays.
