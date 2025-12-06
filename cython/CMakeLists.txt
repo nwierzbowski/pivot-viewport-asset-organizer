@@ -56,11 +56,8 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
         # CRITICAL FIX FOR LINUX COMPATIBILITY (Glibc 2.28)
         # -----------------------------------------------------------------------
         if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-            # 1. Link Realtime library (Required for shm_open)
+            # Link Realtime library (Required for shm_open on older Glibc)
             target_link_libraries(${mod} PRIVATE rt)
-            
-            # 2. Safety Net: Fail build if symbols are undefined (prevents runtime ImportErrors)
-            target_link_options(${mod} PRIVATE "LINKER:--no-undefined")
         endif()
         # -----------------------------------------------------------------------
 
