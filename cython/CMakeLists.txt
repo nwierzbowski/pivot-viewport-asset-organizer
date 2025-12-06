@@ -1,8 +1,6 @@
 # Copyright (C) 2025 Nicholas Wierzbowski / Elbo Studio
 # This file is part of the Pivot Bridge for Blender.
 
-  
-
 find_package(Python3 COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 find_program(CYTHON_EXECUTABLE cython REQUIRED)
 
@@ -53,6 +51,19 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
             set_target_properties(${mod} PROPERTIES SUFFIX ".pyd")
         endif()
         target_link_libraries(${mod} PRIVATE Python3::Module)
+        
+        # -----------------------------------------------------------------------
+        # CRITICAL FIX FOR LINUX COMPATIBILITY (Glibc 2.28)
+        # -----------------------------------------------------------------------
+        if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+            # 1. Link Realtime library (Required for shm_open)
+            target_link_libraries(${mod} PRIVATE rt)
+            
+            # 2. Safety Net: Fail build if symbols are undefined (prevents runtime ImportErrors)
+            target_link_options(${mod} PRIVATE "LINKER:--no-undefined")
+        endif()
+        # -----------------------------------------------------------------------
+
         # Explicitly add Python include directories
         target_include_directories(${mod} PRIVATE ${Python3_INCLUDE_DIRS})
         # Numpy headers
@@ -63,10 +74,7 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
         target_compile_definitions(${mod} PRIVATE SIZEOF_VOID_P=${CMAKE_SIZEOF_VOID_P})
         # Include core headers (header-only library)
         target_include_directories(${mod} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../core)
-        # Core is header-only, no linking needed
-        # if(${mod} IN_LIST OPERATOR_MODULES)
-        #     target_link_libraries(${mod} PRIVATE core)
-        # endif()
+        
         if(DEFINED PIVOT_EDITION_DEFINES)
             foreach(def ${PIVOT_EDITION_DEFINES})
                 target_compile_definitions(${mod} PRIVATE ${def})
