@@ -187,9 +187,9 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
             debug_shm(shm)
 
         _close_shared_memory_segments(shm_objects)
-        print("Post close shared memory checks:")
-        for shm in shm_objects:
-            debug_shm(shm)
+        # print("Post close shared memory checks:")
+        # for shm in shm_objects:
+        #     debug_shm(shm)
 
         new_group_results = final_response["groups"]
         transformed_group_names = list(new_group_results.keys())
@@ -330,9 +330,9 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
         debug_shm(shm)
 
     _close_shared_memory_segments(shm_objects)
-    print("Post close shared memory checks:")
-    for shm in shm_objects:
-        debug_shm(shm)
+    # print("Post close shared memory checks:")
+    # for shm in shm_objects:
+    #     debug_shm(shm)
     
     if not bool(final_response.get("ok", True)):
         error_msg = final_response.get("error", "Unknown engine error during classify_objects")
