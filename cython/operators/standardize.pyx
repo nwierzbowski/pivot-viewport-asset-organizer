@@ -177,13 +177,19 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
         command = engine.build_standardize_groups_command(
             verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
             list(vert_counts_mv), list(edge_counts_mv), list(object_counts_mv), group_names, surface_contexts)
-
+        print("Pre engine shared memory checks:")
         for shm in shm_objects:
             debug_shm(shm)
 
         final_response = _send_engine_command_and_get_response(engine, command)
+        print("Post engine shared memory checks:")
+        for shm in shm_objects:
+            debug_shm(shm)
 
         _close_shared_memory_segments(shm_objects)
+        print("Post close shared memory checks:")
+        for shm in shm_objects:
+            debug_shm(shm)
 
         new_group_results = final_response["groups"]
         transformed_group_names = list(new_group_results.keys())
@@ -311,7 +317,7 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
     command = engine.build_standardize_objects_command(
         verts_shm_name, edges_shm_name, rotations_shm_name, scales_shm_name, offsets_shm_name,
         list(vert_counts_mv), list(edge_counts_mv), [obj.name for obj in mesh_objects], surface_contexts)
-
+    print("Pre engine shared memory checks:")
     for shm in shm_objects:
         debug_shm(shm)
     
@@ -319,8 +325,14 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
     
     final_response = engine.wait_for_response(1)
     
-    # Close shared memory in parent process
+    print("Post engine shared memory checks:")
+    for shm in shm_objects:
+        debug_shm(shm)
+
     _close_shared_memory_segments(shm_objects)
+    print("Post close shared memory checks:")
+    for shm in shm_objects:
+        debug_shm(shm)
     
     if not bool(final_response.get("ok", True)):
         error_msg = final_response.get("error", "Unknown engine error during classify_objects")
