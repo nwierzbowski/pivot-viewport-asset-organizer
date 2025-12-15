@@ -24,7 +24,7 @@ dist/
 out/
 pivot/lib/*/
 pivot/bin/*
-pivot/wheels/
+pivot/wheels/*
 *.egg-info/
 *.so
 *.pyd
