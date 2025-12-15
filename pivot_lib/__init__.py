@@ -17,9 +17,19 @@
 
 """Pivot Cython extension modules.
 
-This package contains compiled Cython extension modules for Pivot.
-The .so/.pyd files are placed directly in this directory by the build system.
+This package provides compiled Cython extension modules for Pivot.
+When installed as a wheel, all modules are available directly:
+
+    from pivot_lib import classification
+    from pivot_lib import edition_utils
+    from pivot_lib import group_manager
+    from pivot_lib import selection_utils
+    from pivot_lib import shm_utils
+    from pivot_lib import shm_bridge
+    from pivot_lib import standardize
 """
+
+__version__ = "1.0.0"
 
 __all__ = [
     "classification",

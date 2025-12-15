@@ -18,4 +18,7 @@ tags = ["3D View", "Modeling", "Organization", "Batch Processing", "Utilities"]
 
 platforms = ["windows-x64", "macos-x64", "macos-arm64", "linux-x64"]
 
-wheels = []
+# Wheels containing compiled Cython modules
+wheels = [
+    "./wheels/pivot_lib-1.0.0-cp311-cp311-linux_x86_64.whl",
+]

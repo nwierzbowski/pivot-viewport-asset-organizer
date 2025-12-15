@@ -83,7 +83,8 @@ else()
 endif()
 
 set(PIVOT_PLATFORM_ID "${_system_name}-${_arch}" CACHE INTERNAL "Platform identifier")
-set(PIVOT_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/lib/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Cython module output directory")
+# Output Cython modules directly to pivot/lib/ (not platform subdirectory) to match wheel installation
+set(PIVOT_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/lib" CACHE INTERNAL "Cython module output directory")
 if(NOT DEFINED PIVOT_BIN_DIR)
     set(PIVOT_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/bin/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Engine output directory")
 endif()

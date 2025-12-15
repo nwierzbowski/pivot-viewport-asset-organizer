@@ -102,6 +102,9 @@ else()
     set(_cython_output_dir "${CMAKE_CURRENT_SOURCE_DIR}/../pivot/lib")
 endif()
 
+# Also output to pivot_lib package for wheel building
+set(_wheel_pkg_dir "${CMAKE_CURRENT_SOURCE_DIR}/../pivot_lib")
+
 set(CYTHON_ALL_MODULES)
 foreach(mod_src ${CYTHON_MODULE_SOURCES})
     get_filename_component(mod ${mod_src} NAME_WE)
@@ -110,7 +113,23 @@ endforeach()
 foreach(mod ${CYTHON_ALL_MODULES})
     if(TARGET ${mod})
         set_target_properties(${mod} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${_cython_output_dir}")
+        # Copy to wheel package directory after build
+        add_custom_command(TARGET ${mod} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${mod}> "${_wheel_pkg_dir}/$<TARGET_FILE_NAME:${mod}>"
+            COMMENT "Copying ${mod} to pivot_lib package"
+        )
     endif()
 endforeach()
 
+# Build wheel after all Cython modules are compiled
+set(_wheel_output_dir "${CMAKE_CURRENT_SOURCE_DIR}/../pivot/wheels")
+add_custom_target(pivot_wheel ALL
+    COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/../build_wheel.py" --output-dir "${_wheel_output_dir}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    COMMENT "Building pivot_lib wheel"
+    DEPENDS ${CYTHON_ALL_MODULES}
+)
+
 unset(_cython_output_dir)
+unset(_wheel_pkg_dir)
+unset(_wheel_output_dir)

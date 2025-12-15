@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses>.
 
-import sys
 import bpy
 import os
 import stat
@@ -68,19 +67,6 @@ def register():
         engine.stop_engine()
     except Exception as e:
         print(f"[Pivot] Note: Could not stop engine during register: {e}")
-
-    # Add platform-specific lib directory to sys.path for Cython module loading
-    try:
-        platform_id = engine.get_platform_id()
-        addon_root = os.path.dirname(__file__)
-        platform_lib_dir = os.path.join(addon_root, 'lib', platform_id)
-        
-        if os.path.isdir(platform_lib_dir):
-            if platform_lib_dir not in sys.path:
-                sys.path.insert(0, platform_lib_dir)
-            print(f"[Pivot] Added platform-specific lib path: {platform_lib_dir}")
-    except Exception as e:
-        print(f"[Pivot] Warning: Could not set up lib path: {e}")
     
     for cls in classesToRegister:
         bpy.utils.register_class(cls)
@@ -154,18 +140,6 @@ def unregister():
     # Only remove depsgraph update handler if it's registered (was only added for Pro edition)
     if handlers.on_depsgraph_update in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(handlers.on_depsgraph_update)
-
-    # Remove platform-specific lib directory from sys.path
-    try:
-        platform_id = engine.get_platform_id()
-        addon_root = os.path.dirname(__file__)
-        platform_lib_dir = os.path.join(addon_root, 'lib', platform_id)
-        
-        if platform_lib_dir in sys.path:
-            sys.path.remove(platform_lib_dir)
-            print(f"[Pivot] Removed platform-specific lib path: {platform_lib_dir}")
-    except Exception as e:
-        print(f"[Pivot] Warning: Could not remove lib path: {e}")
 
     # Perform cleanup as if we're unloading a file
     _reset_sync_state()
