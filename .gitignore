@@ -24,9 +24,11 @@ dist/
 out/
 pivot/lib/*/
 pivot/bin/*
+pivot/wheels/
 *.egg-info/
 *.so
 *.pyd
 *.zip
+*.whl
 
 !pivot/bin/EULA.txt
