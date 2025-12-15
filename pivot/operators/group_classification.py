@@ -19,9 +19,9 @@ import bpy
 import time
 
 from ..constants import PRE, FINISHED
-from ..lib import standardize
-from ..lib import group_manager
-from .. import engine_state
+from pivot_lib import standardize
+from pivot_lib import group_manager
+from pivot_lib import engine_state
 from ..classification_utils import get_qualifying_objects_for_selected, selected_has_qualifying_objects
 
 
@@ -57,10 +57,15 @@ class Pivot_OT_Standardize_Selected_Groups(bpy.types.Operator):
         objects = get_qualifying_objects_for_selected(context.selected_objects, objects_collection)
         origin_method = context.scene.pivot.origin_method
         surface_type = context.scene.pivot.surface_type
-        standardize.standardize_groups(objects, origin_method=origin_method, surface_context=surface_type)
+        
+        standardize.standardize_groups(
+            objects, 
+            origin_method=origin_method, 
+            surface_context=surface_type
+        )
         
         endTime = time.perf_counter()
         elapsed = endTime - startTime
         print(f"Standardize Selected Groups completed in {(elapsed) * 1000:.2f}ms")
-        engine_state._is_performing_classification = True
+        engine_state.set_performing_classification(True)
         return {FINISHED}

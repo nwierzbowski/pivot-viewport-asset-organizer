@@ -19,7 +19,7 @@ import numpy as np
 cimport numpy as cnp
 import uuid
 # import multiprocessing.shared_memory as shared_memory
-from .shm_bridge import SharedMemory
+from pivot_lib.shm_bridge import SharedMemory
 import bpy
 import platform
 from mathutils import Matrix, Vector

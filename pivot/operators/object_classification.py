@@ -19,9 +19,9 @@ import bpy
 import time
 
 from ..constants import PRE, FINISHED, LICENSE_PRO
-from ..lib import standardize
+from pivot_lib import standardize
 from ..classification_utils import get_qualifying_objects_for_selected, selected_has_qualifying_objects
-from ..engine_state import get_engine_license_status
+from pivot_lib.engine_state import get_engine_license_status
 
 # Operator descriptions
 DESC_SET_ORIGIN_SELECTED = "Applies the configured 'Origin Method' to each selected object, respecting the chosen 'Surface Context'. Use this to fix only the origins without affecting rotation"

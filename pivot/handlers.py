@@ -26,10 +26,10 @@ from bpy.app.handlers import persistent
 import os
 import sys
 
-from . import engine_state
-from .lib import group_manager
-from . import engine
-from .surface_manager import get_surface_manager
+from pivot_lib import engine_state
+from pivot_lib import group_manager
+from pivot_lib import engine
+from pivot_lib import surface_manager
 import time
 
 # Cache of each object's last-known scale to detect transform-only edits quickly.
@@ -42,8 +42,8 @@ _previous_rotations: dict[str, tuple[float, float, float, float]] = {}
 def on_depsgraph_update(scene, depsgraph):
     """Orchestrate all depsgraph update handlers in guaranteed order."""
     start_time = time.time()
-    if engine_state._is_performing_classification:
-        engine_state._is_performing_classification = False
+    if engine_state.is_performing_classification():
+        engine_state.set_performing_classification(False)
     else:
         detect_collection_hierarchy_changes(scene, depsgraph)
         unsync_mesh_changes(scene, depsgraph)
@@ -216,10 +216,10 @@ def on_load_pre(scene):
     """
     try:
         # Sync any pending group classifications to the engine before shutting down
-        surface_manager = get_surface_manager()
-        classifications = surface_manager.collect_group_classifications()
+        surface_mgr = surface_manager.get_surface_manager()
+        classifications = surface_mgr.collect_group_classifications()
         if classifications:
-            surface_manager.sync_group_classifications(classifications)
+            surface_mgr.sync_group_classifications(classifications)
     except Exception as e:
         print(f"[Pivot] Failed to sync classifications before load: {e}")
     

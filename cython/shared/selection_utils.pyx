@@ -19,9 +19,12 @@
 
 import bpy
 from mathutils import Vector, Matrix, Quaternion
-from . import edition_utils
-from ..surface_manager import CLASSIFICATION_MARKER_PROP, CLASSIFICATION_ROOT_MARKER_PROP
+from pivot_lib import edition_utils
 from collections import defaultdict
+
+# Constants (must match pivot/surface_manager.py)
+CLASSIFICATION_MARKER_PROP = "pivot_is_classification_collection"
+CLASSIFICATION_ROOT_MARKER_PROP = "pivot_is_classification_root"
 
 
 cpdef object get_root_object(object obj):
@@ -103,7 +106,7 @@ def aggregate_object_groups(list selected_objects):
     cdef object processed_coll
     cdef set collections_to_process
     # Get the configured objects collection
-    from . import group_manager
+    from pivot_lib import group_manager
     group_mgr = group_manager.get_group_manager()
     scene_coll = group_mgr.get_objects_collection()
     depsgraph = bpy.context.evaluated_depsgraph_get()

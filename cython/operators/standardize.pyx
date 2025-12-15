@@ -26,10 +26,10 @@ from mathutils import Quaternion, Vector, Matrix
 
 import bpy
 
-from . import selection_utils, shm_utils, edition_utils, group_manager
-from .. import engine_state
-from ..engine import get_engine_communicator
-from ..surface_manager import get_surface_manager
+from pivot_lib import selection_utils, shm_utils, edition_utils, group_manager
+from pivot_lib import engine_state
+from pivot_lib.engine import get_engine_communicator
+from pivot_lib.surface_manager import get_surface_manager
 from multiprocessing.shared_memory import SharedMemory
 
 # Collection metadata keys
@@ -268,6 +268,7 @@ def debug_shm(shm):
 def _get_standardize_results(list objects, str surface_context="AUTO"):
     """
     Helper function to get standardization results from the engine.
+        
     Returns mesh_objects, rots, origins, cogs
     """
     if not objects:
@@ -306,10 +307,8 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
     vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
     
     # --- Engine communication: unified array format ---
-    # Engine will validate that multiple objects are only used in PRO edition
     engine = get_engine_communicator()
     # Map surface_context to engine-expected string
-    # print(f"Standardize surface context: {surface_context}")
     if surface_context in ("AUTO", "0", "1", "2"):
         engine_surface_context = surface_context
     else:
@@ -351,6 +350,7 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
 
 
 def standardize_object_origins(list objects, str origin_method, str surface_context="AUTO"):
+    """Standardize object origins."""
     mesh_objects, rots, origins, cogs = _get_standardize_results(objects, surface_context)
     if not mesh_objects:
         return
@@ -370,6 +370,7 @@ def standardize_object_origins(list objects, str origin_method, str surface_cont
     
 
 def standardize_object_rotations(list objects):
+    """Standardize object rotations."""
     mesh_objects, rots, origins, cogs = _get_standardize_results(objects)
     if not mesh_objects:
         return

@@ -21,7 +21,7 @@ from bpy.props import BoolProperty, EnumProperty, StringProperty, PointerPropert
 import bpy
 
 # Import C enum values from Cython module
-from .lib import classification
+from pivot_lib import classification
 from .constants import LICENSE_STANDARD, LICENSE_PRO
 
 # UI Labels (property names derived from these)

@@ -19,9 +19,10 @@ authors = [
 Homepage = "https://www.elbo.studio"
 
 [tool.setuptools]
-# Install as pivot.lib subpackage so relative imports work
-packages = ["pivot", "pivot.lib"]
-package-dir = {"pivot" = "pivot_pkg", "pivot.lib" = "."}
+# Install as separate pivot_lib package (not under pivot namespace)
+# This avoids Blender's policy violation for top-level modules in extension directory
+packages = ["pivot_lib"]
+package-dir = {"pivot_lib" = "."}
 
 [tool.setuptools.package-data]
-"pivot.lib" = ["*.so", "*.pyd"]
+"pivot_lib" = ["*.so", "*.pyd"]

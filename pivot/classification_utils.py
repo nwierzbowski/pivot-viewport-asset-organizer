@@ -17,7 +17,7 @@
 
 import bpy
 
-from .surface_manager import CLASSIFICATION_ROOT_MARKER_PROP
+from pivot_lib.surface_manager import CLASSIFICATION_ROOT_MARKER_PROP
 
 
 def get_all_mesh_objects_in_collection(coll):

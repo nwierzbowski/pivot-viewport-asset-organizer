@@ -19,12 +19,12 @@ import bpy
 import os
 import stat
 
-from . import engine
+from pivot_lib import engine
+from pivot_lib import engine_state
 from .classes import SceneAttributes
 from bpy.props import PointerProperty
 
-from . import engine_state
-from .lib import group_manager
+from pivot_lib import group_manager
 from . import handlers
 from .operators.operators import (
     Pivot_OT_Organize_Classified_Objects,
@@ -88,7 +88,7 @@ def register():
         engine.get_engine_communicator()
         # Print Cython edition for debugging
         try:
-            from .lib import edition_utils
+            from pivot_lib import edition_utils
             edition_utils.print_edition()
             is_pro = edition_utils.is_pro_edition()
         except Exception as e:
@@ -96,6 +96,13 @@ def register():
             is_pro = False
     except RuntimeError as exc:
         print(f"[Pivot] Failed to start engine after loading file: {exc}")
+
+    # Register name change callback for group management
+    try:
+        group_mgr = group_manager.get_group_manager()
+        group_mgr.set_name_change_callback(handlers.on_group_name_changed)
+    except Exception as e:
+        print(f"[Pivot] Could not set group name change callback: {e}")
 
     bpy.utils.register_class(Pivot_PT_Status_Panel)
     bpy.utils.register_class(Pivot_PT_Configuration_Panel)

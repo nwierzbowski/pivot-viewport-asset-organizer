@@ -21,22 +21,30 @@ This package provides compiled Cython extension modules for Pivot.
 When installed as a wheel, all modules are available directly:
 
     from pivot_lib import classification
+    from pivot_lib import collection_manager
     from pivot_lib import edition_utils
+    from pivot_lib import engine
+    from pivot_lib import engine_state
     from pivot_lib import group_manager
     from pivot_lib import selection_utils
     from pivot_lib import shm_utils
     from pivot_lib import shm_bridge
     from pivot_lib import standardize
+    from pivot_lib import surface_manager
 """
 
 __version__ = "1.0.0"
 
 __all__ = [
     "classification",
+    "collection_manager",
     "edition_utils",
+    "engine",
+    "engine_state",
     "group_manager",
     "selection_utils",
     "shm_utils",
     "shm_bridge",
     "standardize",
+    "surface_manager",
 ]

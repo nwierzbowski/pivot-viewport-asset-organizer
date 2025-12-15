@@ -35,18 +35,29 @@ cdef class GroupManager:
     cdef dict _last_origin_base_state
     cdef dict _name_tracker
     cdef object _subscription_owner
+    cdef object _name_change_callback
 
     def __init__(self) -> None:
         self._sync_state = {}
         self._last_origin_base_state = {}
         self._name_tracker = {}
         self._subscription_owner = object()  # Owner object for msgbus subscriptions
+        self._name_change_callback = None
+
+    def set_name_change_callback(self, callback) -> None:
+        """Set the callback function for group name changes.
+        
+        This should be called during addon initialization to register the handler.
+        The callback signature should be: callback(collection, group_manager)
+        """
+        self._name_change_callback = callback
 
     def reset_state(self) -> None:
         """Reset all state to initial values, as if the GroupManager was just created.
         
         This is called when loading a new file to ensure clean state.
         Note: Keeps the same subscription_owner to avoid memory leaks from orphaned subscriptions.
+        Also preserves the name_change_callback as it's set during addon initialization.
         """
         try:
             data = getattr(bpy, "data", None)
@@ -152,17 +163,19 @@ cdef class GroupManager:
             if not hasattr(collection, 'name'):
                 print(f"[Pivot] Collection has no name attribute")
                 return
+            
+            if self._name_change_callback is None:
+                print(f"[Pivot] Warning: name_change_callback not set, skipping subscription")
+                return
                 
             collection_name = collection.name
             subscribe_to = collection.path_resolve("name", False)
-            
-            from ..handlers import on_group_name_changed
             
             bpy.msgbus.subscribe_rna(
                 key=subscribe_to,
                 owner=self._subscription_owner,
                 args=(collection, self),
-                notify=on_group_name_changed,
+                notify=self._name_change_callback,
             )
             
             self._name_tracker[collection] = collection_name

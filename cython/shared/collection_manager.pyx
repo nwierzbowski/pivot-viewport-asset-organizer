@@ -24,19 +24,16 @@ Responsibilities:
 """
 
 import bpy
-from typing import TYPE_CHECKING, Any, Optional
-
-if TYPE_CHECKING:  # pragma: no cover - Blender types only exist at runtime.
-    from bpy.types import Collection, Object
+from typing import Any, Optional
 
 
-class CollectionManager:
+cdef class CollectionManager:
     """Handles low-level Blender collection operations."""
 
     def __init__(self) -> None:
         pass
 
-    def get_or_create_root_collection(self, name: str) -> Optional[Any]:
+    def get_or_create_root_collection(self, str name) -> Optional[Any]:
         """Get or create a root collection linked to the scene."""
         scene = getattr(bpy.context, "scene", None)
         if not scene:
@@ -47,7 +44,7 @@ class CollectionManager:
             scene.collection.children.link(root)
         return root
 
-    def ensure_collection_link(self, parent: Any, child: Any) -> None:
+    def ensure_collection_link(self, parent, child) -> None:
         """Ensure child is linked to parent."""
         if not parent or not child:
             return
@@ -61,16 +58,14 @@ class CollectionManager:
         except RuntimeError as e:
             print(f"[ERROR] Failed to link {child.name} to {parent.name}: {e}")
 
-
-
-    def find_top_collection_for_object(self, obj: Any, root_collection: Any) -> Optional[Any]:
+    def find_top_collection_for_object(self, obj, root_collection) -> Optional[Any]:
         """Find the top-level collection containing the object."""
         for child in root_collection.children:
             if self.collection_contains_object(child, obj):
                 return child
         return None
 
-    def collection_contains_object(self, coll: Any, obj: Any) -> bool:
+    cpdef bint collection_contains_object(self, coll, obj):
         """Check if collection contains object, recursively."""
         if coll in obj.users_collection:
             return True
@@ -80,20 +75,20 @@ class CollectionManager:
                 return True
         return False
 
-    def assign_objects_to_collection(self, objects: list[Any], collection: Any) -> None:
+    def assign_objects_to_collection(self, list objects, collection) -> None:
         """Assign all objects to the collection."""
         for obj in objects:
             if collection not in obj.users_collection:
                 collection.objects.link(obj)
 
-    def ensure_object_unlink(self, collection: Any, obj: Any) -> None:
+    def ensure_object_unlink(self, collection, obj) -> None:
         """Ensure object is unlinked from collection."""
         if collection in obj.users_collection:
             collection.objects.unlink(obj)
 
 
 # Global instance
-_collection_manager = CollectionManager()
+cdef CollectionManager _collection_manager = CollectionManager()
 
 def get_collection_manager() -> CollectionManager:
     """Get the global collection manager instance."""

@@ -15,8 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses>.
 
-"""
-Pivot Engine Management Module
+"""Pivot Engine Management Module
 
 This module provides a unified interface for managing the C++ pivot engine subprocess.
 
@@ -24,26 +23,25 @@ Responsibilities:
 - Process lifecycle management (start/stop subprocess)
 - Direct communication interface (JSON commands)
 - Low-level process state (is_running, PID, etc.)
-
-Note: High-level sync bridge state (connection status, expected state, etc.) 
-is managed in engine_state.py for separation of concerns.
 """
 
 import os
 import subprocess
 import atexit
 import json
-import select
 import platform
 import builtins
-from typing import Dict, Any, Optional, Tuple
+import sys
+from typing import Dict, Any, Optional
+
+from pivot_lib import engine_state
 
 # Command IDs for engine communication
-COMMAND_SET_SURFACE_TYPES = 4
-COMMAND_DROP_GROUPS = 5
-COMMAND_CLASSIFY_GROUPS = 1
-COMMAND_CLASSIFY_OBJECTS = 1
-COMMAND_GET_GROUP_SURFACE_TYPES = 2
+cdef int COMMAND_SET_SURFACE_TYPES = 4
+cdef int COMMAND_DROP_GROUPS = 5
+cdef int COMMAND_CLASSIFY_GROUPS = 1
+cdef int COMMAND_CLASSIFY_OBJECTS = 1
+cdef int COMMAND_GET_GROUP_SURFACE_TYPES = 2
 
 
 def get_engine_binary_path() -> str:
@@ -52,8 +50,69 @@ def get_engine_binary_path() -> str:
     Returns:
         str: Path to the pivot_engine executable
     """
-    addon_root = os.path.dirname(os.path.dirname(__file__))
-    bin_dir = os.path.join(addon_root, 'pivot', 'bin')
+    bin_dir = None
+    
+    # For Blender extensions, find the pivot extension directory
+    # The extension is installed as bl_ext.<repo>.<extension_name>.pivot
+    try:
+        # Look for the main pivot module - could be named various ways
+        pivot_module_names = [
+            'bl_ext.vscode_development.pivot',  # VS Code development
+            'bl_ext.user_default.pivot',        # User installed
+            'pivot',                            # Direct import
+        ]
+        
+        for mod_name in pivot_module_names:
+            if mod_name in sys.modules:
+                mod = sys.modules[mod_name]
+                if hasattr(mod, '__file__') and mod.__file__:
+                    pivot_dir = os.path.dirname(mod.__file__)
+                    potential_bin = os.path.join(pivot_dir, 'bin')
+                    if os.path.exists(potential_bin):
+                        bin_dir = potential_bin
+                        break
+        
+        # Also search for any module ending with .pivot that has a bin directory
+        if bin_dir is None:
+            for mod_name, mod in sys.modules.items():
+                if mod_name.endswith('.pivot') and hasattr(mod, '__file__') and mod.__file__:
+                    pivot_dir = os.path.dirname(mod.__file__)
+                    potential_bin = os.path.join(pivot_dir, 'bin')
+                    if os.path.exists(potential_bin):
+                        bin_dir = potential_bin
+                        break
+    except Exception as e:
+        print(f"[Pivot] Error finding pivot module path: {e}")
+    
+    # Fallback: search sys.path for pivot/bin
+    if bin_dir is None:
+        for path in sys.path:
+            potential_bin = os.path.join(path, 'pivot', 'bin')
+            if os.path.exists(potential_bin):
+                bin_dir = potential_bin
+                break
+            # Also check if path itself is the pivot directory
+            if path.endswith('pivot'):
+                potential_bin = os.path.join(path, 'bin')
+                if os.path.exists(potential_bin):
+                    bin_dir = potential_bin
+                    break
+    
+    # Last resort for development: navigate from blender-bridge
+    if bin_dir is None:
+        module_dir = os.path.dirname(__file__) if '__file__' in dir() else os.getcwd()
+        # Try various paths relative to where pivot_lib might be
+        candidates = [
+            os.path.join(module_dir, '..', 'pivot', 'bin'),  # site-packages layout
+            os.path.join(module_dir, '..', '..', 'pivot', 'bin'),  # nested
+            os.path.join(module_dir, '..', '..', 'blender-bridge', 'pivot', 'bin'),  # dev layout
+        ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                bin_dir = candidate
+                break
+        else:
+            bin_dir = candidates[0]  # Use first as fallback even if doesn't exist
     
     # Detect OS and architecture
     system = platform.system().lower()
@@ -65,7 +124,6 @@ def get_engine_binary_path() -> str:
     elif machine in ('aarch64', 'arm64'):
         arch = 'arm64'
     else:
-        # Fallback to current architecture
         arch = machine
     
     # Determine binary name
@@ -108,20 +166,17 @@ def get_platform_id() -> str:
     return f'{system}-{arch}'
 
 
-class PivotEngine:
-    """Unified interface for the C++ pivot engine subprocess.
+cdef class PivotEngine:
+    """Unified interface for the C++ pivot engine subprocess."""
 
-    This class encapsulates all engine-related functionality:
-    - Process lifecycle management (start/stop)
-    - Communication interface
-    - Error handling and cleanup
-    """
+    cdef object _process
+    cdef bint _is_running
 
     def __init__(self):
-        self._process: Optional[subprocess.Popen] = None
+        self._process = None
         self._is_running = False
 
-    def start(self) -> bool:
+    def start(self) -> bint:
         """Start the pivot engine executable.
 
         Returns:
@@ -203,22 +258,12 @@ class PivotEngine:
             self._process = None
             self._is_running = False
 
-    def is_running(self) -> bool:
+    def is_running(self) -> bint:
         """Check if the engine is currently running."""
         return self._is_running and self._process is not None and self._process.poll() is None
 
-    def send_command(self, command_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Send a command to the engine and get the final response.
-
-        Args:
-            command_dict: Command to send as a dictionary
-
-        Returns:
-            Dict containing the engine's final response
-
-        Raises:
-            RuntimeError: If engine is not running or communication fails
-        """
+    def send_command(self, dict command_dict) -> dict:
+        """Send a command to the engine and get the final response."""
         if not self.is_running():
             raise RuntimeError("Engine process not started or has terminated. Make sure the addon is properly registered.")
 
@@ -241,43 +286,24 @@ class PivotEngine:
         except Exception as e:
             raise RuntimeError(f"Communication error: {e}")
 
-    def send_command_async(self, command_dict: Dict[str, Any]) -> None:
-        """Send a command to the engine without waiting for response.
-
-        Args:
-            command_dict: Command to send as a dictionary
-
-        Raises:
-            RuntimeError: If engine is not running or communication fails
-        """
+    def send_command_async(self, dict command_dict) -> None:
+        """Send a command to the engine without waiting for response."""
         if not self.is_running():
             raise RuntimeError("Engine process not started or has terminated. Make sure the addon is properly registered.")
 
         try:
-            # Send command as JSON
             command_json = json.dumps(command_dict) + "\n"
             self._process.stdin.write(command_json)
             self._process.stdin.flush()
         except Exception as e:
             raise RuntimeError(f"Communication error: {e}")
 
-    def wait_for_response(self, expected_id: int) -> Dict[str, Any]:
-        """Wait for a response with the specified ID.
-
-        Args:
-            expected_id: The ID of the response to wait for
-
-        Returns:
-            Dict containing the engine's response
-
-        Raises:
-            RuntimeError: If engine is not running or communication fails
-        """
+    def wait_for_response(self, int expected_id) -> dict:
+        """Wait for a response with the specified ID."""
         if not self.is_running():
             raise RuntimeError("Engine process not started or has terminated. Make sure the addon is properly registered.")
 
         try:
-            # Read responses until we get the one with the expected ID
             while True:
                 response_line = self._process.stdout.readline().strip()
                 if not response_line:
@@ -290,7 +316,7 @@ class PivotEngine:
         except Exception as e:
             raise RuntimeError(f"Communication error: {e}")
 
-    def send_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
+    def send_group_classifications(self, dict group_surface_map) -> bint:
         """Send a batch classification update to the engine."""
         if not group_surface_map:
             return True
@@ -298,7 +324,7 @@ class PivotEngine:
         if not self.is_running():
             return False
 
-        payload = []
+        cdef list payload = []
         for name, value in group_surface_map.items():
             try:
                 surface_int = int(value)
@@ -325,15 +351,8 @@ class PivotEngine:
             print(f"Error sending group classifications: {exc}")
             return False
 
-    def drop_groups(self, group_names: list[str]) -> int:
-        """Drop groups from the engine cache.
-
-        Args:
-            group_names: List of group names to drop from the cache
-
-        Returns:
-            int: Number of groups actually dropped, or -1 on error
-        """
+    def drop_groups(self, list group_names) -> int:
+        """Drop groups from the engine cache."""
         if not group_names:
             return 0
 
@@ -357,28 +376,12 @@ class PivotEngine:
             print(f"Error dropping groups from engine: {exc}")
             return -1
 
-    def build_standardize_groups_command(self, verts_shm_name: str, edges_shm_name: str, 
-                                     rotations_shm_name: str, scales_shm_name: str, 
-                                     offsets_shm_name: str, vert_counts: list, 
-                                     edge_counts: list, object_counts: list, 
-                                     group_names: list, surface_contexts: list[str]) -> Dict[str, Any]:
-        """Build a standardize_groups command for the engine (Pro edition).
-        
-        Args:
-            verts_shm_name: Shared memory name for vertex data
-            edges_shm_name: Shared memory name for edge data
-            rotations_shm_name: Shared memory name for rotation data
-            scales_shm_name: Shared memory name for scale data
-            offsets_shm_name: Shared memory name for offset data
-            vert_counts: List of vertex counts per group
-            edge_counts: List of edge counts per group
-            object_counts: List of object counts per group
-            group_names: List of group names to standardize
-            surface_context: Surface context for standardization
-            
-        Returns:
-            Dict containing the command structure
-        """
+    def build_standardize_groups_command(self, str verts_shm_name, str edges_shm_name, 
+                                     str rotations_shm_name, str scales_shm_name, 
+                                     str offsets_shm_name, list vert_counts, 
+                                     list edge_counts, list object_counts, 
+                                     list group_names, list surface_contexts) -> dict:
+        """Build a standardize_groups command for the engine (Pro edition)."""
         return {
             "id": COMMAND_CLASSIFY_GROUPS,
             "op": "standardize_groups",
@@ -394,7 +397,7 @@ class PivotEngine:
             "surface_contexts": surface_contexts,
         }
 
-    def build_standardize_synced_groups_command(self, group_names: list[str], surface_contexts: list[str]) -> Dict[str, Any]:
+    def build_standardize_synced_groups_command(self, list group_names, list surface_contexts) -> dict:
         """Build a command to reclassify already-synced groups without uploading mesh data."""
         return {
             "id": COMMAND_CLASSIFY_GROUPS,
@@ -403,26 +406,11 @@ class PivotEngine:
             "surface_contexts": surface_contexts
         }
 
-    def build_standardize_objects_command(self, verts_shm_name: str, edges_shm_name: str,
-                                      rotations_shm_name: str, scales_shm_name: str,
-                                      offsets_shm_name: str, vert_counts: list,
-                                      edge_counts: list, object_names: list, surface_contexts: list[str]) -> Dict[str, Any]:
-        """Build a standardize_objects command for the engine.
-        
-        Args:
-            verts_shm_name: Shared memory name for vertex data
-            edges_shm_name: Shared memory name for edge data
-            rotations_shm_name: Shared memory name for rotation data
-            scales_shm_name: Shared memory name for scale data
-            offsets_shm_name: Shared memory name for offset data
-            vert_counts: List of vertex counts per object
-            edge_counts: List of edge counts per object
-            object_names: List of object names to standardize
-            surface_contexts: Per-object surface context strings
-            
-        Returns:
-            Dict containing the command structure
-        """
+    def build_standardize_objects_command(self, str verts_shm_name, str edges_shm_name,
+                                      str rotations_shm_name, str scales_shm_name,
+                                      str offsets_shm_name, list vert_counts,
+                                      list edge_counts, list object_names, list surface_contexts) -> dict:
+        """Build a standardize_objects command for the engine."""
         return {
             "id": COMMAND_CLASSIFY_OBJECTS,
             "op": "standardize_objects",
@@ -437,12 +425,8 @@ class PivotEngine:
             "surface_contexts": surface_contexts
         }
 
-    def build_get_surface_types_command(self) -> Dict[str, Any]:
-        """Build a get_surface_types command for the engine.
-        
-        Returns:
-            Dict containing the command structure
-        """
+    def build_get_surface_types_command(self) -> dict:
+        """Build a get_surface_types command for the engine."""
         return {
             "id": COMMAND_GET_GROUP_SURFACE_TYPES,
             "op": "get_surface_types"
@@ -450,16 +434,19 @@ class PivotEngine:
 
 
 # Global engine instance stored on builtins to persist across reloads
-_engine_instance = getattr(builtins, '_pivot_engine_instance', None)
-if _engine_instance is None:
+cdef PivotEngine _engine_instance
+
+_temp_instance = getattr(builtins, '_pivot_engine_instance', None)
+if _temp_instance is None:
     _engine_instance = PivotEngine()
     builtins._pivot_engine_instance = _engine_instance
 else:
+    _engine_instance = _temp_instance
     if _engine_instance.is_running():
         _engine_instance.stop()
 
 
-def start_engine() -> bool:
+def start_engine() -> bint:
     """Start the pivot engine (convenience function)."""
     return _engine_instance.start()
 
@@ -484,16 +471,7 @@ def get_engine_process():
 
 
 def sync_license_mode() -> str:
-    """Retrieve the compiled edition from the engine.
-
-    Returns:
-        The engine_mode is the
-        edition compiled into the engine binary ("PRO", "STANDARD", or "UNKNOWN").
-
-    Raises:
-        RuntimeError: If communication with the engine fails.
-    """
-
+    """Retrieve the compiled edition from the engine."""
     engine_comm = get_engine_communicator()
     payload = {
         "id": 0,
@@ -502,6 +480,7 @@ def sync_license_mode() -> str:
     response = engine_comm.send_command(payload)
     engine_mode = str(response.get("engine_edition", "UNKNOWN")).upper()
     return engine_mode
+
 
 # Register cleanup function to run on Python exit
 atexit.register(stop_engine)

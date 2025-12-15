@@ -31,8 +31,8 @@ from .operators.object_classification import (
 
 from .constants import PRE, CATEGORY, LICENSE_PRO
 from .classes import LABEL_OBJECTS_COLLECTION, LABEL_ORIGIN_METHOD, LABEL_SURFACE_TYPE
-from .engine_state import get_engine_license_status, set_engine_license_status
-from . import engine
+from pivot_lib.engine_state import get_engine_license_status, set_engine_license_status
+from pivot_lib import engine
 
 
 class Pivot_PT_Status_Panel(bpy.types.Panel):

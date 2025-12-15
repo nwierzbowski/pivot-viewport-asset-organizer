@@ -25,9 +25,10 @@ Responsibilities:
 import bpy
 from typing import Any, Dict, Optional
 
-from .collection_manager import get_collection_manager
-from .lib import group_manager
-from .lib import classification
+from pivot_lib.collection_manager import get_collection_manager
+from pivot_lib import group_manager
+from pivot_lib import classification
+from pivot_lib import engine
 
 # Property keys for collection metadata
 CLASSIFICATION_ROOT_COLLECTION_NAME = "Pivot Classifications"
@@ -36,27 +37,29 @@ CLASSIFICATION_COLLECTION_PROP = "pivot_surface_type"
 CLASSIFICATION_MARKER_PROP = "pivot_is_classification_collection"
 
 
-class SurfaceManager:
+cdef class SurfaceManager:
     """Manages surface classification collections and hierarchy."""
+
+    cdef object _collection_manager
+    cdef object _group_manager
 
     def __init__(self) -> None:
         self._collection_manager = get_collection_manager()
         self._group_manager = group_manager.get_group_manager()
-        # Build a mapping from surface key to display name
 
-    def _get_surface_display_name(self, surface_key: str) -> str:
+    def _get_surface_display_name(self, str surface_key) -> str:
         """Get the display name for a surface key."""
         return classification.SURFACE_TYPE_NAMES.get(surface_key, surface_key)
 
-    def _ensure_surface_collections_exist(self, pivot_root: Any) -> None:
+    def _ensure_surface_collections_exist(self, pivot_root) -> None:
         """Guarantee every known surface collection exists under the pivot root."""
         for surface_key in classification.SURFACE_TYPE_NAMES:
             self.get_or_create_surface_collection(pivot_root, surface_key)
 
-    def _get_and_enforce_root_collection(self) -> Optional[Any]:
-        """Find or create the root classification collection and enforce structure by removing orphaned classification collections."""
+    def _get_and_enforce_root_collection(self):
+        """Find or create the root classification collection and enforce structure."""
         pivot_root = None
-        classification_collections = []
+        cdef list classification_collections = []
         
         # Single loop: find root and collect all classification collections
         for coll in bpy.data.collections:
@@ -85,7 +88,7 @@ class SurfaceManager:
         
         return pivot_root
 
-    def get_or_create_surface_collection(self, pivot_root: Any, surface_key: str) -> Optional[Any]:
+    def get_or_create_surface_collection(self, pivot_root, str surface_key):
         """Get or create a surface classification collection."""
         if not pivot_root:
             return None
@@ -98,7 +101,8 @@ class SurfaceManager:
         collection_name = self._get_surface_display_name(surface_key)
         
         # Try to reuse existing collection
-        if existing := bpy.data.collections.get(collection_name):
+        existing = bpy.data.collections.get(collection_name)
+        if existing:
             self._collection_manager.ensure_collection_link(pivot_root, existing)
             existing[CLASSIFICATION_COLLECTION_PROP] = surface_key
             existing[CLASSIFICATION_MARKER_PROP] = True
@@ -111,15 +115,16 @@ class SurfaceManager:
         pivot_root.children.link(surface_coll)
         return surface_coll
 
-    def collect_group_classifications(self) -> Dict[str, int]:
+    def collect_group_classifications(self) -> dict:
         """Collect group -> surface type mappings."""
-        result = {}
+        cdef dict result = {}
         pivot_root = self._get_and_enforce_root_collection()
         if not pivot_root:
             return result
 
         for surface_coll in pivot_root.children:
-            if surface_value := surface_coll.get(CLASSIFICATION_COLLECTION_PROP):
+            surface_value = surface_coll.get(CLASSIFICATION_COLLECTION_PROP)
+            if surface_value:
                 try:
                     surface_int = int(surface_value)
                 except (TypeError, ValueError):
@@ -131,23 +136,16 @@ class SurfaceManager:
 
         return result
 
-    def sync_group_classifications(self, group_surface_map: Dict[str, Any]) -> bool:
+    def sync_group_classifications(self, dict group_surface_map) -> bint:
         """Sync classifications with the engine."""
         try:
-            from .engine import get_engine_communicator
-            engine = get_engine_communicator()
-            return engine.send_group_classifications(group_surface_map)
+            engine_comm = engine.get_engine_communicator()
+            return engine_comm.send_group_classifications(group_surface_map)
         except RuntimeError:
             return False
 
-    def organize_group_into_surface(self, group_collection: Any, surface_key: str, pivot_root: Any) -> None:
-        """Organize a single group collection into the surface hierarchy.
-        
-        Args:
-            group_collection: The group collection to organize
-            surface_key: The surface type key (str)
-            pivot_root: The pivot root collection
-        """
+    def organize_group_into_surface(self, group_collection, str surface_key, pivot_root) -> None:
+        """Organize a single group collection into the surface hierarchy."""
         if not pivot_root:
             return
         
@@ -170,11 +168,15 @@ class SurfaceManager:
         if surface_coll.children.find(group_collection.name) == -1:
             self._collection_manager.ensure_collection_link(surface_coll, group_collection)
 
-    def organize_groups_into_surfaces(self, group_names: list[str], surface_types: list[int]) -> None:
+    def organize_groups_into_surfaces(self, list group_names, list surface_types) -> None:
         """Organize multiple group collections into the surface hierarchy using parallel lists."""
         
         # Get and enforce the root collection (includes cleanup)
         pivot_root = self._get_and_enforce_root_collection()
+        
+        cdef int idx
+        cdef str group_name
+        cdef str surface_key
         
         for idx, group_name in enumerate(group_names):
             group_coll = bpy.data.collections.get(group_name)
@@ -184,13 +186,13 @@ class SurfaceManager:
             surface_key = str(surface_types[idx])
             self.organize_group_into_surface(group_coll, surface_key, pivot_root)
 
-    def is_classification_collection(self, collection: Any) -> bool:
+    cpdef bint is_classification_collection(self, collection):
         """Check if a collection is a classification collection."""
         if not collection:
             return False
         return collection.get(CLASSIFICATION_MARKER_PROP, False)
 
-    def is_classification_root_collection(self, collection: Any) -> bool:
+    cpdef bint is_classification_root_collection(self, collection):
         """Check if a collection is the classification root collection."""
         if not collection:
             return False
@@ -198,7 +200,7 @@ class SurfaceManager:
 
 
 # Global instance
-_surface_manager = SurfaceManager()
+cdef SurfaceManager _surface_manager = SurfaceManager()
 
 def get_surface_manager() -> SurfaceManager:
     """Get the global surface manager instance."""

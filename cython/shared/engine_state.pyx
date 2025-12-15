@@ -15,28 +15,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, see <https://www.gnu.org/licenses>.
 
-# Engine State Management
-# ------------------------
-# Hosts tiny pieces of global state that describe what the external C++
-# engine currently believes about the scene. Keeping this module slim makes
-# it easy to reason about how Blender-side edits diverge from the engine.
+"""Engine State Management
+
+Hosts global state that describes what the external C++ engine currently 
+believes about the scene. Keeping this module slim makes it easy to reason 
+about how Blender-side edits diverge from the engine.
+"""
 
 from typing import Dict, Iterable, Mapping, Set
 
-_engine_license_mode = "UNKNOWN"
+cdef str _engine_license_mode = "UNKNOWN"
 
 # Membership snapshot returned by the engine: group name -> set of object names.
-_group_membership_snapshot: Dict[str, Set[str]] = {}
+cdef dict _group_membership_snapshot = {}
 
-# Flag to indicate if classification is in progress, to avoid marking as unsynced during operator runs.
-_is_performing_classification = False
+# Flag to indicate if classification is in progress
+cdef bint _is_performing_classification = False
 
 
 # ---------------------------------------------------------------------------
 # License helpers
 # ---------------------------------------------------------------------------
 
-def set_engine_license_status(engine_mode: str) -> None:
+def set_engine_license_status(str engine_mode) -> None:
     """Record the engine license compatibility information."""
     global _engine_license_mode
     _engine_license_mode = engine_mode
@@ -48,17 +49,31 @@ def get_engine_license_status() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Classification flag helpers
+# ---------------------------------------------------------------------------
+
+def set_performing_classification(bint value) -> None:
+    """Set whether classification is currently in progress."""
+    global _is_performing_classification
+    _is_performing_classification = value
+
+
+def is_performing_classification() -> bint:
+    """Check if classification is currently in progress."""
+    return _is_performing_classification
+
+
+# ---------------------------------------------------------------------------
 # Membership snapshot APIs
 # ---------------------------------------------------------------------------
 
-def update_group_membership_snapshot(snapshot: Mapping[str, Iterable[str]], *, replace: bool = False) -> None:
+def update_group_membership_snapshot(snapshot: Mapping[str, Iterable[str]], *, bint replace = False) -> None:
     """Persist the engine-reported membership snapshot.
 
     Args:
         snapshot: Mapping of group name -> iterable of object names the engine used.
         replace:  When True, discard all prior snapshot data before applying updates.
     """
-
     global _group_membership_snapshot
 
     if replace:
@@ -70,7 +85,7 @@ def update_group_membership_snapshot(snapshot: Mapping[str, Iterable[str]], *, r
         _group_membership_snapshot[name] = member_set
 
 
-def build_group_membership_snapshot(full_groups, group_names):
+def build_group_membership_snapshot(list full_groups, list group_names) -> dict:
     """Create a mapping of group names to object names for state tracking.
     
     Args:
@@ -80,7 +95,11 @@ def build_group_membership_snapshot(full_groups, group_names):
     Returns:
         Dict mapping group name -> list of object names
     """
-    snapshot = {}
+    cdef dict snapshot = {}
+    cdef int idx
+    cdef object group
+    cdef str group_name
+    
     for idx, group in enumerate(full_groups):
         group_name = group_names[idx]
         if group_name is not None:
@@ -97,4 +116,3 @@ def drop_groups_from_snapshot(group_names: Iterable[str]) -> None:
     """Remove groups that are no longer managed by Pivot."""
     for name in group_names:
         _group_membership_snapshot.pop(name, None)
-

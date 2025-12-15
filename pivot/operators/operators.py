@@ -20,7 +20,8 @@ import time
 
 from mathutils import Vector
 
-from .. import engine_state
+from pivot_lib import engine_state
+from pivot_lib import engine
 from ..constants import (
     CANCELLED,
     FINISHED,
@@ -28,9 +29,8 @@ from ..constants import (
     PRE,
 )
 
-from .. import engine
-from ..surface_manager import get_surface_manager
-from ..lib import group_manager
+from pivot_lib import group_manager
+from pivot_lib import surface_manager
 
 class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
     bl_idname = "object." + PRE.lower() + "organize_classified_objects"
@@ -48,7 +48,7 @@ class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
     def execute(self, context):
         start_total = time.perf_counter()
         try:
-            from ..lib import standardize
+            from pivot_lib import standardize
             
             # First, standardize all managed groups
             group_mgr = group_manager.get_group_manager()
@@ -64,15 +64,19 @@ class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
                 
                 if objects_to_standardize:
                     try:
-                        standardize.standardize_groups(objects_to_standardize, "BASE", "AUTO")
+                        standardize.standardize_groups(
+                            objects_to_standardize, 
+                            "BASE", 
+                            "AUTO"
+                        )
                     except Exception as e:
                         self.report({"WARNING"}, f"Failed to standardize groups: {e}")
                         print(f"[Pivot] Standardize groups error: {e}")
             
-            surface_manager = get_surface_manager()
-            classifications = surface_manager.collect_group_classifications()
+            surface_mgr = surface_manager.get_surface_manager()
+            classifications = surface_mgr.collect_group_classifications()
             if classifications:
-                sync_ok = surface_manager.sync_group_classifications(classifications)
+                sync_ok = surface_mgr.sync_group_classifications(classifications)
                 if not sync_ok:
                     self.report({"WARNING"}, "Failed to sync classifications to engine; results may be outdated")
 
@@ -113,7 +117,7 @@ class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
                         # Continue to next group instead of failing the whole operation
                 
                 self.report({"INFO"}, f"Organized {organized_count} object groups")
-                engine_state._is_performing_classification = True
+                engine_state.set_performing_classification(True)
             else:
                 self.report({"WARNING"}, "No positions returned from engine")
             end_post = time.perf_counter()
@@ -166,7 +170,7 @@ class Pivot_OT_Reset_Classifications(bpy.types.Operator):
             
             if deleted_count > 0:
                 self.report({"INFO"}, f"Reset classifications: deleted {deleted_count} collection(s)")
-                engine_state._is_performing_classification = True
+                engine_state.set_performing_classification(True)
             else:
                 self.report({"INFO"}, "No classification collections found to reset")
             

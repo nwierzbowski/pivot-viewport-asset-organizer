@@ -11,11 +11,15 @@ configure_file(${EDITION_FLAGS_TEMPLATE} ${EDITION_FLAGS_FILE} @ONLY)
 set(CYTHON_MODULE_SOURCES
     operators/standardize.pyx
     shared/classification.pyx
+    shared/collection_manager.pyx
     shared/edition_utils.pyx
+    shared/engine.pyx
+    shared/engine_state.pyx
     shared/group_manager.pyx
     shared/selection_utils.pyx
     shared/shm_utils.pyx
     shared/shm_bridge.pyx
+    shared/surface_manager.pyx
 )
 
 # Operator modules that need linking to core library
@@ -96,13 +100,8 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
 endforeach()
 
 # Consolidate output directory for all Cython modules
-if(DEFINED PIVOT_LIB_DIR)
-    set(_cython_output_dir ${PIVOT_LIB_DIR})
-else()
-    set(_cython_output_dir "${CMAKE_CURRENT_SOURCE_DIR}/../pivot/lib")
-endif()
-
-# Also output to pivot_lib package for wheel building
+# Output ONLY to pivot_lib package for wheel building
+# Do NOT put .so files directly in pivot/lib to avoid Blender policy violations
 set(_wheel_pkg_dir "${CMAKE_CURRENT_SOURCE_DIR}/../pivot_lib")
 
 set(CYTHON_ALL_MODULES)
@@ -112,12 +111,8 @@ foreach(mod_src ${CYTHON_MODULE_SOURCES})
 endforeach()
 foreach(mod ${CYTHON_ALL_MODULES})
     if(TARGET ${mod})
-        set_target_properties(${mod} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${_cython_output_dir}")
-        # Copy to wheel package directory after build
-        add_custom_command(TARGET ${mod} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${mod}> "${_wheel_pkg_dir}/$<TARGET_FILE_NAME:${mod}>"
-            COMMENT "Copying ${mod} to pivot_lib package"
-        )
+        # Output directly to wheel package directory
+        set_target_properties(${mod} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${_wheel_pkg_dir}")
     endif()
 endforeach()
 

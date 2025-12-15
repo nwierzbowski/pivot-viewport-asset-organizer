@@ -83,8 +83,8 @@ else()
 endif()
 
 set(PIVOT_PLATFORM_ID "${_system_name}-${_arch}" CACHE INTERNAL "Platform identifier")
-# Output Cython modules directly to pivot/lib/ (not platform subdirectory) to match wheel installation
-set(PIVOT_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/lib" CACHE INTERNAL "Cython module output directory")
+# Cython modules are output directly to pivot_lib/ for wheel building (not to pivot/lib/)
+# This avoids Blender's policy violation for top-level modules in extension directory
 if(NOT DEFINED PIVOT_BIN_DIR)
     set(PIVOT_BIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pivot/bin/${PIVOT_PLATFORM_ID}" CACHE INTERNAL "Engine output directory")
 endif()
@@ -117,7 +117,7 @@ function(_pivot_prepare_dir dir platform_id)
     file(WRITE "${marker}" "${marker_content}\n")
 endfunction()
 
-_pivot_prepare_dir("${PIVOT_LIB_DIR}" "${PIVOT_PLATFORM_ID}")
+
 _pivot_prepare_dir("${PIVOT_BIN_DIR}" "${PIVOT_PLATFORM_ID}")
 
 # Required Boost libs for IPC
