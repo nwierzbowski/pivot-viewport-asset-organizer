@@ -1,0 +1,22 @@
+schema_version = "1.0.0"
+id = "pivot-viewport-asset-organizer"
+version = "1.0.0"
+type = "add-on"
+name = "Pivot: Viewport Asset Organizer"
+tagline = "Performs viewport formatting, standardization, and grouping"
+description = "Pivot is a powerful viewport asset organizer that helps you automatically format, standardize, and group objects in Blender. Features viewport organization, batch classification, and smart loacl axes fixing."
+
+maintainer = "Elbo Studio <nicholas.wierzbowski@elbo.studio>"
+website = "https://www.elbo.studio"
+blender_version_min = "4.2.0"
+blender_version_max = ""
+
+license = ["GPL-3.0-or-later"]
+
+permissions = []
+
+tags = ["3D View", "Modeling", "Organization", "Batch Processing", "Utilities"]
+
+platforms = ["windows-x64", "macos-x64", "macos-arm64", "linux-x64"]
+
+wheels = []
