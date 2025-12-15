@@ -27,9 +27,9 @@ from mathutils import Quaternion, Vector, Matrix
 import bpy
 
 from . import selection_utils, shm_utils, edition_utils, group_manager
-from pivot import engine_state
-from pivot.engine import get_engine_communicator
-from pivot.surface_manager import get_surface_manager
+from .. import engine_state
+from ..engine import get_engine_communicator
+from ..surface_manager import get_surface_manager
 from multiprocessing.shared_memory import SharedMemory
 
 # Collection metadata keys

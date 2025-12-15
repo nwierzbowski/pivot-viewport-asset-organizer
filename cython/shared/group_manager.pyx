@@ -156,7 +156,7 @@ cdef class GroupManager:
             collection_name = collection.name
             subscribe_to = collection.path_resolve("name", False)
             
-            from pivot.handlers import on_group_name_changed
+            from ..handlers import on_group_name_changed
             
             bpy.msgbus.subscribe_rna(
                 key=subscribe_to,

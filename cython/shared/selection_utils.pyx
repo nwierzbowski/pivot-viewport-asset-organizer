@@ -20,7 +20,7 @@
 import bpy
 from mathutils import Vector, Matrix, Quaternion
 from . import edition_utils
-from pivot.surface_manager import CLASSIFICATION_MARKER_PROP, CLASSIFICATION_ROOT_MARKER_PROP
+from ..surface_manager import CLASSIFICATION_MARKER_PROP, CLASSIFICATION_ROOT_MARKER_PROP
 from collections import defaultdict
 
 

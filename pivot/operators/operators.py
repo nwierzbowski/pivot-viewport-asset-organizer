@@ -20,7 +20,7 @@ import time
 
 from mathutils import Vector
 
-from pivot import engine_state
+from .. import engine_state
 from ..constants import (
     CANCELLED,
     FINISHED,
