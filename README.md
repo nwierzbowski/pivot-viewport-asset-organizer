@@ -26,7 +26,7 @@ The sole purpose of this code is to serve as a user interface and a high-speed d
 
 ## The Full Product
 
-The full, installable addon package (containing both the GPL Bridge and the proprietary Engine) can be acquired from [Gumroad]([https://gumroad.com](https://gum.co/u/rh84odyq)) or [Superhive](https://superhivemarket.com/products/pivot). Standard edition is free on Gumroad and $5 on Superhive, while Pro edition is $30 on both platforms. More information is available at [elbo.studio](https://www.elbo.studio).
+The full, installable addon package (containing both the GPL Bridge and the proprietary Engine) can be acquired from [Gumroad](https://gum.co/u/rh84odyq) or [Superhive](https://superhivemarket.com/products/pivot). Standard edition is free on Gumroad and $5 on Superhive, while Pro edition is $30 on both platforms. More information is available at [elbo.studio](https://www.elbo.studio).
 
 ## Setup/Compilation
 
