@@ -34,7 +34,7 @@ def main() -> None:
     args = parser.parse_args()
 
     script_dir = Path(__file__).parent
-    pkg_dir = script_dir / "pivot_lib"
+    pkg_dir = script_dir / "native"
 
     output_dir = Path(args.output_dir) if args.output_dir else (script_dir / "pivot" / "wheels")
 

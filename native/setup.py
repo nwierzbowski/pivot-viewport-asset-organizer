@@ -37,7 +37,7 @@ class PrecompiledBuildExt(build_ext):
 
 def get_extensions():
     """Find all pre-compiled extension modules."""
-    pkg_dir = Path(__file__).parent / "pivot_lib"
+    pkg_dir = Path(__file__).parent
     ext_suffix = ".pyd" if platform.system() == "Windows" else ".so"
     
     extensions = []
