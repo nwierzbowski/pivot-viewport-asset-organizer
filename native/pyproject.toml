@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pivot_lib"
-version = "1.0.0"
+version = "1.0.1"
 description = "Cython extension modules for Pivot Blender addon"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"

@@ -20,12 +20,12 @@ platforms = ["linux-x64", "macos-x64", "macos-arm64", "windows-x64"]
 
 # Wheels containing compiled Cython modules
 wheels = [
-    "./wheels/elbo_sdk-1.0.0-cp311-cp311-linux_x86_64.whl",
-    "./wheels/elbo_sdk-1.0.0-cp311-cp311-macosx_10_9_x86_64.whl",
-    "./wheels/elbo_sdk-1.0.0-cp311-cp311-macosx_11_0_arm64.whl",
-    "./wheels/elbo_sdk-1.0.0-cp311-cp311-win_amd64.whl",
-    "./wheels/pivot_lib-1.0.0-cp311-cp311-linux_x86_64.whl",
-    "./wheels/pivot_lib-1.0.0-cp311-cp311-macosx_10_9_x86_64.whl",
-    "./wheels/pivot_lib-1.0.0-cp311-cp311-macosx_11_0_arm64.whl",
-    "./wheels/pivot_lib-1.0.0-cp311-cp311-win_amd64.whl",
+    "./wheels/elbo_sdk-1.0.1-cp311-cp311-linux_x86_64.whl",
+    "./wheels/elbo_sdk-1.0.1-cp311-cp311-macosx_10_9_x86_64.whl",
+    "./wheels/elbo_sdk-1.0.1-cp311-cp311-macosx_11_0_arm64.whl",
+    "./wheels/elbo_sdk-1.0.1-cp311-cp311-win_amd64.whl",
+    "./wheels/pivot_lib-1.0.1-cp311-cp311-linux_x86_64.whl",
+    "./wheels/pivot_lib-1.0.1-cp311-cp311-macosx_10_9_x86_64.whl",
+    "./wheels/pivot_lib-1.0.1-cp311-cp311-macosx_11_0_arm64.whl",
+    "./wheels/pivot_lib-1.0.1-cp311-cp311-win_amd64.whl",
 ]

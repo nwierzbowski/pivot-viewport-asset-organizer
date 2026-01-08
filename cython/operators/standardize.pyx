@@ -180,7 +180,7 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
         # print("Pre engine shared memory checks:")
         # for shm in shm_objects:
         #     debug_shm(shm)
-
+        
         final_response = _send_engine_command_and_get_response(engine, command)
         # print("\n\nPost engine shared memory checks:")
         # for shm in shm_objects:

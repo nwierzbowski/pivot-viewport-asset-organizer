@@ -58,6 +58,39 @@ def _reset_sync_state() -> None:
     handlers.clear_previous_scales()
 
 
+def _register_bpy_class(cls):
+    try:
+        bpy.utils.register_class(cls)
+    except ValueError as exc:
+        message = str(exc)
+        if "already registered" in message:
+            print(f"[Pivot] {cls.__name__} already registered, skipping")
+            return
+        raise
+
+
+def _unregister_bpy_class(cls):
+    try:
+        bpy.utils.unregister_class(cls)
+    except RuntimeError as exc:
+        message = str(exc)
+        if "not registered" in message:
+            print(f"[Pivot] {cls.__name__} was not registered, skipping")
+            return
+        raise
+
+
+def _assign_scene_property() -> None:
+    if hasattr(bpy.types.Scene, "pivot"):
+        delattr(bpy.types.Scene, "pivot")
+    bpy.types.Scene.pivot = PointerProperty(type=SceneAttributes)
+
+
+def _remove_scene_property() -> None:
+    if hasattr(bpy.types.Scene, "pivot"):
+        delattr(bpy.types.Scene, "pivot")
+
+
 def register():
     print("App Sandbox:", os.getenv("APP_SANDBOX_CONTAINER_ID"))
     print("Registering Pivot")
@@ -69,12 +102,23 @@ def register():
         print(f"[Pivot] Note: Could not stop engine during register: {e}")
     
     for cls in classesToRegister:
-        bpy.utils.register_class(cls)
-    bpy.types.Scene.pivot = PointerProperty(type=SceneAttributes)
+        _register_bpy_class(cls)
+    _assign_scene_property()
 
     # Ensure engine binary is executable after zip install (zip extraction often drops exec bits)
+    # Keep Blender path/layout knowledge in the bridge; elbo-sdk stays host-agnostic.
     try:
-        engine_path = engine.get_engine_binary_path()
+        exe_name = "pivot_engine.exe" if os.name == "nt" else "pivot_engine"
+        pivot_dir = os.path.dirname(__file__)
+        bin_dir = os.path.join(pivot_dir, "bin")
+        platform_dir = os.path.join(bin_dir, engine.get_platform_id())
+        engine_path = os.path.join(platform_dir, exe_name)
+        if not os.path.exists(engine_path):
+            engine_path = os.path.join(bin_dir, exe_name)
+
+        if engine_path:
+            os.environ["PIVOT_ENGINE_PATH"] = engine_path
+
         if engine_path and os.path.exists(engine_path) and os.name != 'nt':
             st = os.stat(engine_path)
             if not (st.st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)):
@@ -85,7 +129,7 @@ def register():
 
     is_pro = False
     try:
-        engine.get_engine_communicator()
+        engine.get_engine_communicator(engine_path=os.getenv("PIVOT_ENGINE_PATH"))
         # Print Cython edition for debugging
         try:
             from pivot_lib import edition_utils
@@ -104,13 +148,13 @@ def register():
     except Exception as e:
         print(f"[Pivot] Could not set group name change callback: {e}")
 
-    bpy.utils.register_class(Pivot_PT_Status_Panel)
-    bpy.utils.register_class(Pivot_PT_Configuration_Panel)
+    _register_bpy_class(Pivot_PT_Status_Panel)
+    _register_bpy_class(Pivot_PT_Configuration_Panel)
 
     # Always register standard panel
-    bpy.utils.register_class(Pivot_PT_Standard_Panel)
+    _register_bpy_class(Pivot_PT_Standard_Panel)
 
-    bpy.utils.register_class(Pivot_PT_Pro_Panel)
+    _register_bpy_class(Pivot_PT_Pro_Panel)
 
     # Register persistent handlers for engine lifecycle management
     if handlers.on_load_pre not in bpy.app.handlers.load_pre:
@@ -129,15 +173,15 @@ def register():
 def unregister():
     print("Unregistering Pivot")
     
-    bpy.utils.unregister_class(Pivot_PT_Pro_Panel)
-    bpy.utils.unregister_class(Pivot_PT_Standard_Panel)
-    bpy.utils.unregister_class(Pivot_PT_Status_Panel)
-    bpy.utils.unregister_class(Pivot_PT_Configuration_Panel)
+    _unregister_bpy_class(Pivot_PT_Pro_Panel)
+    _unregister_bpy_class(Pivot_PT_Standard_Panel)
+    _unregister_bpy_class(Pivot_PT_Status_Panel)
+    _unregister_bpy_class(Pivot_PT_Configuration_Panel)
     
     for cls in reversed(classesToRegister):  # Unregister in reverse order
-        bpy.utils.unregister_class(cls)
+        _unregister_bpy_class(cls)
 
-    del bpy.types.Scene.pivot
+    _remove_scene_property()
 
     # Unregister all persistent handlers
     if handlers.on_load_pre in bpy.app.handlers.load_pre:
