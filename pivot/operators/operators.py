@@ -82,8 +82,9 @@ class Pivot_OT_Organize_Classified_Objects(bpy.types.Operator):
 
             # Call the engine to organize objects
             start_engine = time.perf_counter()
-            engine_comm = engine.get_engine_communicator()
-            response = engine_comm.send_command({"id": 1, "op": "organize_objects"})
+            if not engine.is_running():
+                engine.start()
+            response = engine.send_command({"id": 1, "op": "organize_objects"})
             end_engine = time.perf_counter()
             
             start_post = time.perf_counter()

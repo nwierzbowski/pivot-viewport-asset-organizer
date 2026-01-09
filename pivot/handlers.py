@@ -77,8 +77,9 @@ def enforce_colors(scene, depsgraph):
     if orphaned_groups:
         try:
             # Drop from engine
-            engine_comm = engine.get_engine_communicator()
-            dropped_count = engine_comm.drop_groups(orphaned_groups)
+            if not engine.is_running():
+                engine.start()
+            dropped_count = engine.drop_groups(orphaned_groups)
             if dropped_count >= 0:
                 # Clear their colors and remove from sync state
                 for coll_name in orphaned_groups:

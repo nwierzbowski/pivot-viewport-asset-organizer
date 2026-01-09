@@ -129,7 +129,6 @@ def register():
 
     is_pro = False
     try:
-        engine.get_engine_communicator(engine_path=os.getenv("PIVOT_ENGINE_PATH"))
         # Print Cython edition for debugging
         try:
             from pivot_lib import edition_utils
