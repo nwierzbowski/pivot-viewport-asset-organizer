@@ -97,7 +97,7 @@ def register():
     
     # Stop any running engine from previous edition
     try:
-        engine.stop_engine()
+        engine.stop()
     except Exception as e:
         print(f"[Pivot] Note: Could not stop engine during register: {e}")
     
@@ -194,7 +194,7 @@ def unregister():
     # Perform cleanup as if we're unloading a file
     _reset_sync_state()
     handlers.on_load_pre(None)
-    engine.stop_engine()
+    engine.stop()
 
 
 if __name__ == "__main__":
