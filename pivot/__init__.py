@@ -126,6 +126,11 @@ def register():
                 print("Fixed executable permissions on pivot engine binary (register)")
     except Exception as e:
         print(f"Note: Could not adjust permissions for engine binary during register: {e}")
+    # Start the engine
+    try:
+        engine.start(engine_path)
+    except Exception as e:
+        print(f"[Pivot] Could not start engine: {e}")
 
     is_pro = False
     try:
@@ -139,6 +144,8 @@ def register():
             is_pro = False
     except RuntimeError as exc:
         print(f"[Pivot] Failed to start engine after loading file: {exc}")
+
+    
 
     # Register name change callback for group management
     try:

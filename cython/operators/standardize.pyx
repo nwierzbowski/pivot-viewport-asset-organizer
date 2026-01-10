@@ -28,7 +28,7 @@ import bpy
 
 from pivot_lib import selection_utils, shm_utils, edition_utils, group_manager
 from pivot_lib import engine_state
-from elbo_sdk.engine import get_engine_communicator
+from elbo_sdk import engine
 from pivot_lib.surface_manager import get_surface_manager
 from multiprocessing.shared_memory import SharedMemory
 
@@ -157,7 +157,7 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
     core_group_mgr = group_manager.get_group_manager()
     origin_method_is_base = origin_method == "BASE"
 
-    engine = get_engine_communicator()
+    engine = engine.get_engine_communicator()
     new_group_results = {}
     transformed_group_names = []
 
@@ -307,7 +307,6 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
     vert_counts_mv, edge_counts_mv, object_counts_mv = count_memory_views
     
     # --- Engine communication: unified array format ---
-    engine = get_engine_communicator()
     # Map surface_context to engine-expected string
     if surface_context in ("AUTO", "0", "1", "2"):
         engine_surface_context = surface_context

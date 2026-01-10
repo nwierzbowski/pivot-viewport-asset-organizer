@@ -91,3 +91,11 @@ pivot_common_cython_create_wheel_target(
     OUTPUT_DIR "${PIVOT_WHEEL_OUTPUT_DIR}"
     MODULE_TARGETS ${_pivot_all_modules}
 )
+
+# Symlink to Blender site-packages for development
+pivot_common_cython_add_blender_symlink(
+    TARGET_NAME pivot_wheel
+    SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../native/build/lib.linux-x86_64-cpython-311/pivot_lib"
+    PACKAGE_NAME pivot_lib
+    BLENDER_SITE_PACKAGES "${BLENDER_SITE_PACKAGES}"
+)
