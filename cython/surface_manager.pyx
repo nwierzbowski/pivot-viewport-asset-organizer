@@ -139,8 +139,7 @@ cdef class SurfaceManager:
     def sync_group_classifications(self, dict group_surface_map) -> bint:
         """Sync classifications with the engine."""
         try:
-            engine_comm = engine.get_engine_communicator()
-            return engine_comm.send_group_classifications(group_surface_map)
+            return engine.send_group_classifications(group_surface_map)
         except RuntimeError:
             return False
 

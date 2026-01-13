@@ -99,14 +99,14 @@ def _send_engine_command_and_get_response(engine, command):
     return final_response
 
 
-def _close_shared_memory_segments(shm_objects):
-    """Close shared memory segments with error handling."""
-    for shm in shm_objects:
-        try:
-            shm.close()
-        except Exception as e:
-            shm_name = getattr(shm, "name", "<unknown>")
-            print(f"Warning: Failed to close shared memory segment '{shm_name}': {e}")
+# def _close_shared_memory_segments(shm_objects):
+#     """Close shared memory segments with error handling."""
+#     for shm in shm_objects:
+#         try:
+#             shm.close()
+#         except Exception as e:
+#             shm_name = getattr(shm, "name", "<unknown>")
+#             print(f"Warning: Failed to close shared memory segment '{shm_name}': {e}")
 
 
 def _build_group_surface_contexts(group_names, surface_context, classification_map=None):
@@ -157,7 +157,6 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
     core_group_mgr = group_manager.get_group_manager()
     origin_method_is_base = origin_method == "BASE"
 
-    # engine = engine.get_engine_communicator()
     new_group_results = {}
     transformed_group_names = []
 
@@ -186,7 +185,7 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
         # for shm in shm_objects:
         #     debug_shm(shm)
 
-        _close_shared_memory_segments(shm_objects)
+        # _close_shared_memory_segments(shm_objects)
         # print("Post close shared memory checks:")
         # for shm in shm_objects:
         #     debug_shm(shm)
@@ -328,7 +327,7 @@ def _get_standardize_results(list objects, str surface_context="AUTO"):
     # for shm in shm_objects:
     #     debug_shm(shm)
 
-    _close_shared_memory_segments(shm_objects)
+    # _close_shared_memory_segments(shm_objects)
     # print("Post close shared memory checks:")
     # for shm in shm_objects:
     #     debug_shm(shm)
