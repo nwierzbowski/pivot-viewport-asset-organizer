@@ -246,24 +246,6 @@ def standardize_groups(list selected_objects, str origin_method, str surface_con
         # Pass as parallel lists with verified alignment to avoid swapping
         get_surface_manager().organize_groups_into_surfaces(all_group_names, surface_types)
 
-def debug_shm(shm):
-    print("=== Shared Memory Debug ===")
-    print("Name:", repr(shm.name))
-    print("Name bytes:", shm.name.encode())
-    print("Size:", shm.size)
-
-    # Try re-open to confirm existence
-    try:
-        test = SharedMemory(shm.name)
-        print("Re-open test: OK")
-        test.close()
-    except Exception as e:
-        print("Re-open test FAILED:", e)
-
-    # Show content sample
-    print("First bytes:", bytes(shm.buf[:16]).hex())
-    print("============================")
-
 def _get_standardize_results(list objects, str surface_context="AUTO"):
     """
     Helper function to get standardization results from the engine.
